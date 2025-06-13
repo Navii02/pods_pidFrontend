@@ -1,0 +1,176 @@
+.project-modal-custom .modal-dialog {
+  max-width: 500px;
+  margin: auto;
+}
+
+
+.project-modal-custom .modal-content {
+  background-color: #1A1A1A; /* Rich Black */
+  color: #ffffff;
+  max-height: 600px;
+  overflow-y: auto;
+  border-radius: 10px;
+  border: 1px solid #3C3B80; /* Iris */
+}
+
+/* Scrollbar Styling for modal-content */
+.project-modal-custom .modal-content::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.project-modal-custom .modal-content::-webkit-scrollbar-track {
+  background: #1A1A1A; /* Rich Black */
+  border-radius: 4px;
+}
+
+.project-modal-custom .modal-content::-webkit-scrollbar-thumb {
+  background-color: #7A78E8; /* Lavender Blue */
+  border-radius: 4px;
+  border: 2px solid #1A1A1A; /* Padding around thumb */
+}
+
+.project-modal-custom .modal-content::-webkit-scrollbar-thumb:hover {
+  background-color: #4D5DBE; /* Blue Sapphire */
+}
+
+.project-modal-custom .modal-header {
+  background-color: #202020; /* Onyx */
+}
+
+.project-modal-header .modal-title {
+  color: #ffffff;
+}
+
+.close-button {
+  color: #ffffff;
+}
+
+.create-project-button {
+  background-color: #7A78E8; /* Lavender Blue */
+  border-color: #7A78E8;
+  color: #ffffff;
+}
+
+.create-project-button:hover {
+  background-color: #3A4547; /* Deep Slate */
+  border-color: #3A4547;
+}
+
+/* Create Project text color */
+.create-project-button span,
+.create-project-button .fa-plus {
+  color: #ffffff;
+}
+
+.project-form-card {
+  background-color: #202020; /* Onyx */
+  border: 1px solid #3C3B80; /* Iris */
+  color: #ffffff;
+}
+
+.project-form-card .form-control {
+  background-color: #1A1A1A; /* Rich Black */
+  color: #ffffff;
+  border: 1px solid #3A4547; /* Deep Slate */
+}
+
+.project-form-card .form-control::placeholder {
+  color: #ffffff;
+  opacity: 0.7;
+}
+
+.project-form-card textarea.form-control::placeholder {
+  color: #ffffff;
+  opacity: 0.7;
+}
+
+.project-form-card .form-control:focus {
+  border-color: #7A78E8; /* Lavender Blue */
+  box-shadow: none;
+}
+
+
+
+.form-buttons {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 1rem;
+}
+
+.project-list {
+  background-color: #202020; /* Onyx */
+
+  overflow-y: auto;
+  max-height: 300px;
+}
+
+/* Scrollbar Styling for project list */
+.project-list::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.project-list::-webkit-scrollbar-track {
+  background: #202020; /* Onyx */
+  border-radius: 3px;
+}
+
+.project-list::-webkit-scrollbar-thumb {
+  background-color: #7A78E8; /* Lavender Blue */
+  border-radius: 3px;
+  border: 1.5px solid #202020;
+}
+
+.project-list::-webkit-scrollbar-thumb:hover {
+  background-color: #4D5DBE; /* Blue Sapphire */
+}
+
+.project-header,
+.project-item {
+  background-color: #1A1A1A; /* Rich Black */
+  color: #ffffff;
+}
+
+.project-item:hover {
+  background-color: #3A4547; /* Deep Slate */
+  cursor: pointer;
+}
+
+.project-number,
+.project-name {
+  cursor: pointer;
+}
+
+.project-actions {
+  display: flex;
+  margin-left: -13px;
+  gap: 0.5rem;
+  justify-content: flex-end;
+}
+
+.action-icon {
+  color: #7A78E8; /* Lavender Blue */
+  padding: 0;
+}
+
+.action-icon:hover {
+  color: #ffffff;
+}
+
+.action-icon.text-danger:hover {
+  color: #ff4d4f;
+}
+
+/* Alert Styling */
+.alert-danger {
+  background-color: #3A4547;
+  color: #ffffff;
+  border: none;
+}
+
+.alert-info {
+  background-color: #2F3839;
+  color: #ffffff;
+  border: none;
+}

@@ -1,0 +1,84 @@
+.project-toggle-wrapper {
+  background-color: #1e1e1e;
+  color: white;
+  border-radius: 5px;
+  padding: 10px;
+  font-size: 13px;
+}
+
+.selected-project-header {
+  font-size: 14px;
+  font-weight: bold;
+  padding: 6px 0;
+  color: white;
+}
+
+.folder-row,
+.disc-row,
+.sys-row,
+.tag-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px 0;
+}
+
+.folder-indent-1 {
+  margin-left: 16px;
+}
+.folder-indent-2 {
+  margin-left: 32px;
+}
+.folder-indent-3 {
+  margin-left: 48px;
+}
+
+.folder-icon {
+  color: #4ea5ff;
+  margin: 0 6px;
+  font-size: 12px;
+  width: 12px;
+  height: 12px;
+}
+
+.entity-line {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+}
+
+.entity-icons {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.entity-icons button {
+  background: none;
+  border: none;
+  color: white;
+  font-size: 13px;
+  padding: 2px;
+  cursor: pointer;
+}
+
+.entity-icons button:hover {
+  color: #0dcaf0;
+}
+
+.add-area-btn {
+  background-color: transparent;
+  border: none;
+  color: white;
+  font-size: 16px;
+  cursor: pointer;
+}
+
+.add-area-btn:hover {
+  color: #0dcaf0;
+}
+
+.tag-row:hover {
+  background-color: #2a2a2a;
+}
