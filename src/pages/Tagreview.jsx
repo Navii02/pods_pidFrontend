@@ -281,33 +281,19 @@ const Tagreview = () => {
                     <div className="d-flex justify-content-center">
                       {editingId === tag.tagId ? (
                         <>
-                          <button
-                            className=""
-                            onClick={() => handleSave(tag.tagId)}
-                          >
-                            <FontAwesomeIcon icon={faSave} />
-                          </button>
-                          <button
-                            className=""
-                            onClick={handleCancel}
-                          >
-                            <FontAwesomeIcon icon={faTimes} />
-                          </button>
+                        
+                            <FontAwesomeIcon className="text-dark me-3"  onClick={() => handleSave(tag.tagId)} icon={faSave} />
+                      
+                            <FontAwesomeIcon  onClick={handleCancel} icon={faTimes} />
+                    
                         </>
                       ) : (
                         <div className="p-0">
-                          <button
-                            className=""
-                            onClick={() => handleEdit(tag)}
-                          >
-                            <FontAwesomeIcon icon={faEdit} />
-                          </button>
-                          <button
-                            className=""
-                            onClick={() => handleDelete(tag.tagId)}
-                          >
-                            <FontAwesomeIcon icon={faTrash} />
-                          </button>
+                       
+                            <FontAwesomeIcon className="text-dark me-3" onClick={() => handleEdit(tag)} icon={faEdit} />
+                         
+                            <FontAwesomeIcon onClick={() => handleDelete(tag.tagId)} icon={faTrash} />
+                        
                         </div>
                       )}
                     </div>
