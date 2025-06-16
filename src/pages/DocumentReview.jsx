@@ -1,9 +1,12 @@
-import React, { useEffect, useState } from "react";
+import React, { useContext, useEffect, useState } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faDownload } from "@fortawesome/free-solid-svg-icons";
 import { getDocumentsdetails } from "../services/CommonApis";
+import { updateProjectContext } from "../context/ContextShare";
 
 const Review = () => {
+   const {updateProject} = useContext(updateProjectContext)
+
   const [documents, setDocuments] = useState([]);
 //console.log(documents)
       const projectString = sessionStorage.getItem("selectedProject");
@@ -27,7 +30,7 @@ const Review = () => {
     };
 
     fetchData();
-  }, []);
+  }, [updateProject]);
 
   // Style objects
   const thStyle = {

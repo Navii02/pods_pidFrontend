@@ -12,6 +12,7 @@ import TreeRegister from "./pages/TreeReview";
 import BulkModelImport from "./pages/BulkModalImport";
 import CommentReview from "./pages/CommentReview";
 import CommentStatusTable from "./pages/CommentStatusTable";
+import Iroamer from "./pages/Iroamer";
 
 // import Login from './pages/Login';
 
@@ -33,6 +34,8 @@ function App() {
         <Route path="/bulk-model-import" element={<BulkModelImport />} />
         <Route path="/comment-review" element={<CommentReview />} />
         <Route path="/comment-status" element={<CommentStatusTable />} />
+                <Route path="/iroamer" element={<Iroamer />} />
+
       </Route>
 
       {/* Fallback */}

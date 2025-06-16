@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useContext } from "react";
 import { useNavigate } from "react-router-dom";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
@@ -24,8 +24,11 @@ import Arearegister from "../components/Tree/Arearegister";
 import DisciplineRegister from "../components/Tree/DisiplineRegister";
 import SystemRegister from "../components/Tree/SystemRegister";
 import ProjectDetails from "./ProjectDetails";
+import { updateProjectContext } from "../context/ContextShare";
 
-function Sidebar({ onToggle, setProjectname, onOpenProjectModal }) {
+function Sidebar({ onToggle, setProjectname, onOpenProjectModal })
+ {
+  const {updateProject} = useContext(updateProjectContext)
   const navigate = useNavigate();
   const [activeItem, setActiveItem] = useState("");
   const [isCollapsed, setIsCollapsed] = useState(false);
@@ -37,19 +40,19 @@ function Sidebar({ onToggle, setProjectname, onOpenProjectModal }) {
     disciplineRegister: false,
     systemRegister: false,
   });
-    const  [updatetree,setUpdateTree]=useState("")
+  
 
   useEffect(() => {
     const storedProject = sessionStorage.getItem("selectedProject");
     if (storedProject) {
       const project = JSON.parse(storedProject);
-      if (project && project.projectName) {
+      if (project && project?.projectName) {
         setShowProjectName(true);
       } else {
         console.warn("Stored project data is invalid");
       }
     }
-  }, [sessionStorage.getItem("selectedProject")]);
+  }, [sessionStorage.getItem("selectedProject"),updateProject]);
 
   const handleOpenModal = (modalName) => {
     setOpenModal((prev) => ({
@@ -282,10 +285,13 @@ function Sidebar({ onToggle, setProjectname, onOpenProjectModal }) {
       {!isCollapsed && (
         <div className="sidebar-menu" ref={sidebarMenuRef}>
           <div className="open-project-section">
-            <span onClick={onOpenProjectModal}>
+            <div className="p-3">
+                 <span onClick={onOpenProjectModal}>
               <FontAwesomeIcon icon={faFolderOpen} />
               Project Management
             </span>
+            </div>
+         
             {showProjectName && (
                <ProjectDetails 
     showProjectDetails={showProjectDetails}

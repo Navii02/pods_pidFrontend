@@ -1,10 +1,13 @@
-import React, { useEffect, useState } from "react";
+import React, { useContext, useEffect, useState } from "react";
 import "../styles/spid.css";
 import { useNavigate } from "react-router-dom";
 import { fetchSvgFiles } from "../services/SpidApi";
+import { updateProjectContext } from "../context/ContextShare";
 
 
 const Spid = () => {
+   const {updateProject} = useContext(updateProjectContext)
+  
   const [files, setFiles] = useState([]);
   const navigate = useNavigate();
 
@@ -30,7 +33,7 @@ const Spid = () => {
       }
     };
     getSvgFiles();
-  }, []);
+  }, [updateProject]);
 
   const handleOpen = (fileId) => {
     navigate(`/canvas/${fileId}`);

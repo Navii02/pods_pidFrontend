@@ -1,6 +1,15 @@
-import React, { useEffect, useState } from "react";
+import React, { useContext, useEffect, useState } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faChevronUp, faChevronDown, faTrash, faPlus, faEye, faMinus, faFolder, faCube } from "@fortawesome/free-solid-svg-icons";
+import {
+  faChevronUp,
+  faChevronDown,
+  faTrash,
+  faPlus,
+  faEye,
+  faMinus,
+  faFolder,
+  faCube,
+} from "@fortawesome/free-solid-svg-icons";
 import EntityRegister from "./EntityRegister";
 import TagEntityModal from "../components/Tree/TagEntityModal";
 import {
@@ -8,11 +17,19 @@ import {
   getProjectArea,
   getprojectDisipline,
   getprojectsystem,
-  getProjectTags // Assuming this API function exists
+  getProjectTags, // Assuming this API function exists
 } from "../services/TreeManagementApi";
 import "../styles/ProjectDetails.css";
+import { TreeresponseContext, updateProjectContext } from "../context/ContextShare";
 
-const ProjectDetails = ({ showProjectDetails, setShowProjectDetails, activeTab }) => {
+const ProjectDetails = ({
+  showProjectDetails,
+  setShowProjectDetails,
+  activeTab,
+}) => {
+
+  const { updateTree } = useContext(TreeresponseContext);
+   const {updateProject} = useContext(updateProjectContext)
   const selectedProject = JSON.parse(sessionStorage.getItem("selectedProject"));
   const [showEntityModal, setShowEntityModal] = useState(false);
   const [showDisciplineModalFor, setShowDisciplineModalFor] = useState(null);
@@ -25,23 +42,26 @@ const ProjectDetails = ({ showProjectDetails, setShowProjectDetails, activeTab }
   const [tagsMap, setTagsMap] = useState({}); // New state for tags
   const [expandedDiscipline, setExpandedDiscipline] = useState(null);
   const [expandedSystem, setExpandedSystem] = useState(null); // New state for expanded systems
-
+  const [hasProjectData, setHasProjectData] = useState(!!selectedProject);
   const entityTypes = {
     areas: "Area",
     systems: "System",
-    disciplines: "Discipline"
+    disciplines: "Discipline",
   };
   const currentEntityType = entityTypes[activeTab] || "Area";
 
   useEffect(() => {
+       setHasProjectData(!!selectedProject);
     if (selectedProject?.projectId) {
       fetchAreas();
     }
-  }, []);
+  }, [sessionStorage.getItem("selectedProject"),updateProject,updateTree]);
 
   const fetchAreas = async () => {
     try {
-      const response = await getProjectArea(selectedProject.projectId, { type: "area" });
+      const response = await getProjectArea(selectedProject.projectId, {
+        type: "area",
+      });
       if (response.status === 200) {
         setAreas(response.data.area || []);
       }
@@ -52,11 +72,14 @@ const ProjectDetails = ({ showProjectDetails, setShowProjectDetails, activeTab }
 
   const fetchDisciplines = async (areaCode) => {
     try {
-      const response = await getprojectDisipline(areaCode, selectedProject.projectId);
+      const response = await getprojectDisipline(
+        areaCode,
+        selectedProject.projectId
+      );
       if (response.status === 200) {
-        setDisciplinesMap(prev => ({
+        setDisciplinesMap((prev) => ({
           ...prev,
-          [areaCode]: response.data.disciplines || []
+          [areaCode]: response.data.disciplines || [],
         }));
         setExpandedArea(areaCode);
       }
@@ -71,9 +94,9 @@ const ProjectDetails = ({ showProjectDetails, setShowProjectDetails, activeTab }
       const response = await getprojectsystem(projectid, area, disc);
       if (response.status === 200) {
         const key = `${area}_${disc}`;
-        setSystemsMap(prev => ({
+        setSystemsMap((prev) => ({
           ...prev,
-          [key]: response.data.systems || []
+          [key]: response.data.systems || [],
         }));
         setExpandedDiscipline(key);
       }
@@ -88,12 +111,12 @@ const ProjectDetails = ({ showProjectDetails, setShowProjectDetails, activeTab }
       const projectid = selectedProject.projectId;
       const response = await getProjectTags(projectid, area, disc, sys);
       console.log(response.data);
-      
+
       if (response.status === 200) {
         const key = `${area}_${disc}_${sys}`;
-        setTagsMap(prev => ({
+        setTagsMap((prev) => ({
           ...prev,
-          [key]: response.data.tags || []
+          [key]: response.data.tags || [],
         }));
         setExpandedSystem(key);
       }
@@ -102,34 +125,41 @@ const ProjectDetails = ({ showProjectDetails, setShowProjectDetails, activeTab }
     }
   };
 
- const handleDelete = async (type, id, code) => {
-  const confirm = window.confirm(`Delete ${type}: ${code}? All child entities will be deleted.`);
-  if (!confirm) return;
-  try {
-    let deleteCode = code;
+  const handleDelete = async (type, id, code) => {
+    const confirm = window.confirm(
+      `Delete ${type}: ${code}? All child entities will be deleted.`
+    );
+    if (!confirm) return;
+    try {
+      let deleteCode = code;
 
-    if (type === "Discipline") {
-      deleteCode = `${id}__${code}`;
-    } else if (type === "Tag") {
-      deleteCode = `${id}__${code}`; 
-    }
-
-    const response = await DeleteEntity(type, selectedProject.projectId, deleteCode);
-    if (response.status === 200) {
-      alert(`${type} and children deleted.`);
-      if (type === "Area") fetchAreas();
-      else if (type === "Discipline") fetchDisciplines(id);
-      else if (type === "System") fetchSystems(id.split('_')[0], id.split('_')[1]);
-      else if (type === "Tag") {
-        const [area, disc, sys] = id.split('_');
-        fetchTags(area, disc, sys); // Refresh tags after deletion
+      if (type === "Discipline") {
+        deleteCode = `${id}__${code}`;
+      } else if (type === "Tag") {
+        deleteCode = `${id}__${code}`;
       }
+
+      const response = await DeleteEntity(
+        type,
+        selectedProject.projectId,
+        deleteCode
+      );
+      if (response.status === 200) {
+        alert(`${type} and children deleted.`);
+        if (type === "Area") fetchAreas();
+        else if (type === "Discipline") fetchDisciplines(id);
+        else if (type === "System")
+          fetchSystems(id.split("_")[0], id.split("_")[1]);
+        else if (type === "Tag") {
+          const [area, disc, sys] = id.split("_");
+          fetchTags(area, disc, sys); // Refresh tags after deletion
+        }
+      }
+    } catch (error) {
+      console.error(`Failed to delete ${type}`, error);
+      alert("Deletion failed");
     }
-  } catch (error) {
-    console.error(`Failed to delete ${type}`, error);
-    alert("Deletion failed");
-  }
-};
+  };
 
   const handleEntityRegisterClose = () => {
     setShowEntityModal(false);
@@ -149,16 +179,23 @@ const ProjectDetails = ({ showProjectDetails, setShowProjectDetails, activeTab }
 
   return (
     <div>
+      
       <EntityRegister
-        isOpen={showEntityModal || !!showDisciplineModalFor || !!showSystemModalFor}
+        isOpen={
+          showEntityModal || !!showDisciplineModalFor || !!showSystemModalFor
+        }
         onClose={handleEntityRegisterClose}
         onSuccess={handleEntityRegisterSuccess}
         entityType={
-          showSystemModalFor ? "System" :
-          showDisciplineModalFor ? "Discipline" :
-          currentEntityType
+          showSystemModalFor
+            ? "System"
+            : showDisciplineModalFor
+            ? "Discipline"
+            : currentEntityType
         }
-        parentEntity={showSystemModalFor || showDisciplineModalFor || selectedProject}
+        parentEntity={
+          showSystemModalFor || showDisciplineModalFor || selectedProject
+        }
       />
 
       <TagEntityModal
@@ -167,12 +204,20 @@ const ProjectDetails = ({ showProjectDetails, setShowProjectDetails, activeTab }
         selectedProject={selectedProject}
       />
 
-      <div className="project-toggle-wrapper mt-3">
+      <div className="project-toggle-wrapper ">
         {showProjectDetails && (
           <>
-            <div className="d-flex w-100 justify-content-between align-items-center selected-project-header mb-4">
-              <div>{selectedProject.projectName}</div>
-              <button className="add-area-btn" onClick={() => setShowEntityModal(true)}>+</button>
+            <div className="d-flex w-100 justify-content-between  selected-project-header mb-2 mt-3">
+              <div className="ms-3">{selectedProject?.projectName}</div>
+              <div className="entity-icons">
+                <button>
+                  <FontAwesomeIcon icon={faEye} />
+                </button>
+
+                <button onClick={() => setShowEntityModal(true)}>
+                  <FontAwesomeIcon icon={faPlus} />
+                </button>
+              </div>
             </div>
 
             {areas.map((area) => {
@@ -181,101 +226,200 @@ const ProjectDetails = ({ showProjectDetails, setShowProjectDetails, activeTab }
                 <div key={area.area}>
                   <div className="folder-row">
                     <div className="entity-line">
-                      <FontAwesomeIcon 
-                        icon={isExpanded ? faMinus : faPlus} 
-                        onClick={() => isExpanded ? setExpandedArea(null) : fetchDisciplines(area.area)} 
+                      <FontAwesomeIcon
+                        icon={isExpanded ? faMinus : faPlus}
+                        onClick={() =>
+                          isExpanded
+                            ? setExpandedArea(null)
+                            : fetchDisciplines(area.area)
+                        }
                       />
-                      <FontAwesomeIcon icon={faFolder} className="folder-icon" />
+                      <FontAwesomeIcon
+                        icon={faFolder}
+                        className="folder-icon"
+                      />
                       {area.area} - {area.name}
                     </div>
                     <div className="entity-icons">
-                      <button><FontAwesomeIcon icon={faEye} /></button>
-                      <button onClick={() => openDisciplineModal(area)}><FontAwesomeIcon icon={faPlus} /></button>
-                      <button onClick={() => handleDelete("Area", null, area.area)}><FontAwesomeIcon icon={faTrash} /></button>
+                      <button>
+                        <FontAwesomeIcon icon={faEye} />
+                      </button>
+                      <button onClick={() => openDisciplineModal(area)}>
+                        <FontAwesomeIcon icon={faPlus} />
+                      </button>
+                      <button
+                        onClick={() => handleDelete("Area", null, area.area)}
+                      >
+                        <FontAwesomeIcon icon={faTrash} />
+                      </button>
                     </div>
                   </div>
 
-                  {isExpanded && disciplinesMap[area.area]?.map((disc) => {
-                    const systemKey = `${area.area}_${disc.disc}`;
-                    const isDiscExpanded = expandedDiscipline === systemKey;
-                    const systems = systemsMap[systemKey] || [];
+                  {isExpanded &&
+                    disciplinesMap[area.area]?.map((disc) => {
+                      const systemKey = `${area.area}_${disc.disc}`;
+                      const isDiscExpanded = expandedDiscipline === systemKey;
+                      const systems = systemsMap[systemKey] || [];
 
-                    return (
-                      <div key={disc.disc} className="folder-indent-1">
-                        <div className="disc-row">
-                          <div className="entity-line">
-                            <FontAwesomeIcon 
-                              icon={isDiscExpanded ? faMinus : faPlus} 
-                              onClick={() => isDiscExpanded ? setExpandedDiscipline(null) : fetchSystems(area.area, disc.disc)} 
-                            />
-                            <FontAwesomeIcon icon={faFolder} className="folder-icon" />
-                            {disc.disc} - {disc.name}
+                      return (
+                        <div key={disc.disc} className="folder-indent-1">
+                          <div className="disc-row">
+                            <div className="entity-line">
+                              <FontAwesomeIcon
+                                icon={isDiscExpanded ? faMinus : faPlus}
+                                onClick={() =>
+                                  isDiscExpanded
+                                    ? setExpandedDiscipline(null)
+                                    : fetchSystems(area.area, disc.disc)
+                                }
+                              />
+                              <FontAwesomeIcon
+                                icon={faFolder}
+                                className="folder-icon"
+                              />
+                              {disc.disc} - {disc.name}
+                            </div>
+                            <div className="entity-icons">
+                              <button>
+                                <FontAwesomeIcon icon={faEye} />
+                              </button>
+                              <button
+                                onClick={() =>
+                                  openSystemModal({
+                                    ...disc,
+                                    area: area.area,
+                                    project_id: selectedProject.projectId,
+                                  })
+                                }
+                              >
+                                <FontAwesomeIcon icon={faPlus} />
+                              </button>
+                              <button
+                                onClick={() =>
+                                  handleDelete(
+                                    "Discipline",
+                                    area.area,
+                                    disc.disc
+                                  )
+                                }
+                              >
+                                <FontAwesomeIcon icon={faTrash} />
+                              </button>
+                            </div>
                           </div>
-                          <div className="entity-icons">
-                            <button><FontAwesomeIcon icon={faEye} /></button>
-                            <button onClick={() => openSystemModal({ ...disc, area: area.area, project_id: selectedProject.projectId })}><FontAwesomeIcon icon={faPlus} /></button>
-                            <button onClick={() => handleDelete("Discipline", area.area, disc.disc)}><FontAwesomeIcon icon={faTrash} /></button>
-                          </div>
-                        </div>
 
-                        {isDiscExpanded && systems.map((sys) => {
-                          const tagKey = `${area.area}_${disc.disc}_${sys.sys}`;
-                          const isSysExpanded = expandedSystem === tagKey;
-                          const tags = tagsMap[tagKey] || [];
+                          {isDiscExpanded &&
+                            systems.map((sys) => {
+                              const tagKey = `${area.area}_${disc.disc}_${sys.sys}`;
+                              const isSysExpanded = expandedSystem === tagKey;
+                              const tags = tagsMap[tagKey] || [];
 
-                          return (
-                            <div key={sys.sys} className="folder-indent-2">
-                              <div className="sys-row">
-                                <div className="entity-line">
-                                  <FontAwesomeIcon 
-                                    icon={isSysExpanded ? faMinus : faPlus} 
-                                    onClick={() => isSysExpanded ? setExpandedSystem(null) : fetchTags(area.area, disc.disc, sys.sys)} 
-                                  />
-                                  <FontAwesomeIcon icon={faFolder} className="folder-icon" />
-                                  {sys.sys} - {sys.name}
-                                </div>
-                                <div className="entity-icons">
-                                  <button><FontAwesomeIcon icon={faEye} /></button>
-                                  <button onClick={() => openTagModal({ ...sys, area: area.area, disc: disc.disc, projectId: selectedProject.projectId })}><FontAwesomeIcon icon={faPlus} /></button>
-                                  <button onClick={() => handleDelete("System", `${area.area}_${disc.disc}`, sys.sys)}><FontAwesomeIcon icon={faTrash} /></button>
-                                </div>
-                              </div>
-
-                              {isSysExpanded && tags.map((tag) => (
-                                <div key={tag.tag} className="folder-indent-3">
-                                  <div className="tag-row">
+                              return (
+                                <div key={sys.sys} className="folder-indent-2">
+                                  <div className="sys-row">
                                     <div className="entity-line">
-                                      <FontAwesomeIcon icon={faCube}  className="folder-icon" />
-                                      {tag.tag} - {tag.name}
+                                      <FontAwesomeIcon
+                                        icon={isSysExpanded ? faMinus : faPlus}
+                                        onClick={() =>
+                                          isSysExpanded
+                                            ? setExpandedSystem(null)
+                                            : fetchTags(
+                                                area.area,
+                                                disc.disc,
+                                                sys.sys
+                                              )
+                                        }
+                                      />
+                                      <FontAwesomeIcon
+                                        icon={faFolder}
+                                        className="folder-icon"
+                                      />
+                                      {sys.sys} - {sys.name}
                                     </div>
                                     <div className="entity-icons">
-                                      <button><FontAwesomeIcon icon={faEye} /></button>
-                                      <button onClick={() => handleDelete("Tag", `${area.area}_${disc.disc}_${sys.sys}`, tag.tag)}>
+                                      <button>
+                                        <FontAwesomeIcon icon={faEye} />
+                                      </button>
+                                      <button
+                                        onClick={() =>
+                                          openTagModal({
+                                            ...sys,
+                                            area: area.area,
+                                            disc: disc.disc,
+                                            projectId:
+                                              selectedProject.projectId,
+                                          })
+                                        }
+                                      >
+                                        <FontAwesomeIcon icon={faPlus} />
+                                      </button>
+                                      <button
+                                        onClick={() =>
+                                          handleDelete(
+                                            "System",
+                                            `${area.area}_${disc.disc}`,
+                                            sys.sys
+                                          )
+                                        }
+                                      >
                                         <FontAwesomeIcon icon={faTrash} />
                                       </button>
                                     </div>
                                   </div>
+
+                                  {isSysExpanded &&
+                                    tags.map((tag) => (
+                                      <div
+                                        key={tag.tag}
+                                        className="folder-indent-3"
+                                      >
+                                        <div className="tag-row">
+                                          <div className="entity-line">
+                                            <FontAwesomeIcon
+                                              icon={faCube}
+                                              className="folder-icon"
+                                            />
+                                            {tag.tag} - {tag.name}
+                                          </div>
+                                          <div className="entity-icons">
+                                            <button>
+                                              <FontAwesomeIcon icon={faEye} />
+                                            </button>
+                                            <button
+                                              onClick={() =>
+                                                handleDelete(
+                                                  "Tag",
+                                                  `${area.area}_${disc.disc}_${sys.sys}`,
+                                                  tag.tag
+                                                )
+                                              }
+                                            >
+                                              <FontAwesomeIcon icon={faTrash} />
+                                            </button>
+                                          </div>
+                                        </div>
+                                      </div>
+                                    ))}
                                 </div>
-                              ))}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    );
-                  })}
+                              );
+                            })}
+                        </div>
+                      );
+                    })}
                 </div>
               );
             })}
           </>
         )}
-        <div className="d-flex mt-2 justify-content-center">
+       
+      </div>
+       <div className="d-flex mt-2 justify-content-center">
           <FontAwesomeIcon
             icon={showProjectDetails ? faChevronUp : faChevronDown}
-            onClick={() => setShowProjectDetails(prev => !prev)}
+            onClick={() => setShowProjectDetails((prev) => !prev)}
             style={{ cursor: "pointer" }}
           />
         </div>
-      </div>
     </div>
   );
 };

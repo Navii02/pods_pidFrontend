@@ -10,9 +10,12 @@ import {
   faFloppyDisk
 } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import React, { useState } from "react";
+import React, { useContext, useState } from "react";
+import { updateProjectContext } from "../context/ContextShare";
 
 function CommentReview() {
+   const {updateProject} = useContext(updateProjectContext)
+
   const [searchQuery, setSearchQuery] = useState('');
   const [editedRowIndex, setEditedRowIndex] = useState(null);
   const [editedLineData, setEditedLineData] = useState({});

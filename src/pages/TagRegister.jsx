@@ -241,7 +241,7 @@ const TagRegister = () => {
             <Form.Text className="text-light">
               {formData.model 
                 ? `${formData.model.name} (${(formData.model.size / 1024).toFixed(2)} KB)`
-                : 'No file chosen (Max 10MB)'}
+                : 'No file chosen '}
             </Form.Text>
           </Form.Group>
 

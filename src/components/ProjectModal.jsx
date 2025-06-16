@@ -1,18 +1,21 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useContext } from "react";
 import {
   Modal,
   Button,
   Form,
   Alert,
   ListGroup,
-  Card,
-  Row,
-  Col,
 } from "react-bootstrap";
-
 import "../styles/ProjectModal.css";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faEdit, faPlus, faTimes, faTrash } from "@fortawesome/free-solid-svg-icons";
+import {
+  faEdit,
+  faFolder,
+  faPlus,
+  faTimes,
+  faTrash,
+} from "@fortawesome/free-solid-svg-icons";
+import { updateProjectContext } from "../context/ContextShare";
 
 const INITIAL_PROJECT_STATE = {
   projectId: "",
@@ -34,19 +37,18 @@ function ProjectModal({
   updateProject,
   deleteProject,
 }) {
+  const {setUpdateProject} = useContext(updateProjectContext)
   const [formState, setFormState] = useState(INITIAL_PROJECT_STATE);
-  const [isCreating, setIsCreating] = useState(false);
+  const [isFormModalOpen, setIsFormModalOpen] = useState(false);
   const [editingProject, setEditingProject] = useState(null);
   const [error, setError] = useState("");
 
   useEffect(() => {
-    if (!isOpen) {
-      resetState();
-    }
+    if (!isOpen) resetState();
   }, [isOpen]);
 
   const resetState = () => {
-    setIsCreating(false);
+    setIsFormModalOpen(false);
     setEditingProject(null);
     setFormState(INITIAL_PROJECT_STATE);
     setError("");
@@ -54,21 +56,20 @@ function ProjectModal({
 
   const handleSelectProject = (project) => {
     sessionStorage.setItem("selectedProject", JSON.stringify(project));
-    setProjectname(project.projectName);
+    setProjectname(project?.projectName);
+    setUpdateProject(project)
     onClose();
+
   };
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
-    // Ensure value is a string, default to empty string if null/undefined
     setFormState((prev) => ({ ...prev, [name]: value ?? "" }));
     setError("");
   };
 
   const handleEditProject = (project) => {
-    setIsCreating(false);
     setEditingProject(project);
-    // Ensure projectName and projectNumber are strings
     setFormState({
       ...project,
       projectName: project.projectName ?? "",
@@ -77,14 +78,13 @@ function ProjectModal({
       projectId: project.projectId ?? "",
       projectPath: project.projectPath ?? "",
     });
-    setError("");
+    setIsFormModalOpen(true);
   };
 
   const handleCreateProject = () => {
-    setIsCreating(true);
     setEditingProject(null);
     setFormState(INITIAL_PROJECT_STATE);
-    setError("");
+    setIsFormModalOpen(true);
   };
 
   const handleCancel = () => {
@@ -94,7 +94,6 @@ function ProjectModal({
   const handleSubmit = useCallback(
     async (e) => {
       e.preventDefault();
-      // Ensure projectName and projectNumber are strings before trim
       const projectName = formState.projectName ?? "";
       const projectNumber = formState.projectNumber ?? "";
 
@@ -108,12 +107,19 @@ function ProjectModal({
           const response = await updateProject({ ...editingProject, ...formState });
           if (response.status === 200) {
             updateStateAfterEdit(response.data);
+            console.log(response.data);
+
+            setIsFormModalOpen(false);
             onClose();
           }
         } else {
           const response = await saveProject(formState);
           if (response.status === 201) {
             updateStateAfterCreate(response.data);
+             handleSelectProject(response.data.project)
+            console.log(response.data);
+            
+            setIsFormModalOpen(false);
             onClose();
           }
         }
@@ -153,143 +159,122 @@ function ProjectModal({
   };
 
   return (
-    <Modal
-      show={isOpen}
-      onHide={onClose}
-      centered
-      size="lg"
-      className="project-modal-custom"
-      aria-labelledby="project-management-modal"
-    >
-      <Modal.Header className="project-modal-header d-flex justify-content-between">
-        <Modal.Title id="project-management-modal">Project Management</Modal.Title>
-        <Button
-          variant="link"
-          className="close-button"
-          onClick={onClose}
-          aria-label="Close"
-        >
-          <FontAwesomeIcon icon={faTimes} />
-        </Button>
-      </Modal.Header>
+    <>
+      <Modal show={isOpen} onHide={onClose} centered  dialogClassName="custom-project-form-size" className="project-modal-custom">
+        <Modal.Header className="project-modal-header d-flex justify-content-between">
+          <Modal.Title>Project Management</Modal.Title>
+          <div className="header-icons">
+            <FontAwesomeIcon icon={faFolder} />
+            <FontAwesomeIcon icon={faTrash} />
+            <FontAwesomeIcon icon={faPlus} onClick={handleCreateProject} />
+            <FontAwesomeIcon icon={faTimes} onClick={onClose} />
+          </div>
+        </Modal.Header>
 
-      <Modal.Body>
-        {error && <Alert variant="danger">{error}</Alert>}
+        <Modal.Body>
+          {error && <Alert variant="danger">{error}</Alert>}
 
-        {!isCreating && !editingProject && (
-          <Button
-            variant="primary"
-            className="mb-3 create-project-button"
-            onClick={handleCreateProject}
-          >
-            <FontAwesomeIcon icon={faPlus} className="me-2" />
-            Create New Project
-          </Button>
-        )}
-
-        {(isCreating || editingProject) && (
-          <Card className="project-form-card mb-3">
-            <Card.Body>
-              <Card.Title>{editingProject ? "Edit Project" : "Create New Project"}</Card.Title>
-              <Form onSubmit={handleSubmit}>
-                <Row>
-                  <Col md={6}>
-                    <Form.Group controlId="projectNumber" className="mb-3">
-                      <Form.Label>Project Number</Form.Label>
-                      <Form.Control
-                        type="text"
-                        name="projectNumber"
-                        value={formState.projectNumber}
-                        onChange={handleInputChange}
-                        placeholder="Enter project number"
-                        isInvalid={!!error && !formState.projectNumber.trim()}
-                        required
-                      />
-                    </Form.Group>
-                  </Col>
-                  <Col md={6}>
-                    <Form.Group controlId="projectName" className="mb-3">
-                      <Form.Label>Project Name</Form.Label>
-                      <Form.Control
-                        type="text"
-                        name="projectName"
-                        value={formState.projectName}
-                        onChange={handleInputChange}
-                        placeholder="Enter project name"
-                        isInvalid={!!error && !formState.projectName.trim()}
-                        required
-                      />
-                    </Form.Group>
-                  </Col>
-                </Row>
-
-                <Form.Group controlId="description" className="mb-3">
-                  <Form.Label>Description</Form.Label>
-                  <Form.Control
-                    as="textarea"
-                    name="description"
-                    rows={3}
-                    value={formState.description}
-                    onChange={handleInputChange}
-                    placeholder="Enter project description"
-                  />
-                </Form.Group>
-
-                <div className="form-buttons">
-                  <Button variant="secondary" onClick={handleCancel}>
-                    Cancel
-                  </Button>
-                  <Button
-                    variant="primary"
-                    type="submit"
-                    disabled={!formState.projectName.trim() || !formState.projectNumber.trim()}
-                  >
-                    {editingProject ? "Update" : "Create"}
-                  </Button>
-                </div>
-              </Form>
-            </Card.Body>
-          </Card>
-        )}
-
-        {!isCreating && !editingProject && (
-          projects.length > 0 ? (
+          {projects.length > 0 ? (
             <ListGroup className="project-list">
               <ListGroup.Item className="project-header">
-                <Row>
-                  <Col md={3}><strong>Project Number</strong></Col>
-                  <Col md={6}><strong>Project Name</strong></Col>
-                  <Col md={3} className="text-center"><strong>Actions</strong></Col>
-                </Row>
+                <div className="project-row header">
+                  <div className="project-cell number"><strong>Project Number</strong></div>
+                  <div className="project-cell name"><strong>Project Name</strong></div>
+                  <div className="project-cell actions"><strong>Actions</strong></div>
+                </div>
               </ListGroup.Item>
 
               {projects.map((project) => (
                 <ListGroup.Item key={project.projectId} className="project-item">
-                  <Row className="align-items-center">
-                    <Col md={3} onClick={() => handleSelectProject(project)} className="project-number">
-                      {project.projectNumber}
-                    </Col>
-                    <Col md={6} onClick={() => handleSelectProject(project)} className="project-name">
-                      {project.projectName}
-                    </Col>
-                    <Col md={3} className="project-actions">
+                  <div className="project-row">
+                    <div className="project-cell number">{project.projectNumber}</div>
+                    <div className="project-cell name">{project.projectName}</div>
+                    <div className="project-cell actions">
+                      <Button variant="link" className="action-icon" onClick={() => handleSelectProject(project)}>
+                        <FontAwesomeIcon icon={faFolder} />
+                      </Button>
                       <Button variant="link" className="action-icon" onClick={() => handleEditProject(project)}>
                         <FontAwesomeIcon icon={faEdit} />
                       </Button>
                       <Button variant="link" className="action-icon text-danger" onClick={() => handleDeleteProject(project)}>
                         <FontAwesomeIcon icon={faTrash} />
                       </Button>
-                    </Col>
-                  </Row>
+                    </div>
+                  </div>
                 </ListGroup.Item>
               ))}
             </ListGroup>
           ) : (
             <Alert variant="info" className="mt-3">No projects found</Alert>
-          )
-        )}
-      </Modal.Body>
-    </Modal>
+          )}
+        </Modal.Body>
+      </Modal>
+
+      {/* Project Form Modal */}
+      <Modal show={isFormModalOpen} onHide={handleCancel} centered size="sm" backdrop="static"   className="project-form-modal" >
+        <Modal.Header className="">
+          <Modal.Title >
+            {editingProject ? "Edit Project" : "Add New Project"}
+          </Modal.Title>
+          <Button variant="link" className="" onClick={handleCancel}>
+            <FontAwesomeIcon icon={faTimes} />
+          </Button>
+        </Modal.Header>
+
+        <Modal.Body >
+          {error && <Alert variant="danger">{error}</Alert>}
+
+          <Form onSubmit={handleSubmit}>
+            <Form.Group controlId="projectNumber" >
+              <Form.Label  className="text-dark">Project Number <span>*</span></Form.Label>
+              <Form.Control
+                type="text"
+                name="projectNumber"
+                value={formState.projectNumber}
+                onChange={handleInputChange}
+                placeholder="Enter project number"
+                isInvalid={!!error && !formState.projectNumber.trim()}
+              />
+            </Form.Group>
+
+            <Form.Group controlId="projectName" >
+              <Form.Label  className="text-dark">Project Name <span >*</span></Form.Label>
+              <Form.Control
+                type="text"
+                name="projectName"
+                value={formState.projectName}
+                onChange={handleInputChange}
+                placeholder="Enter project name"
+                isInvalid={!!error && !formState.projectName.trim()}
+              />
+            </Form.Group>
+
+            <Form.Group controlId="description" >
+              <Form.Label  className="text-dark">Project Description</Form.Label>
+              <Form.Control
+                as="textarea"
+                rows={3}
+                name="description"
+                value={formState.description}
+                onChange={handleInputChange}
+                placeholder="Enter project description"
+              />
+            </Form.Group>
+          </Form>
+        </Modal.Body>
+
+        <Modal.Footer >
+          <Button variant="secondary" onClick={handleCancel}>Cancel</Button>
+          <Button
+            variant="primary"
+            onClick={handleSubmit}
+            disabled={!formState.projectName.trim() || !formState.projectNumber.trim()}
+          >
+            OK
+          </Button>
+        </Modal.Footer>
+      </Modal>
+    </>
   );
 }
 

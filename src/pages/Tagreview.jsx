@@ -8,11 +8,14 @@ import {
   faXmark,
 } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import React, { useEffect, useState } from "react";
+import React, { useContext, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { deleteTag, getdocumentsbyTags, GetTagDetails, updateTags } from "../services/TagApi";
+import { updateProjectContext } from "../context/ContextShare";
 
 const Tagreview = () => {
+ const {updateProject} = useContext(updateProjectContext)
+
   const [tags, setTags] = useState([]);
   const [editingId, setEditingId] = useState(null);
   const [editData, setEditData] = useState({});
@@ -41,7 +44,7 @@ const Tagreview = () => {
 
   useEffect(() => {
     GetTags();
-  }, []);
+  }, [updateProject]);
 
   const handleEdit = (tag) => {
     setEditingId(tag.tagId);

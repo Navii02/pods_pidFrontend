@@ -17,15 +17,18 @@ import '../styles/TreeReview.css';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faTimes, faTrash } from '@fortawesome/free-solid-svg-icons';
 import { faEdit, faSave } from '@fortawesome/free-regular-svg-icons';
-import { TreeresponseContext } from '../context/ContextShare';
+import { TreeresponseContext, updateProjectContext } from '../context/ContextShare';
 
 function TreeReview(updatetree) {
  const { updateTree } = useContext(TreeresponseContext);
+ const {updateProject} = useContext(updateProjectContext)
 
 
   const [areaData, setAreaData] = useState([]);
   const [discData, setDiscData] = useState([]);
   const [sysData, setSysData] = useState([]);
+  //console.log(areaData,discData,sysData);
+  
 
   const [editedRowIndex, setEditedRowIndex] = useState({ type: '', index: -1 });
   const [editedLineData, setEditedLineData] = useState({});
@@ -42,7 +45,7 @@ function TreeReview(updatetree) {
         getSystem(projectId)
       ]);
       setAreaData(areaRes.data.area || []);
-      setDiscData(discRes.data.disipline || []); // Fixed typo: disipline -> discipline
+      setDiscData(discRes.data.disipline || []); 
       setSysData(sysRes.data.system || []);
     } catch (error) {
       console.error("Error fetching data:", error);
@@ -51,7 +54,7 @@ function TreeReview(updatetree) {
 
   useEffect(() => {
     if (projectId) fetchData();
-  }, [projectId,updateTree]);
+  }, [projectId,updateTree,updateProject]);
 
   const startEdit = (type, index, row) => {
     setEditedRowIndex({ type, index });
@@ -91,8 +94,12 @@ function TreeReview(updatetree) {
 
   const handleDelete = async (type, id) => {
     try {
+      console.log(id);
+      
       switch(type) {
         case 'area':
+          console.log(id);
+          
           await deleteArea(id);
           break;
         case 'discipline':
@@ -135,23 +142,22 @@ function TreeReview(updatetree) {
     <div className="table-wrapper">
       <div className="table-header">
         <h4 className="table-title">{type.toUpperCase()} Table</h4>
-      
       </div>
       <table className="styled-table">
         <thead>
           <tr>
             <th>Code</th>
             <th>Name</th>
-            <th>
-              <div className='d-flex justify-content-between'>
-                <p  style={{marginLeft:"140px" }}  >Actions</p>
+            <th className="actions-header">
+              <div className="actions-header-content">
+                <span>Actions</span>
                 <button
-          className="delete-all-btn"
-          onClick={() => handleDeleteAll(type)}
-          title={`Delete all ${type}s`}
-        >
-          <FontAwesomeIcon className='text-white' icon={faTrash} />
-        </button>
+                  className="delete-all-btn"
+                  onClick={() => handleDeleteAll(type)}
+                  title={`Delete all ${type}s`}
+                >
+                  <FontAwesomeIcon icon={faTrash} />
+                </button>
               </div>
             </th>
           </tr>
@@ -175,26 +181,44 @@ function TreeReview(updatetree) {
                   />
                 ) : row[nameKey]}
               </td>
-              <td>
-                {editedRowIndex.type === type && editedRowIndex.index === index ? (
-                  <>
-                    <button className="save-btn" onClick={() => handleSave(type)}>
-                      <FontAwesomeIcon icon={faSave} />
-                    </button>
-                    <button className="cancel-btn" onClick={cancelEdit}>
-                      <FontAwesomeIcon icon={faTimes} />
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    <button className="edit-btn" onClick={() => startEdit(type, index, row)}>
-                      <FontAwesomeIcon icon={faEdit} />
-                    </button>
-                    <button className="delete-btn" onClick={() => handleDelete(type, row[idKey])}>
-                      <FontAwesomeIcon icon={faTrash} />
-                    </button>
-                  </>
-                )}
+              <td className="actions-cell">
+                <div className="action-buttons">
+                  {editedRowIndex.type === type && editedRowIndex.index === index ? (
+                    <>
+                      <button 
+                        className="icon-btn save-btn" 
+                        onClick={() => handleSave(type)}
+                        title="Save"
+                      >
+                        <FontAwesomeIcon icon={faSave} />
+                      </button>
+                      <button 
+                        className="icon-btn cancel-btn" 
+                        onClick={cancelEdit}
+                        title="Cancel"
+                      >
+                        <FontAwesomeIcon icon={faTimes} />
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button 
+                        className="icon-btn edit-btn" 
+                        onClick={() => startEdit(type, index, row)}
+                        title="Edit"
+                      >
+                        <FontAwesomeIcon icon={faEdit} />
+                      </button>
+                      <button 
+                        className="icon-btn delete-btn" 
+                        onClick={() => handleDelete(type, row[idKey])}
+                        title="Delete"
+                      >
+                        <FontAwesomeIcon icon={faTrash} />
+                      </button>
+                    </>
+                  )}
+                </div>
               </td>
             </tr>
           ))}
@@ -205,7 +229,7 @@ function TreeReview(updatetree) {
 
   return (
     <div className="tree-review-container">
-      {renderTable(areaData, 'area', 'area', 'name', 'areaId')} {/* Fixed: AreaId -> areaId */}
+      {renderTable(areaData, 'area', 'area', 'name', 'AreaId')}
       {renderTable(discData, 'discipline', 'disc', 'name', 'discId')}
       {renderTable(sysData, 'system', 'sys', 'name', 'sysId')}
     </div>

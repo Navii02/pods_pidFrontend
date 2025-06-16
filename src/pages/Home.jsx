@@ -22,6 +22,8 @@ const Home = () => {
     setIsProjectModalOpen(true);
     try {
       const response = await getProjects();
+      console.log(response);
+      
       if (response.status === 200) {
         setProjectDetails(response.data.row || []);
         setProjects(response.data.row || []);
@@ -42,14 +44,14 @@ const Home = () => {
   return (
     <div className="d-flex flex-column min-vh-100">
       <Header projectName={projectName} />
-      <div className="d-flex flex-grow-1" style={{ marginTop: '50px' }}>
+      <div className="d-flex flex-grow-1" style={{ marginTop: '70px' }}>
         <aside
           className="bg-dark"
           style={{
             width: isSidebarCollapsed ? '0px' : '300px',
             position: 'fixed',
-            height: 'calc(100vh - 50px - 30px)',
-            top: '50px',
+            height: 'calc(100vh - 70px - 30px)',
+            top: '70px',
             left: 0,
             zIndex: 1000,
             transition: 'width 0.3s ease',

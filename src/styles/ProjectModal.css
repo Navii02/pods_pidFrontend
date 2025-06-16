@@ -1,176 +1,232 @@
-.project-modal-custom .modal-dialog {
-  max-width: 500px;
-  margin: auto;
+.custom-project-form-size .modal-dialog {
+  max-width: 900px;
+  width: 100%;
 }
 
 
-.project-modal-custom .modal-content {
-  background-color: #1A1A1A; /* Rich Black */
-  color: #ffffff;
-  max-height: 600px;
-  overflow-y: auto;
-  border-radius: 10px;
-  border: 1px solid #3C3B80; /* Iris */
-}
-
-/* Scrollbar Styling for modal-content */
-.project-modal-custom .modal-content::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-
-.project-modal-custom .modal-content::-webkit-scrollbar-track {
-  background: #1A1A1A; /* Rich Black */
-  border-radius: 4px;
-}
-
-.project-modal-custom .modal-content::-webkit-scrollbar-thumb {
-  background-color: #7A78E8; /* Lavender Blue */
-  border-radius: 4px;
-  border: 2px solid #1A1A1A; /* Padding around thumb */
-}
-
-.project-modal-custom .modal-content::-webkit-scrollbar-thumb:hover {
-  background-color: #4D5DBE; /* Blue Sapphire */
-}
-
-.project-modal-custom .modal-header {
-  background-color: #202020; /* Onyx */
-}
-
-.project-modal-header .modal-title {
-  color: #ffffff;
-}
-
-.close-button {
-  color: #ffffff;
-}
-
-.create-project-button {
-  background-color: #7A78E8; /* Lavender Blue */
-  border-color: #7A78E8;
-  color: #ffffff;
-}
-
-.create-project-button:hover {
-  background-color: #3A4547; /* Deep Slate */
-  border-color: #3A4547;
-}
-
-/* Create Project text color */
-.create-project-button span,
-.create-project-button .fa-plus {
-  color: #ffffff;
-}
-
-.project-form-card {
-  background-color: #202020; /* Onyx */
-  border: 1px solid #3C3B80; /* Iris */
-  color: #ffffff;
-}
-
-.project-form-card .form-control {
-  background-color: #1A1A1A; /* Rich Black */
-  color: #ffffff;
-  border: 1px solid #3A4547; /* Deep Slate */
-}
-
-.project-form-card .form-control::placeholder {
-  color: #ffffff;
-  opacity: 0.7;
-}
-
-.project-form-card textarea.form-control::placeholder {
-  color: #ffffff;
-  opacity: 0.7;
-}
-
-.project-form-card .form-control:focus {
-  border-color: #7A78E8; /* Lavender Blue */
-  box-shadow: none;
-}
-
-
-
-.form-buttons {
+.project-modal-custom .project-modal-header {
+  background-color: #000;
+  color: #fff;
+  padding: 12px 18px;
   display: flex;
   justify-content: space-between;
-  margin-top: 1rem;
+  align-items: center;
+  border-bottom: 1px solid #333;
 }
 
-.project-list {
-  background-color: #202020; /* Onyx */
-
-  overflow-y: auto;
-  max-height: 300px;
+.project-modal-custom .project-modal-header .modal-title {
+  font-size: 18px;
+  font-weight: 500;
 }
 
-/* Scrollbar Styling for project list */
-.project-list::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-
-.project-list::-webkit-scrollbar-track {
-  background: #202020; /* Onyx */
-  border-radius: 3px;
-}
-
-.project-list::-webkit-scrollbar-thumb {
-  background-color: #7A78E8; /* Lavender Blue */
-  border-radius: 3px;
-  border: 1.5px solid #202020;
-}
-
-.project-list::-webkit-scrollbar-thumb:hover {
-  background-color: #4D5DBE; /* Blue Sapphire */
-}
-
-.project-header,
-.project-item {
-  background-color: #1A1A1A; /* Rich Black */
-  color: #ffffff;
-}
-
-.project-item:hover {
-  background-color: #3A4547; /* Deep Slate */
-  cursor: pointer;
-}
-
-.project-number,
-.project-name {
-  cursor: pointer;
-}
-
-.project-actions {
+.project-modal-custom .header-icons {
   display: flex;
-  margin-left: -13px;
-  gap: 0.5rem;
-  justify-content: flex-end;
+  gap: 14px;
+  align-items: center;
+  padding-right: 6px;
 }
 
-.action-icon {
-  color: #7A78E8; /* Lavender Blue */
+.project-modal-custom .header-icons .fa-folder,
+.project-modal-custom .header-icons .fa-trash,
+.project-modal-custom .header-icons .fa-plus,
+.project-modal-custom .header-icons .fa-times {
+  color: #fff;
+  cursor: pointer;
+  font-size: 18px;
+  transition: color 0.2s;
+}
+
+.project-modal-custom .header-icons .fa-folder:hover,
+.project-modal-custom .header-icons .fa-trash:hover,
+.project-modal-custom .header-icons .fa-plus:hover,
+.project-modal-custom .header-icons .fa-times:hover {
+  color: #00bcd4;
+}
+
+/* Modal body */
+.project-modal-custom .modal-body {
+  background-color: #272626;
   padding: 0;
 }
 
-.action-icon:hover {
-  color: #ffffff;
+/* Project list and items */
+.project-modal-custom .project-list,
+.project-modal-custom .project-header,
+.project-modal-custom .project-item {
+  background-color: #2e2e2e;
+  color: #fff;
+  border: none;
 }
 
-.action-icon.text-danger:hover {
-  color: #ff4d4f;
+.project-modal-custom .project-header {
+  font-weight: 600;
+  border-bottom: 1px solid #444;
+  padding: 12px 15px;
 }
 
-/* Alert Styling */
+.project-modal-custom .project-item {
+  border-bottom: 1px solid #444;
+  transition: background-color 0.2s ease;
+}
+
+.project-modal-custom .project-item:hover {
+  background-color: #383838;
+  cursor: pointer;
+}
+
+/* Project row layout */
+.project-modal-custom .project-row {
+  display: flex;
+  align-items: center;
+  padding: 8px 0;
+}
+
+.project-modal-custom .project-row.header {
+  font-weight: bold;
+  background-color: #2a2a2a;
+  color: #fff;
+}
+
+.project-modal-custom .project-cell {
+  padding: 4px 10px;
+  display: flex;
+  align-items: center;
+}
+
+.project-modal-custom .project-cell.number {
+  flex: 1;
+}
+
+.project-modal-custom .project-cell.name {
+  flex: 2;
+}
+
+.project-modal-custom .project-cell.actions {
+  flex: 1;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+/* Action icons */
+.project-modal-custom .action-icon {
+  color: #fff;
+  font-size: 16px;
+  cursor: pointer;
+  transition: transform 0.2s, color 0.2s;
+}
+
+.project-modal-custom .action-icon:hover {
+  transform: scale(1.1);
+  color: #00bcd4;
+}
+
+.project-modal-custom .action-icon.text-danger {
+  color: #ff5555;
+}
+
+.project-modal-custom .action-icon.text-danger:hover {
+  color: #ff2222;
+}
+
+/* Error alert */
 .alert-danger {
-  background-color: #3A4547;
-  color: #ffffff;
-  border: none;
+  font-size: 13px;
+  margin-top: 8px;
+  margin-bottom: 15px;
+  border-left: 4px solid #ff5555;
+  background-color: #3b1f1f;
+  color: #ffcccc;
+  padding: 10px 15px;
 }
 
-.alert-info {
-  background-color: #2F3839;
-  color: #ffffff;
-  border: none;
+/* Remove border-radius from main modal */
+.project-modal-custom .modal-content,
+.project-modal-custom .form-control,
+.project-modal-custom .btn,
+.project-modal-custom .modal-header,
+.project-modal-custom .modal-footer,
+.project-modal-custom .modal-body {
+  border-radius: 0;
+}
+
+/* === Scoped styles for form modal === */
+.project-form-modal .modal-content {
+  border-radius: 10px !important;
+  overflow: hidden;
+  border: 1px solid #444;
+}
+
+.project-form-modal .modal-header {
+  background-color: #000 !important;
+  color: #fff;
+  padding: 12px 18px;
+  font-weight: bold;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: none;
+}
+
+.project-form-modal .modal-header .btn-close,
+.project-form-modal .modal-header .btn {
+  color: #fff;
+  font-size: 18px;
+}
+
+.project-form-modal .modal-body {
+  background-color: #f0f0f0 !important;
+  padding: 20px;
+}
+
+.project-form-modal .form-control {
+  background-color: #f2f2f2;
+  color: #1a1a1a;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 14px;
+  padding: 6px 10px;
+}
+
+.project-form-modal .form-control:focus {
+  border-color: #007bff;
+  box-shadow: 0 0 4px rgba(0, 123, 255, 0.5);
+  background-color: #ffffff;
+  color: #000000;
+}
+
+.project-form-modal .modal-footer {
+  background-color: #e0e0e0 !important;
+  padding: 12px 18px;
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  border-top: none;
+}
+
+.project-form-modal .modal-footer .btn {
+  padding: 6px 20px;
+  font-weight: 500;
+  font-size: 14px;
+  border-radius: 6px;
+  min-width: 90px;
+}
+
+.project-form-modal .modal-footer .btn-secondary {
+  background-color: #6c757d;
+  color: #fff;
+  border-color: #6c757d;
+}
+
+.project-form-modal .modal-footer .btn-secondary:hover {
+  background-color: #5a6268;
+}
+
+.project-form-modal .modal-footer .btn-primary {
+  background-color: #000;
+  color: #fff;
+  border-color: #000;
+}
+
+.project-form-modal .modal-footer .btn-primary:hover {
+  background-color: #333;
 }

@@ -1,15 +1,14 @@
+
 .project-toggle-wrapper {
-  background-color: #1e1e1e;
+  background-color: #272727;
+  margin-left: 0px;
   color: white;
-  border-radius: 5px;
-  padding: 10px;
   font-size: 13px;
 }
 
 .selected-project-header {
   font-size: 14px;
   font-weight: bold;
-  padding: 6px 0;
   color: white;
 }
 
@@ -20,17 +19,17 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 4px 0;
+  padding: 2px 0;
 }
 
 .folder-indent-1 {
   margin-left: 16px;
 }
 .folder-indent-2 {
-  margin-left: 32px;
+  margin-left: 28px;
 }
 .folder-indent-3 {
-  margin-left: 48px;
+  margin-left: 20px;
 }
 
 .folder-icon {
