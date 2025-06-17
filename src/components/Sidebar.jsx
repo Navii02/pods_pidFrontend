@@ -83,6 +83,7 @@ function Sidebar({
   }, [sessionStorage.getItem("selectedProject"), updateProject]);
 
   const handleOpenModal = (modalName) => {
+    console.log(modalName);
     setOpenModal((prev) => ({
       ...prev,
       [modalName]: true,
@@ -162,12 +163,6 @@ function Sidebar({
       });
       navigate(item.path);
     }
-  };
-
-  const handleToggle = () => {
-    const newCollapsedState = !isCollapsed;
-    setIsCollapsed(newCollapsedState);
-    onToggle(newCollapsedState);
   };
 
   useEffect(() => {
@@ -482,13 +477,13 @@ function Sidebar({
 
       {/* Modals */}
       {openModal.areaRegister && (
-        <Arearegister onClose={() => handleCloseModal("areaRegister")} />
+        <Arearegister isOpen={openModal.areaRegister} onClose={() => handleCloseModal("areaRegister")} />
       )}
       {openModal.disciplineRegister && (
-        <DisciplineRegister onClose={() => handleCloseModal("disciplineRegister")} />
+        <DisciplineRegister isOpen={openModal.disciplineRegister} onClose={() => handleCloseModal("disciplineRegister")} />
       )}
       {openModal.systemRegister && (
-        <SystemRegister onClose={() => handleCloseModal("systemRegister")} />
+        <SystemRegister isOpen={openModal.systemRegister} onClose={() => handleCloseModal("systemRegister")} />
       )}
       
       {showProjectDetails && <ProjectDetails />}

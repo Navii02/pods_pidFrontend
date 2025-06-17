@@ -1212,9 +1212,7 @@ function HomePage() {
       />
  
      }
-      <Outlet/>
-            
-         
+      <Outlet/>       
           </div>
         </div>
 

@@ -18,6 +18,8 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faTimes, faTrash } from '@fortawesome/free-solid-svg-icons';
 import { faEdit, faSave } from '@fortawesome/free-regular-svg-icons';
 import { TreeresponseContext, updateProjectContext } from '../context/ContextShare';
+import DeleteConfirm from '../components/DeleteConfirm';
+import Alert from '../components/Alert';
 
 function TreeReview(updatetree) {
  const { updateTree } = useContext(TreeresponseContext);
@@ -31,11 +33,71 @@ function TreeReview(updatetree) {
   
 
   const [editedRowIndex, setEditedRowIndex] = useState({ type: '', index: -1 });
-  const [editedLineData, setEditedLineData] = useState({});
 
   const projectString = sessionStorage.getItem("selectedProject");
   const project = projectString ? JSON.parse(projectString) : null;
   const projectId = project?.projectId;
+
+    const [currentDeleteTag, setCurrentDeleteTag] = useState('');
+  const [currentDeleteType, setCurrentDeleteType] = useState('');
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [editedAreaRowIndex, setEditedAreaRowIndex] = useState(-1);
+  const [editedDiscRowIndex, setEditedDiscRowIndex] = useState(-1);
+  const [editedSysRowIndex, setEditedSysRowIndex] = useState(-1);
+  const [editedLineData, setEditedLineData] = useState({});
+  const [customAlert, setCustomAlert] = useState(false);
+  const [modalMessage, setModalMessage] = useState('');
+
+  const handleDeleteTagFromTable = (number, type) => {
+    setCurrentDeleteTag(number);
+    setCurrentDeleteType(type);
+    setShowConfirm(true);
+  };
+
+  const handleConfirmDelete = () => {
+    if (currentDeleteType === 'area') {
+    } else if (currentDeleteType === 'disc') {
+    } else if (currentDeleteType === 'sys') {
+    }
+    setShowConfirm(false);
+    setCurrentDeleteTag('');
+    setCurrentDeleteType('');
+  };
+
+  const handleCancelDelete = () => {
+    setShowConfirm(false);
+    setCurrentDeleteTag('');
+    setCurrentDeleteType('');
+  };
+
+  const handleEditOpen = (index, type) => {
+    setEditedLineData({});
+    if (type === 'area') {
+      setEditedAreaRowIndex(index);
+      setEditedDiscRowIndex(-1);
+      setEditedSysRowIndex(-1);
+      setEditedLineData({ ...areaData[index], oldArea: areaData[index].area });
+    } else if (type === 'disc') {
+      setEditedDiscRowIndex(index);
+      setEditedAreaRowIndex(-1);
+      setEditedSysRowIndex(-1);
+      setEditedLineData({ ...discData[index], oldDisc: discData[index].disc });
+    } else if (type === 'sys') {
+      setEditedSysRowIndex(index);
+      setEditedAreaRowIndex(-1);
+      setEditedDiscRowIndex(-1);
+      setEditedLineData({ ...sysData[index], oldSys: sysData[index].sys });
+    }
+  };
+
+  const handleCloseEdit = () => {
+    setEditedAreaRowIndex(-1);
+    setEditedDiscRowIndex(-1);
+    setEditedSysRowIndex(-1);
+    setEditedLineData({});
+  };
+
+
 
   const fetchData = async () => {
     try {
@@ -228,10 +290,191 @@ function TreeReview(updatetree) {
   );
 
   return (
-    <div className="tree-review-container">
-      {renderTable(areaData, 'area', 'area', 'name', 'AreaId')}
-      {renderTable(discData, 'discipline', 'disc', 'name', 'discId')}
-      {renderTable(sysData, 'system', 'sys', 'name', 'sysId')}
+    // <div className="tree-review-container">
+    //   {renderTable(areaData, 'area', 'area', 'name', 'AreaId')}
+    //   {renderTable(discData, 'discipline', 'disc', 'name', 'discId')}
+    //   {renderTable(sysData, 'system', 'sys', 'name', 'sysId')}
+    // </div>
+
+        <div style={{ width: '100%', height: '90vh', backgroundColor: 'white', zIndex: '1', position: 'absolute' }}>
+      <form>
+        <div className="table-container">
+          <h4 className='text-center'>Area table</h4>
+          <table className='tagTable'>
+            <thead>
+              <tr>
+                <th className="wideHead">Code</th>
+                <th className="wideHead">Name</th>
+                <th className="tableActionCell">
+                  <i className="fa-solid fa-trash-can ms-3" title='Delete all' onClick={()=>{handleDeleteAll('area')}}></i>
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {areaData.map((tag, index) => (
+                <tr key={tag.areaId} style={{ color: 'black' }}>
+                  <td style={{ backgroundColor: '#f0f0f0' }}>
+                    {editedAreaRowIndex === index ? (
+                      <input
+                        onChange={e => handleChange('area', e.target.value)}
+                        type="text"
+                        value={editedLineData.area || ''}
+                      />
+                    ) : (
+                      tag.area
+                    )}
+                  </td>
+                  <td>
+                    {editedAreaRowIndex === index ? (
+                      <input
+                        onChange={e => handleChange('name', e.target.value)}
+                        type="text"
+                        value={editedLineData.name || ''}
+                      />
+                    ) : (
+                      tag.name
+                    )}
+                  </td>
+                  <td style={{ backgroundColor: '#f0f0f0' }}>
+                    {editedAreaRowIndex === index ? (
+                      <>
+                        <i className="fa-solid fa-floppy-disk text-success" onClick={() => handleSave('area', tag.areaId)}></i>
+                        <i className="fa-solid fa-xmark ms-3 text-danger" onClick={handleCloseEdit}></i>
+                      </>
+                    ) : (
+                      <>
+                        <i className="fa-solid fa-pencil" onClick={() => handleEditOpen(index, 'area')}></i>
+                        <i className="fa-solid fa-trash-can ms-3" onClick={() => handleDeleteTagFromTable(tag.areaId, 'area')}></i>
+                      </>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
+          <h4 className='text-center'>Discipline table</h4>
+          <table className='tagTable'>
+            <thead>
+              <tr>
+                <th className="wideHead">Code</th>
+                <th className="wideHead">Name</th>
+                <th className="tableActionCell">
+                  <i className="fa-solid fa-trash-can ms-3" title='Delete all' onClick={()=>{handleDeleteAll('discipline')}}></i>
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {discData.map((tag, index) => (
+                <tr key={tag.discId} style={{ color: 'black' }}>
+                  <td style={{ backgroundColor: '#f0f0f0' }}>
+                    {editedDiscRowIndex === index ? (
+                      <input
+                        onChange={e => handleChange('disc', e.target.value)}
+                        type="text"
+                        value={editedLineData.disc || ''}
+                      />
+                    ) : (
+                      tag.disc
+                    )}
+                  </td>
+                  <td>
+                    {editedDiscRowIndex === index ? (
+                      <input
+                        onChange={e => handleChange('name', e.target.value)}
+                        type="text"
+                        value={editedLineData.name || ''}
+                      />
+                    ) : (
+                      tag.name
+                    )}
+                  </td>
+                  <td style={{ backgroundColor: '#f0f0f0' }}>
+                    {editedDiscRowIndex === index ? (
+                      <>
+                        <i className="fa-solid fa-floppy-disk text-success" onClick={() => handleSave('disc', tag.discId)}></i>
+                        <i className="fa-solid fa-xmark ms-3 text-danger" onClick={handleCloseEdit}></i>
+                      </>
+                    ) : (
+                      <>
+                        <i className="fa-solid fa-pencil" onClick={() => handleEditOpen(index, 'disc')}></i>
+                        <i className="fa-solid fa-trash-can ms-3" onClick={() => handleDeleteTagFromTable(tag.discId, 'disc')}></i>
+                      </>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
+          <h4 className='text-center'>System table</h4>
+          <table className='tagTable'>
+            <thead>
+              <tr>
+                <th className="wideHead">Code</th>
+                <th className="wideHead">Name</th>
+                <th className="tableActionCell">
+                  <i className="fa-solid fa-trash-can ms-3" title='Delete all'  onClick={()=>{handleDeleteAll('system')}}></i>
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {sysData.map((tag, index) => (
+                <tr key={tag.sysId} style={{ color: 'black' }}>
+                  <td style={{ backgroundColor: '#f0f0f0' }}>
+                    {editedSysRowIndex === index ? (
+                      <input
+                        onChange={e => handleChange('sys', e.target.value)}
+                        type="text"
+                        value={editedLineData.sys || ''}
+                      />
+                    ) : (
+                      tag.sys
+                    )}
+                  </td>
+                  <td>
+                    {editedSysRowIndex === index ? (
+                      <input
+                        onChange={e => handleChange('name', e.target.value)}
+                        type="text"
+                        value={editedLineData.name || ''}
+                      />
+                    ) : (
+                      tag.name
+                    )}
+                  </td>
+                  <td style={{ backgroundColor: '#f0f0f0' }}>
+                    {editedSysRowIndex === index ? (
+                      <>
+                        <i className="fa-solid fa-floppy-disk text-success" onClick={() => handleSave('sys', tag.sysId)}></i>
+                        <i className="fa-solid fa-xmark ms-3 text-danger" onClick={handleCloseEdit}></i>
+                      </>
+                    ) : (
+                      <>
+                        <i className="fa-solid fa-pencil" onClick={() => handleEditOpen(index, 'sys')}></i>
+                        <i className="fa-solid fa-trash-can ms-3" onClick={() => handleDeleteTagFromTable(tag.sysId, 'sys')}></i>
+                      </>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </form>
+      {showConfirm && (
+        <DeleteConfirm
+          message="Are you sure you want to delete this tag?"
+          onConfirm={handleConfirmDelete}
+          onCancel={handleCancelDelete}
+        />
+      )}
+      {customAlert && (
+        <Alert
+          message={modalMessage}
+          onClose={() => setCustomAlert(false)}
+        />
+      )}
     </div>
   );
 }

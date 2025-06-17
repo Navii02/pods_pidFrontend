@@ -20,6 +20,7 @@ function Arearegister({ onClose, isOpen }) {
     if (isOpen) {
       setCode("");
       setName("");
+      console.log(isOpen);
       setCustomAlert(false);
       setModalMessage("");
       if (codeInputRef.current) {
