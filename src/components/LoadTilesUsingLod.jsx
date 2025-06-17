@@ -2614,7 +2614,7 @@ class SpatialOptimization {
   }
 }
 
-const BabylonLODManager = () => {
+const BabylonLODManager = ({mode,viewMode,setViewMode}) => {
   const canvasRef = useRef(null);
   const sceneRef = useRef(null);
   const engineRef = useRef(null);
@@ -2702,6 +2702,7 @@ const BabylonLODManager = () => {
   let nodeDepths = new Map();
   let nodeParents = new Map();
   let nodeCounter = 1;
+
 
   // Create scene function converted to React
   const createScene = useCallback(() => {
@@ -3328,6 +3329,19 @@ const restoreCameraState = useCallback((scene, cameraState) => {
     },
     [createOrbitCamera, checkXRSupport]
   );
+
+  
+  // Add this useEffect in BabylonLODManager after the existing useEffects
+useEffect(() => {
+  if (mode && sceneRef.current) {
+    console.log('Mode changed to:', mode);
+    if (mode === 'orbit') {
+      toggleCamera('orbit');
+    } else if (mode === 'fly') {
+      toggleCamera('fly');
+    }
+  }
+}, [mode, toggleCamera]);
 
   // Cleanup function for WebXR
   const cleanupWebXR = useCallback(() => {
@@ -6424,6 +6438,19 @@ const restoreCameraState = useCallback((scene, cameraState) => {
     }
   };
 
+         // useEffect for all views(top,front...) functionality
+        useEffect(() => {
+          applyView(viewMode);
+        }, [viewMode]);
+  
+        // useEffect for allview timeout functionality
+        useEffect(() => {
+          return () => {
+            setViewMode("");
+          };
+        }, []);
+  
+
   function clearAllPipingStores() {
     const confirmClear = window.confirm(
       "Are you sure you want to clear all data in the 'piping' database? This action cannot be undone."
@@ -6514,16 +6541,7 @@ const restoreCameraState = useCallback((scene, cameraState) => {
           Clear DB
         </button>
 
-        <button
-          onClick={() => toggleCamera("orbit")}
-          className="btn btn-primary"
-        >
-          Orbit Camera
-        </button>
-
-        <button onClick={() => toggleCamera("fly")} className="btn btn-warning">
-          Fly Camera
-        </button>
+      
 
         {/* WebXR Camera Button - only show if supported */}
         {isXRSupported && (
@@ -6552,66 +6570,11 @@ const restoreCameraState = useCallback((scene, cameraState) => {
             {isInXR ? "🥽 In VR Mode" : "⏳ Starting VR..."}
           </div>
         )}
-        <button
-          onClick={() => applyView("Fit View")}
-          className={`btn ${
-            cameraType === "arcRotate" ? "btn-primary" : "btn-secondary"
-          }`}
-        >
-          Fit View
-        </button>
-        <button
-          onClick={() => applyView("Top View")}
-          className={`btn ${
-            cameraType === "arcRotate" ? "btn-primary" : "btn-secondary"
-          }`}
-        >
-          Top View
-        </button>
-        <button
-          onClick={() => applyView("Bottom View")}
-          className={`btn ${
-            cameraType === "arcRotate" ? "btn-primary" : "btn-secondary"
-          }`}
-        >
-          Bottom View
-        </button>
-        <button
-          onClick={() => applyView("Front View")}
-          className={`btn ${
-            cameraType === "arcRotate" ? "btn-primary" : "btn-secondary"
-          }`}
-        >
-          Front View
-        </button>
-        <button
-          onClick={() => applyView("Back View")}
-          className={`btn ${
-            cameraType === "arcRotate" ? "btn-primary" : "btn-secondary"
-          }`}
-        >
-          Back View
-        </button>
-        <button
-          onClick={() => applyView("Right Side View")}
-          className={`btn ${
-            cameraType === "arcRotate" ? "btn-primary" : "btn-secondary"
-          }`}
-        >
-          Right Side View
-        </button>
-        <button
-          onClick={() => applyView("Left Side View")}
-          className={`btn ${
-            cameraType === "arcRotate" ? "btn-primary" : "btn-secondary"
-          }`}
-        >
-          Left Side View
-        </button>
+       
       </div>
 
       {/* Camera Control Panel */}
-      <div
+      {/* <div
         style={{
           position: "absolute",
           top: "10px",
@@ -6620,10 +6583,10 @@ const restoreCameraState = useCallback((scene, cameraState) => {
           flexDirection: "column",
           gap: "5px",
         }}
-      ></div>
+      ></div> */}
 
       {/* LOD Info Panel */}
-      <div style={{ position: "absolute", right: "60px", top: "10px" }}>
+      {/* <div style={{ position: "absolute", right: "60px", top: "10px" }}>
         <div
           className="text-white text-base leading-[40px]"
           style={{
@@ -6642,25 +6605,9 @@ const restoreCameraState = useCallback((scene, cameraState) => {
           <div>
             Loaded Nodes: {lodInfo.loadedNodes}, Cached: {lodInfo.cachedMeshes}
           </div>
-          <button
-            onClick={() => setShowPerformancePanel(!showPerformancePanel)}
-            style={{
-              backgroundColor: "rgba(255,255,255,0.2)",
-              color: "white",
-              border: "1px solid rgba(255,255,255,0.3)",
-              borderRadius: "3px",
-              padding: "5px 10px",
-              marginTop: "5px",
-              cursor: "pointer",
-              fontSize: "11px",
-            }}
-          >
-            {/* {showPerformancePanel ? "Hide" : "Show"} Performance */}
-          </button>
-          {/* <TestingControls /> */}
+       
         </div>
-      </div>
-      {showPerformancePanel && <PerformancePanel />}
+      </div> */}
 
       {/* Speed Control Bar for Fly Camera */}
       {speedBar}

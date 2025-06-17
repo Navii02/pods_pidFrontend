@@ -1,8 +1,10 @@
 import React, { useRef, useState } from 'react'
 import BabylonLODManager from '../components/LoadTilesUsingLod'
 import CommentModal from "../components/CommentModal";
-import { faGear, faMousePointer, faPlane, faScissors, faUpRightAndDownLeftFromCenter } from "@fortawesome/free-solid-svg-icons";
+import { faGear, faMousePointer, faPlane, faScissors } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { Axis3d } from "lucide-react";
+
 function GlobalModalOpen() {
 
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -60,6 +62,11 @@ function GlobalModalOpen() {
       setMode("fly");
       setActiveButton(buttonName);
     };
+
+    const handleEnterVR = (buttonName)=>{
+      setMode("webxr");
+      setActiveButton(buttonName);
+    }
   
     const handleShowAxis = (buttonName) => {
       setShowAxis(!showAxis);
@@ -154,7 +161,7 @@ function GlobalModalOpen() {
          <div className="d-flex">
              <div className="w-100">  
 
-       <BabylonLODManager/>
+       <BabylonLODManager mode={mode} viewMode={viewMode} setViewMode={setViewMode}/>
        </div>
     
 
@@ -168,7 +175,7 @@ function GlobalModalOpen() {
                       onClick={() => handleShowAxis("axis")}
                       title="Show Axis"
                     >
-                      {/* <Axis3d /> */}
+                      <Axis3d />
                     </span>
                   </div>
                 </li>
@@ -197,6 +204,19 @@ function GlobalModalOpen() {
                       title="Fly camera"
                     >
                                             <FontAwesomeIcon icon={faPlane}size="lg" />
+
+                    </span>
+                  </div>
+                </li>
+
+                   <li className={activeButton === "webxr" ? "active" : ""}>
+                  <div className="tooltip-container">
+                    <span
+                      className="icon-tooltip"
+                      onClick={() => handleEnterVR("webxr")}
+                      title="Fly camera"
+                    >
+                <i class="fa-solid fa-shield  fs-4"></i>
 
                     </span>
                   </div>
@@ -234,7 +254,7 @@ function GlobalModalOpen() {
                     onClick={() => handlezoomfit("fitview")}
                   >
                     <span className="icon-tooltip" title="Fit View">
-<FontAwesomeIcon icon={faUpRightAndDownLeftFromCenter} size="lg" />
+                    <i class="fa-solid fa-arrows-to-dot fs-4"></i>
                     </span>
                   </div>
                 </li>
