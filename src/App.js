@@ -1,5 +1,5 @@
 import { Routes, Route } from "react-router-dom";
-import './App.css'
+import "./App.css";
 import Home from "./pages/Home";
 import Spid from "./pages/Spid";
 import Dashboard from "./pages/Dashboard";
@@ -15,8 +15,12 @@ import CommentReview from "./pages/CommentReview";
 import CommentStatusTable from "./pages/CommentStatusTable";
 import Iroamer from "./pages/Iroamer";
 import HomePage from "./pages/HomePage";
+import ValveList from "./pages/ValveList";
+import LineList from "./pages/LineList";
 import GlobalModalOpen from "./pages/GlobalModalOpen";
 import CreateGlobalModal from "./pages/CreateGlobalModal";
+import EquipmentList from "./pages/EquipmentList";
+
 
 // import Login from './pages/Login';
 
@@ -38,10 +42,14 @@ function App() {
         <Route path="/bulk-model-import" element={<BulkModelImport />} />
         <Route path="/comment-review" element={<CommentReview />} />
         <Route path="/comment-status" element={<CommentStatusTable />} />
-        <Route path="/iroamer" element={<Iroamer />} />
+                <Route path="/iroamer" element={<Iroamer />} />
+                
         <Route path="/global-model/open" element={<GlobalModalOpen />} />
-        <Route path="/global-model/create" element={<CreateGlobalModal/>} />
+        <Route path="/global-model/create" element={<CreateGlobalModal/>}/>
+        <Route path="/equipment-list" element={<EquipmentList />} />
+        <Route path="/valve-list" element={<ValveList />} />
 
+        <Route path="/line-list" element={<LineList />} />
       </Route>
 
       {/* Fallback */}

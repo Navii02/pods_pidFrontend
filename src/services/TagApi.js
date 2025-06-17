@@ -77,3 +77,66 @@ try {
       throw error
     }
   }
+
+
+  //Linelist
+
+  export const getLineList = async(id)=>{
+  try {
+    const response = await commonApi("GET", `${url}/api/getline/${id}`);
+    //console.log(response);
+    return response;
+  } catch (error) {
+    throw error;
+  }
+  }
+
+  export const saveimportedLineList = async(data)=>{
+
+  }
+  export const EditLinelist = async(data)=>{
+
+  }
+  export const deletelineList = async(nuber)=>{
+
+  }
+  //EquipmentList
+
+    export const getequipmentList = async(id)=>{
+  try {
+    const response = await commonApi("GET", `${url}/api/getequipment/${id}`);
+    console.log(response);
+    return response;
+  } catch (error) {
+    throw error;
+  }
+  }
+   export const saveimportedEquipmentList = async(data)=>{
+
+  }
+ export const EditEquipmentlist = async(data)=>{
+
+  }
+  export const deleteequipmentList = async(nuber)=>{
+
+  }
+  //valveList 
+
+      export const getvalvelist = async(id)=>{
+  try {
+    const response = await commonApi("GET", `${url}/api/getvalve/${id}`);
+    console.log(response);
+    return response;
+  } catch (error) {
+    throw error;
+  }
+  }
+   export const saveimportedValveList = async(data)=>{
+
+  }
+ export const EditValvelist = async(data)=>{
+
+  }
+  export const deletevalveList = async(nuber)=>{
+
+  }

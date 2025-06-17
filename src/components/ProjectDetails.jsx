@@ -9,6 +9,7 @@ import {
   faMinus,
   faFolder,
   faCube,
+  faPlusCircle,
 } from "@fortawesome/free-solid-svg-icons";
 import EntityRegister from "./EntityRegister";
 import TagEntityModal from "../components/Tree/TagEntityModal";
@@ -214,8 +215,8 @@ const ProjectDetails = ({
                   <FontAwesomeIcon icon={faEye} />
                 </button>
 
-                <button onClick={() => setShowEntityModal(true)}>
-                  <FontAwesomeIcon icon={faPlus} />
+                <button onClick={() => setShowEntityModal(true)} className="me-2">
+                  <FontAwesomeIcon icon={faPlusCircle} />
                 </button>
               </div>
             </div>
@@ -245,12 +246,12 @@ const ProjectDetails = ({
                         <FontAwesomeIcon icon={faEye} />
                       </button>
                       <button onClick={() => openDisciplineModal(area)}>
-                        <FontAwesomeIcon icon={faPlus} />
+                        <FontAwesomeIcon icon={faPlusCircle} />
                       </button>
                       <button
                         onClick={() => handleDelete("Area", null, area.area)}
                       >
-                        <FontAwesomeIcon icon={faTrash} />
+                        <FontAwesomeIcon icon={faTrash}className="me-2" />
                       </button>
                     </div>
                   </div>
@@ -292,7 +293,7 @@ const ProjectDetails = ({
                                   })
                                 }
                               >
-                                <FontAwesomeIcon icon={faPlus} />
+                                <FontAwesomeIcon icon={faPlusCircle} />
                               </button>
                               <button
                                 onClick={() =>
@@ -303,7 +304,7 @@ const ProjectDetails = ({
                                   )
                                 }
                               >
-                                <FontAwesomeIcon icon={faTrash} />
+                                <FontAwesomeIcon icon={faTrash} className="me-2" />
                               </button>
                             </div>
                           </div>
@@ -351,7 +352,7 @@ const ProjectDetails = ({
                                           })
                                         }
                                       >
-                                        <FontAwesomeIcon icon={faPlus} />
+                                        <FontAwesomeIcon icon={faPlusCircle} />
                                       </button>
                                       <button
                                         onClick={() =>
@@ -362,7 +363,7 @@ const ProjectDetails = ({
                                           )
                                         }
                                       >
-                                        <FontAwesomeIcon icon={faTrash} />
+                                        <FontAwesomeIcon icon={faTrash} className="me-2"/>
                                       </button>
                                     </div>
                                   </div>
@@ -394,7 +395,7 @@ const ProjectDetails = ({
                                                 )
                                               }
                                             >
-                                              <FontAwesomeIcon icon={faTrash} />
+                                              <FontAwesomeIcon icon={faTrash} className="me-2" />
                                             </button>
                                           </div>
                                         </div>
@@ -413,13 +414,7 @@ const ProjectDetails = ({
         )}
        
       </div>
-       <div className="d-flex mt-2 justify-content-center">
-          <FontAwesomeIcon
-            icon={showProjectDetails ? faChevronUp : faChevronDown}
-            onClick={() => setShowProjectDetails((prev) => !prev)}
-            style={{ cursor: "pointer" }}
-          />
-        </div>
+    
     </div>
   );
 };
