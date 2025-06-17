@@ -245,7 +245,7 @@ header {
 }
 .custom-modal{
   width: 18rem;
-  margin-top: 12%;
+  /* margin-top: 12%; */
   margin-left: 40%;
 }
 .extendmodal-card {
@@ -1130,7 +1130,7 @@ div.drop-file input {
   width: 310px;
   height: 230px;
   background-color: #ebebf0;
-  margin-left: 25%;
+  /* margin-left: 25%; */
   margin-top: 30%;
   border-radius: 10px;
   border-color: #090909;
@@ -1434,7 +1434,7 @@ button#addCommentBtn {
 }
 
 .custom-alert {
-  position: fixed;
+  position: absolute;
   top: 0;
   left: 0;
   width: 100%;

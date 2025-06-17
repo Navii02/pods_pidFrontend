@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef, useContext } from "react";
 import { useNavigate } from "react-router-dom";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-
+import Alert from '../components/Alert'
 // import "../styles/Sidebar.css";
 import treeIcon from "../assets/images/tree.png";
 import Arearegister from "../components/Tree/Arearegister";
@@ -62,6 +62,8 @@ function Sidebar({
   const [showContents, setShowCOntents] = useState(false);
   const [activeLink, setActiveLink] = useState("three");
   const [activeTab, setActiveTab] = useState("");
+    const [customAlert, setCustomAlert] = useState(false);
+    const [modalMessage, setModalMessage] = useState("");
 
   // Notify parent component when activeLink changes
   useEffect(() => {
@@ -477,7 +479,7 @@ function Sidebar({
 
       {/* Modals */}
       {openModal.areaRegister && (
-        <Arearegister isOpen={openModal.areaRegister} onClose={() => handleCloseModal("areaRegister")} />
+        <Arearegister isOpen={openModal.areaRegister} onClose={() => handleCloseModal("areaRegister")} setModalMessage={setModalMessage} setCustomAlert={setCustomAlert}/>
       )}
       {openModal.disciplineRegister && (
         <DisciplineRegister isOpen={openModal.disciplineRegister} onClose={() => handleCloseModal("disciplineRegister")} />
@@ -485,7 +487,12 @@ function Sidebar({
       {openModal.systemRegister && (
         <SystemRegister isOpen={openModal.systemRegister} onClose={() => handleCloseModal("systemRegister")} />
       )}
-      
+        {customAlert && (
+    <Alert
+      message={modalMessage}
+      onAlertClose={() => setCustomAlert(false)}
+    />
+  )}
       {showProjectDetails && <ProjectDetails />}
     </>
   );

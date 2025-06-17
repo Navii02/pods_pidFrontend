@@ -1,6 +1,7 @@
 import React from 'react'
 
 function Alert({ message, onAlertClose }) {
+  console.log(message,onAlertClose)
   return (
     <div className="custom-alert">
     <div className="custom-alert-content">

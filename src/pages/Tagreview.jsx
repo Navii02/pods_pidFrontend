@@ -155,9 +155,8 @@ const Tagreview = () => {
   };
 
   return (
-    <div className="container-fluid px-0">
-      <div style={wrapperStyle} className="rounded shadow-sm">
-        <table className="table table-bordered table-hover mb-0">
+    <div className="table-container">
+        <table className="tagTable">
           <thead>
             <tr>
               <th style={thStyle}>#</th>
@@ -331,7 +330,6 @@ const Tagreview = () => {
             )}
           </tbody>
         </table>
-      </div>
      {popupData.visible && (
   <div
     style={{

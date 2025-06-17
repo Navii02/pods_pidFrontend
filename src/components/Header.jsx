@@ -22,7 +22,7 @@ const Header = () => {
 
   return (
     <header>
-      <img id="logoPD" src="images/logo-pd.png" onClick={() => navigate("/")} />
+      <img id="logoPD" src="/images/logo-pd.png" onClick={() => navigate("/")} />
 
       <p class="text-light">
         {" "}

@@ -6,6 +6,7 @@ import { faTimes } from "@fortawesome/free-solid-svg-icons";
 import "../../styles/TreeRegistration.css";
 import { RegisterDisipline } from "../../services/TreeManagementApi";
 import { TreeresponseContext } from "../../context/ContextShare";
+import Alert from "../Alert";
 
 function DisciplineRegister({ onClose, isOpen }) {
  const { setUpdatetree } = useContext(TreeresponseContext);
@@ -60,7 +61,8 @@ function DisciplineRegister({ onClose, isOpen }) {
   
 
   return (
-    <Modal
+  <>
+    {/* <Modal
       show={isOpen}
       onHide={handleClose}
       keyboard={false}
@@ -99,11 +101,7 @@ function DisciplineRegister({ onClose, isOpen }) {
           />
         </div>
 
-        {customAlert && (
-          <div className="custom-alert">
-            {modalMessage}
-          </div>
-        )}
+       
       </Modal.Body>
 
       <Modal.Footer className="custom-modal-footer">
@@ -115,6 +113,48 @@ function DisciplineRegister({ onClose, isOpen }) {
         </button>
       </Modal.Footer>
     </Modal>
+         {customAlert && (
+    <Alert
+      message={modalMessage}
+      onAlertClose={() => setCustomAlert(false)}
+    />
+  )} */}
+
+       <Modal
+    onHide={handleClose}
+    show={isOpen}
+    backdrop="static"
+    keyboard={false}
+    dialogClassName="custom-modal"
+  >
+    <div className="area-dialog">
+      <div className="title-dialog">
+        <p className='text-light'>Add Disipline</p>
+        <p className='text-light cross' onClick={handleClose}>&times;</p>
+      </div>
+      <div className="dialog-input">
+        <label>Code<span className="required">*</span></label>
+        <input
+          type="text"
+          ref={codeInputRef}
+          value={code}
+          onChange={(e) => setCode(e.target.value)}
+        />
+        <label>Name</label>
+        <input
+          type="text"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+        />
+      </div>
+   
+      <div className='dialog-button' style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+      <button className='btn btn-secondary' onClick={handleClose}>Cancel</button>
+      <button className='btn btn-dark' onClick={handleOk}>Ok</button>
+    </div>
+    </div>
+  </Modal>
+  </>
   );
 }
 
