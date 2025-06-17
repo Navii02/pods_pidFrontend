@@ -407,6 +407,7 @@ header {
 
 
 .right-sidenav {
+  right:0;
   width: 75px;
   z-index: 1;
 }
