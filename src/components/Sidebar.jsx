@@ -371,8 +371,8 @@ function Sidebar({
             <i class="fa fa-folder-open"></i>Open Project
             <div class="dropdown-content"></div>
           </div>
-          {projectName &&
-            (showContents ? (
+          { showProjectName && 
+            (showContents ?  (
               <div
                 style={{
                   width: "100%",
@@ -390,33 +390,17 @@ function Sidebar({
               <>
                 <div>
                   <div className="project-folder">
-                    <div
-                      className="tree"
-                      style={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        alignItems: "center",
-                        padding: "7px",
-                      }}
-                    >
-                      <span>{projectName}</span>
-                      <span>
-                        <i
-                          className="fa-solid fa-eye"
-                          style={{
-                            fontSize: "12px",
-                            marginRight: "9px",
-                          }}
-                        ></i>
-                        <FontAwesomeIcon
-                          icon={faPlusCircle}
-                          className="ms-2"
-                          style={{ fontSize: "15px" }}
-                        />
-                      </span>
+                   
+                            {showProjectName && (
+               <ProjectDetails 
+    showProjectDetails={showProjectDetails}
+    setShowProjectDetails={setShowProjectDetails}
+    onAddArea={() => console.log("Add area clicked")} // Add your actual handler
+  />
+            )}
                     </div>
                   </div>
-                </div>
+                
                 <div
                   style={{
                     width: "100%",
