@@ -280,7 +280,7 @@ function ValveList() {
                 <th colSpan="22">
                   <input
                     type="text"
-                    placeholder="Search by Tag Number"
+                    placeholder="Search by Tag "
                     value={searchQuery}
                     onChange={handleSearch}
                     style={{ width: "100%", padding: "5px" }}
@@ -540,7 +540,7 @@ function ValveList() {
                         <FontAwesomeIcon
                           icon={faTrashCan}
                           className="ms-3"
-                          onClick={() => handleDeleteValveFromTable(valve.id)}
+                          onClick={() => handleDeleteValveFromTable(valve.tagId)}
                           style={{ cursor: "pointer" }}
                         />
                       </>

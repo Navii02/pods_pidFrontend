@@ -677,7 +677,7 @@ function LineList() {
                         ></i>
                         <i
                           className="fa-solid fa-trash-can ms-3"
-                          onClick={() => handleDeleteLineFromTable(line.tag)}
+                          onClick={() => handleDeleteLineFromTable(line.tagId)}
                         ></i>
                       </>
                     )}
