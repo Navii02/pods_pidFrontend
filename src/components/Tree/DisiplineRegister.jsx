@@ -1,16 +1,12 @@
 
 import React, { useState, useEffect, useRef, useContext } from "react";
 import Modal from "react-bootstrap/Modal";
-import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faTimes } from "@fortawesome/free-solid-svg-icons";
-import "../../styles/TreeRegistration.css";
 import { RegisterDisipline } from "../../services/TreeManagementApi";
 import { TreeresponseContext } from "../../context/ContextShare";
 import Alert from "../Alert";
 
 function DisciplineRegister({ onClose, isOpen }) {
  const { setUpdatetree } = useContext(TreeresponseContext);
-
 
   const [code, setCode] = useState("");
   const [name, setName] = useState("");
@@ -154,6 +150,13 @@ function DisciplineRegister({ onClose, isOpen }) {
     </div>
     </div>
   </Modal>
+   
+   {customAlert && (
+    <Alert
+      message={modalMessage}
+      onAlertClose={() => setCustomAlert(false)}
+    />
+  )}
   </>
   );
 }

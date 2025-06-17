@@ -1185,7 +1185,7 @@ function HomePage() {
             <img
               onClick={toggleLeftNav}
               id="tree"
-              src="images/tree.png"
+              src="/images/tree.png"
               alt=""
             />
           </div>

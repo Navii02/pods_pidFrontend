@@ -6463,7 +6463,7 @@ const restoreCameraState = useCallback((scene, cameraState) => {
   }
 
   return (
-    <div style={{ width: "100%", height: "100vh" }}>
+    <div >
       {/* Canvas */}
       <canvas
         ref={canvasRef}
@@ -6623,7 +6623,7 @@ const restoreCameraState = useCallback((scene, cameraState) => {
       ></div>
 
       {/* LOD Info Panel */}
-      <div style={{ position: "absolute", right: "10px", top: "10px" }}>
+      <div style={{ position: "absolute", right: "60px", top: "10px" }}>
         <div
           className="text-white text-base leading-[40px]"
           style={{
@@ -6655,9 +6655,9 @@ const restoreCameraState = useCallback((scene, cameraState) => {
               fontSize: "11px",
             }}
           >
-            {showPerformancePanel ? "Hide" : "Show"} Performance
+            {/* {showPerformancePanel ? "Hide" : "Show"} Performance */}
           </button>
-          <TestingControls />
+          {/* <TestingControls /> */}
         </div>
       </div>
       {showPerformancePanel && <PerformancePanel />}

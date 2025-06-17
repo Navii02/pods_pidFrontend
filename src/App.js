@@ -16,6 +16,7 @@ import CommentStatusTable from "./pages/CommentStatusTable";
 import Iroamer from "./pages/Iroamer";
 import HomePage from "./pages/HomePage";
 import GlobalModalOpen from "./pages/GlobalModalOpen";
+import CreateGlobalModal from "./pages/CreateGlobalModal";
 
 // import Login from './pages/Login';
 
@@ -39,6 +40,7 @@ function App() {
         <Route path="/comment-status" element={<CommentStatusTable />} />
         <Route path="/iroamer" element={<Iroamer />} />
         <Route path="/global-model/open" element={<GlobalModalOpen />} />
+        <Route path="/global-model/create" element={<CreateGlobalModal/>} />
 
       </Route>
 

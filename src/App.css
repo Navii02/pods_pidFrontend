@@ -328,13 +328,13 @@ header {
   height:100% ;
   width: 75px;
   margin: 0;
-  background-color:rgba(255, 0, 0, 0);
+  background-color:rgba(13, 9, 229, 0);
   color: #fefcfc;
   transition: transform 0.3s ease;
   display: block;
   justify-content: center;
   align-items: center;
-  z-index: 1;
+  z-index: 100;
   overflow-y: auto; 
   max-height: calc(100vh - 70px);
   display: block; 
@@ -404,7 +404,6 @@ header {
   z-index: 1;
 
 }
-
 
 .right-sidenav {
   right:0;
@@ -1443,7 +1442,7 @@ button#addCommentBtn {
   display: flex;
   align-items: center;
   justify-content: center;
-  background-color: rgba(0, 0, 0, 0.5); /* semi-transparent background */
+  background-color: rgba(1, 1, 1, 0.5); /* semi-transparent background */
   z-index: 9999; /* high z-index to ensure it appears above other elements */
 }
 

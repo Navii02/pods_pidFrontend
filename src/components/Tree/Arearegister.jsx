@@ -6,14 +6,15 @@ import { faTimes } from "@fortawesome/free-solid-svg-icons";
 import "../../styles/TreeRegistration.css";
 import { RegisterArea } from "../../services/TreeManagementApi";
 import { TreeresponseContext } from "../../context/ContextShare";
-import { Alert } from "react-bootstrap";
+import  Alert  from "../Alert";
 
-function Arearegister({ onClose, isOpen,setModalMessage,setCustomAlert }) {
+function Arearegister({ onClose, isOpen }) {
  const { setUpdatetree } = useContext(TreeresponseContext);
 
   const [code, setCode] = useState("");
   const [name, setName] = useState("");
-
+  const [customAlert, setCustomAlert] = useState(false);
+    const [modalMessage, setModalMessage] = useState("");
   const codeInputRef = useRef(null);
 
   useEffect(() => {
@@ -40,7 +41,7 @@ function Arearegister({ onClose, isOpen,setModalMessage,setCustomAlert }) {
     if (!code) {
       // setCustomAlert(true);
       // setModalMessage("Code is mandatory");
-      alert("Code is mandatory")
+      alert('Code is mandatory')
 
       return;
     }
@@ -151,7 +152,12 @@ function Arearegister({ onClose, isOpen,setModalMessage,setCustomAlert }) {
     </div>
   </Modal>
  
-
+        {customAlert && (
+    <Alert
+      message={modalMessage}
+      onAlertClose={() => setCustomAlert(false)}
+    />
+  )}
     </>
   );
 }
