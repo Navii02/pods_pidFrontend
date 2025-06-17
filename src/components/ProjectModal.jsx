@@ -46,6 +46,9 @@ function ProjectModal({
   useEffect(() => {
     if (!isOpen) resetState();
   }, [isOpen]);
+  useEffect(()=>{
+    console.log(projects)
+  },[])
 
   const resetState = () => {
     setIsFormModalOpen(false);
@@ -118,7 +121,6 @@ function ProjectModal({
             updateStateAfterCreate(response.data);
              handleSelectProject(response.data.project)
             console.log(response.data);
-            
             setIsFormModalOpen(false);
             onClose();
           }
@@ -157,123 +159,303 @@ function ProjectModal({
       }
     }
   };
+  const [showallprojects, setshowallprojects] = useState(false);
+
+    const handleshowallprojects = () => {
+    setshowallprojects(!showallprojects);
+  };
 
   return (
+  
     <>
-      <Modal show={isOpen} onHide={onClose} centered  dialogClassName="custom-project-form-size" className="project-modal-custom">
-        <Modal.Header className="project-modal-header d-flex justify-content-between">
-          <Modal.Title>Project Management</Modal.Title>
-          <div className="header-icons">
-            <FontAwesomeIcon icon={faFolder} />
-            <FontAwesomeIcon icon={faTrash} />
-            <FontAwesomeIcon icon={faPlus} onClick={handleCreateProject} />
-            <FontAwesomeIcon icon={faTimes} onClick={onClose} />
+      <div className="mainpro">
+      {isOpen && (
+        <div className="project-model">
+          <div className="heading">
+            <h6>Load project</h6>
+            <div className="icons">
+              <i
+                className="fa-solid fa-trash"
+                title="Delete all project"
+                
+              ></i>
+              <i
+                class="fa-solid fa-folder  ms-3"
+              
+                title="Map project"
+              ></i>
+              <i
+                class="fa-solid fa-circle-plus ms-3 "
+                title="Create new project"
+               onClick={handleCreateProject}
+              ></i>
+              <i
+                class="fa-solid fa-xmark ms-3 "
+                title="Close project"
+                onClick={onClose}
+              ></i>
+            </div>
           </div>
-        </Modal.Header>
-
-        <Modal.Body>
-          {error && <Alert variant="danger">{error}</Alert>}
-
-          {projects.length > 0 ? (
-            <ListGroup className="project-list">
-              <ListGroup.Item className="project-header">
-                <div className="project-row header">
-                  <div className="project-cell number"><strong>Project Number</strong></div>
-                  <div className="project-cell name"><strong>Project Name</strong></div>
-                  <div className="project-cell actions"><strong>Actions</strong></div>
-                </div>
-              </ListGroup.Item>
-
-              {projects.map((project) => (
-                <ListGroup.Item key={project.projectId} className="project-item">
-                  <div className="project-row">
-                    <div className="project-cell number">{project.projectNumber}</div>
-                    <div className="project-cell name">{project.projectName}</div>
-                    <div className="project-cell actions">
-                      <Button variant="link" className="action-icon" onClick={() => handleSelectProject(project)}>
-                        <FontAwesomeIcon icon={faFolder} />
-                      </Button>
-                      <Button variant="link" className="action-icon" onClick={() => handleEditProject(project)}>
-                        <FontAwesomeIcon icon={faEdit} />
-                      </Button>
-                      <Button variant="link" className="action-icon text-danger" onClick={() => handleDeleteProject(project)}>
-                        <FontAwesomeIcon icon={faTrash} />
-                      </Button>
-                    </div>
-                  </div>
-                </ListGroup.Item>
-              ))}
-            </ListGroup>
+          {showallprojects ? (
+            <div
+              style={{
+                textAlign: "center",
+                backgroundColor: "#272626",
+                height: "30px",
+                color: "grey",
+              }}
+            >
+              <p>(Empty)</p>
+            </div>
           ) : (
-            <Alert variant="info" className="mt-3">No projects found</Alert>
+            <div
+              style={{
+                backgroundColor: "#272626",
+                height: "auto",
+                color: "grey",
+                overflowY: "auto",
+              }}
+            >
+              {projects.length > 0 ? (
+                <table className="table table-light">
+                  <tbody>
+                    {projects.map((project, index) => (
+                      <tr key={index}>
+                        <td
+                          style={{
+                            backgroundColor: "#515CBC",
+                            textAlign: "center",
+                          }}
+                        >
+                          {project.projectNumber}
+                        </td>
+                        <td
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            backgroundColor: "#272626",
+                            color: "white",
+                          }}
+                        >
+                          {project.projectName}
+                          <button
+                           onClick={() => handleSelectProject(project)}
+                            style={{
+                              marginLeft: "auto",
+                              background: "none",
+                              border: "none",
+                            }}
+                          >
+                            <i
+                              class="fa-solid fa-folder-open text-light"
+                              title="Open-project"
+                            ></i>
+                          </button>
+                          <i
+                            className="fa-solid fa-pencil text-light ms-3 me-2"
+                            onClick={() => handleEditProject(project)}
+                            title="Edit-project"
+                          ></i>
+
+                          <i
+                            className="fa-solid fa-trash text-light ms-3 me-2"
+                            onClick={() =>
+                              handleDeleteProject(project)
+                            }
+                            title="Delete-project"
+                          ></i>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              ) : (
+                <div
+                  style={{
+                    textAlign: "center",
+                    backgroundColor: "#272626",
+                    height: "auto",
+                    color: "grey",
+                  }}
+                >
+                  <p>(Empty)</p>
+                </div>
+              )}
+            </div>
           )}
-        </Modal.Body>
-      </Modal>
+          <div className="footing">
+            {showallprojects ? (
+              <p>
+                Show projects
+                <input type="checkbox" onClick={handleshowallprojects} />
+              </p>
+            ) : (
+              <p>
+                Hide projects
+                <input type="checkbox" onClick={handleshowallprojects} />
+              </p>
+            )}
+          </div>
+        </div>
+      )}
 
-      {/* Project Form Modal */}
-      <Modal show={isFormModalOpen} onHide={handleCancel} centered size="sm" backdrop="static"   className="project-form-modal" >
-        <Modal.Header className="">
-          <Modal.Title >
-            {editingProject ? "Edit Project" : "Add New Project"}
-          </Modal.Title>
-          <Button variant="link" className="" onClick={handleCancel}>
-            <FontAwesomeIcon icon={faTimes} />
-          </Button>
-        </Modal.Header>
-
-        <Modal.Body >
-          {error && <Alert variant="danger">{error}</Alert>}
-
-          <Form onSubmit={handleSubmit}>
-            <Form.Group controlId="projectNumber" >
-              <Form.Label  className="text-dark">Project Number <span>*</span></Form.Label>
-              <Form.Control
+      {isFormModalOpen && (
+        <div className="whole">
+          <div className="project-dialog">
+            <div className="title-dialog">
+              <p className="text-light">Add New Project</p>
+              <p className="text-light cross" onClick={handleCancel}>
+                &times;
+              </p>
+            </div>
+            <div className="dialog-input">
+              <label>Project number *</label>
+              <input
                 type="text"
-                name="projectNumber"
+                 name="projectNumber"
                 value={formState.projectNumber}
                 onChange={handleInputChange}
-                placeholder="Enter project number"
-                isInvalid={!!error && !formState.projectNumber.trim()}
               />
-            </Form.Group>
-
-            <Form.Group controlId="projectName" >
-              <Form.Label  className="text-dark">Project Name <span >*</span></Form.Label>
-              <Form.Control
+              <label>Project Name*</label>
+              <input
                 type="text"
                 name="projectName"
                 value={formState.projectName}
                 onChange={handleInputChange}
-                placeholder="Enter project name"
-                isInvalid={!!error && !formState.projectName.trim()}
               />
-            </Form.Group>
-
-            <Form.Group controlId="description" >
-              <Form.Label  className="text-dark">Project Description</Form.Label>
-              <Form.Control
-                as="textarea"
-                rows={3}
+              <label>Project Description</label>
+              <textarea
                 name="description"
                 value={formState.description}
                 onChange={handleInputChange}
-                placeholder="Enter project description"
               />
-            </Form.Group>
-          </Form>
-        </Modal.Body>
+             
+            </div>
+            <div
+              className="dialog-button"
+              style={{
+                display: "flex",
+                justifyContent: "flex-end",
+                gap: "10px",
+              }}
+            >
+              <button
+                className="btn btn-secondary"
+                onClick={handleCancel}
+              >
+                Cancel
+              </button>
+              <button className="btn btn-dark" onClick={handleSubmit}>
+                Ok
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* {mapprojectmodal && (
+        <div className="whole">
+          <div className="project-dialog">
+            <div className="title-dialog">
+              <p className="text-light">Map Project</p>
+              <p className="text-light cross" onClick={handleCloseProject}>
+                &times;
+              </p>
+            </div>
+            <div className="dialog-input">
+              <button
+                className="btn projectbtn"
+                onClick={handleDirectoryChange}
+              >
+                Choose Folder
+              </button>
+              {selectedDirectory && <p>{selectedDirectory}</p>}
+            </div>
+            <div className="dialog-button">
+              <button
+                className="btn btn-secondary"
+                onClick={handleCloseProject}
+              >
+                Cancel
+              </button>
+              <button className="btn btn-dark" onClick={handleMapproject}>
+                Ok
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
-        <Modal.Footer >
-          <Button variant="secondary" onClick={handleCancel}>Cancel</Button>
-          <Button
-            variant="primary"
-            onClick={handleSubmit}
-            disabled={!formState.projectName.trim() || !formState.projectNumber.trim()}
-          >
-            OK
-          </Button>
-        </Modal.Footer>
-      </Modal>
+      {showEditModal && (
+        <div className="whole">
+          <div className="project-dialog">
+            <div className="title-dialog">
+              <p className="text-light">Edit Project</p>
+              <p
+                className="text-light cross"
+                onClick={() => setShowEditModal(false)}
+              >
+                &times;
+              </p>
+            </div>
+            <div className="dialog-input">
+              <label>Project Number *</label>
+              <input
+                type="text"
+                value={editProjectNumber}
+                onChange={(e) => setEditProjectNumber(e.target.value)}
+              />
+              <label>Project Name *</label>
+              <input
+                type="text"
+                value={editProjectName}
+                onChange={(e) => setEditProjectName(e.target.value)}
+              />
+              <label>Project Description</label>
+              <textarea
+                value={editProjectDescription}
+                onChange={(e) => setEditProjectDescription(e.target.value)}
+              />
+            </div>
+            <div
+              className="dialog-button"
+              style={{
+                display: "flex",
+                justifyContent: "flex-end",
+                gap: "10px",
+              }}
+            >
+              <button
+                className="btn btn-secondary"
+                onClick={() => setShowEditModal(false)}
+              >
+                Cancel
+              </button>
+              <button
+                className="btn btn-dark"
+                onClick={handleSaveEditedProject}
+              >
+                Save
+              </button>
+            </div>
+          </div>
+        </div>
+      )} */}
+
+      {/* {customAlert && (
+        <Alert
+          message={modalMessage}
+          onAlertClose={() => setCustomAlert(false)}
+        />
+      )}
+
+      {showConfirm && (
+        <DeleteConfirm
+          message="Are you sure you want to delete?"
+          onConfirm={handleConfirm}
+          onCancel={handleCancel}
+        />
+      )} */}
+    </div>
     </>
   );
 }

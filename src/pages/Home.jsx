@@ -60,6 +60,7 @@ const Home = () => {
           <Sidebar
             onToggle={handleSidebarToggle}
             setProjectname={setProjectname}
+            projectName={projectName}
             onOpenProjectModal={handleOpenProjectModal}
           />
         </aside>

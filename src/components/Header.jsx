@@ -7,71 +7,43 @@ import { updateProjectContext } from "../context/ContextShare";
 
 const Header = () => {
   const navigate = useNavigate();
-  const {setUpdateProject} = useContext(updateProjectContext)
+  const { setUpdateProject } = useContext(updateProjectContext);
   const projectString = sessionStorage.getItem("selectedProject");
   const project = projectString ? JSON.parse(projectString) : null;
 
-   const handleLogout = async()=>{
-     sessionStorage.clear()
-//window.location.reload()
-setUpdateProject("No data")
-     navigate('/')
-   }
+  const handleLogout = async () => {
+    sessionStorage.clear();
+    //window.location.reload()
+    setUpdateProject("No data");
+    navigate("/");
+  };
 
   //console.log(project?.projectName);
 
   return (
-    <header
-      style={{
-        backgroundColor: "#000",
-        color: "#fff",
-        padding: "1rem 2rem",
-        display: "flex",
-        justifyContent: "space-between",
-        alignItems: "center",
-        position: "fixed",
-        top: 0,
-        left: 0,
-        right: 0,
+    <header>
+      <img id="logoPD" src="images/logo-pd.png" onClick={() => navigate("/")} />
 
-        boxShadow: "0 2px 10px rgba(0, 0, 0, 0.3)",
-      }}
-    >
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          cursor: "pointer",
-        }}
-        onClick={() => navigate("/")}
-      >
-        <img
-          id="logoPD"
-          src={Logo}
-          alt="Company Logo"
-          style={{
-            height: "20px",
-            width: "auto",
-          }}
-        />
-      </div>
-      <span
-        style={{
-          marginRight: "600px",
-          fontSize: "14px",
-        }}
-      >
+      <p class="text-light">
+        {" "}
         Project Name: {project?.projectName || "No Project Selected"}
-      </span>
+      </p>
 
-      <nav style={{ display: "flex", gap: "2rem" }}>
-        <div className=" d-flex" onClick={handleLogout}>
-        
-            <FontAwesomeIcon   style={{  cursor: "pointer"}}className="m-1" icon={faArrowRightFromBracket} />
-              <p style={{  cursor: "pointer"}}>LOGOUT</p>
-        </div>
-   
-      </nav>
+      <div
+        id="logout"
+        className="me-3"
+        style={{ display: "flex" }}
+        onClick={handleLogout}
+      >
+        <p style={{ padding: "8px 16px", cursor: "pointer" }}>
+          <FontAwesomeIcon
+            style={{ cursor: "pointer" }}
+            className="ms-1"
+            icon={faArrowRightFromBracket}
+          />
+          Log out
+        </p>
+      </div>
     </header>
   );
 };

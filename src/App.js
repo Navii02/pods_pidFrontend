@@ -1,4 +1,5 @@
 import { Routes, Route } from "react-router-dom";
+import './App.css'
 import Home from "./pages/Home";
 import Spid from "./pages/Spid";
 import Dashboard from "./pages/Dashboard";
@@ -13,6 +14,7 @@ import BulkModelImport from "./pages/BulkModalImport";
 import CommentReview from "./pages/CommentReview";
 import CommentStatusTable from "./pages/CommentStatusTable";
 import Iroamer from "./pages/Iroamer";
+import HomePage from "./pages/HomePage";
 
 // import Login from './pages/Login';
 
@@ -22,7 +24,7 @@ function App() {
       {/* <Route path="/login" element={<Login />} /> */}
 
       {/* All pages that use the shared layout */}
-      <Route element={<Home />}>
+      <Route element={<HomePage />}>
         <Route path="/" element={<Dashboard />} />
         <Route path="/spid" element={<Spid />} />
         <Route path="/documents/review" element={<DocumentReview />} />

@@ -1,6 +1,15 @@
+// Sidebar.js - Updated to notify parent of active link changes
 import React, { useState, useEffect, useRef, useContext } from "react";
 import { useNavigate } from "react-router-dom";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+
+// import "../styles/Sidebar.css";
+import treeIcon from "../assets/images/tree.png";
+import Arearegister from "../components/Tree/Arearegister";
+import DisciplineRegister from "../components/Tree/DisiplineRegister";
+import SystemRegister from "../components/Tree/SystemRegister";
+import ProjectDetails from "./ProjectDetails";
+import { updateProjectContext } from "../context/ContextShare";
 import {
   faFolderOpen,
   faFighterJet,
@@ -17,20 +26,29 @@ import {
   faChevronDown,
   faChevronRight,
   faChevronUp,
+  faPlusCircle,
+  faArchive,
+  faSliders,
+  faEye,
+  faEyeSlash,
+  faCaretDown,
+  faCaretUp,
+  faSuitcase,
+  faLineChart,
+  faPencil,
+  faBook,
 } from "@fortawesome/free-solid-svg-icons";
-import "../styles/Sidebar.css";
-import treeIcon from "../assets/images/tree.png";
-import Arearegister from "../components/Tree/Arearegister";
-import DisciplineRegister from "../components/Tree/DisiplineRegister";
-import SystemRegister from "../components/Tree/SystemRegister";
-import ProjectDetails from "./ProjectDetails";
-import { updateProjectContext } from "../context/ContextShare";
 
-function Sidebar({ onToggle, setProjectname, onOpenProjectModal })
- {
-  const {updateProject} = useContext(updateProjectContext)
+function Sidebar({
+  onToggle,
+  projectName,
+  setProjectname,
+  onOpenProjectModal,
+  onActiveLinkChange, // New prop to notify parent of active link changes
+}) {
+  const { updateProject } = useContext(updateProjectContext);
   const navigate = useNavigate();
-  const [activeItem, setActiveItem] = useState("");
+  const [activeItem, setActiveItem] = useState("iRoamer");
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [showProjectName, setShowProjectName] = useState(false);
   const [showProjectDetails, setShowProjectDetails] = useState(true);
@@ -40,7 +58,17 @@ function Sidebar({ onToggle, setProjectname, onOpenProjectModal })
     disciplineRegister: false,
     systemRegister: false,
   });
-  
+
+  const [showContents, setShowCOntents] = useState(false);
+  const [activeLink, setActiveLink] = useState("three");
+  const [activeTab, setActiveTab] = useState("");
+
+  // Notify parent component when activeLink changes
+  useEffect(() => {
+    if (onActiveLinkChange) {
+      onActiveLinkChange(activeLink);
+    }
+  }, [activeLink, onActiveLinkChange]);
 
   useEffect(() => {
     const storedProject = sessionStorage.getItem("selectedProject");
@@ -52,7 +80,7 @@ function Sidebar({ onToggle, setProjectname, onOpenProjectModal })
         console.warn("Stored project data is invalid");
       }
     }
-  }, [sessionStorage.getItem("selectedProject"),updateProject]);
+  }, [sessionStorage.getItem("selectedProject"), updateProject]);
 
   const handleOpenModal = (modalName) => {
     setOpenModal((prev) => ({
@@ -70,6 +98,7 @@ function Sidebar({ onToggle, setProjectname, onOpenProjectModal })
 
   const handleSubItemClick = (label, path, isModal = false, modalName = "") => {
     setActiveItem(label);
+    setActiveTab(label);
     if (isModal) {
       handleOpenModal(modalName);
     } else {
@@ -96,10 +125,10 @@ function Sidebar({ onToggle, setProjectname, onOpenProjectModal })
 
   const handleItemClick = (item) => {
     setActiveItem(item.name);
-
+    setActiveLink(item.activeLink || item.name.toLowerCase().replace(/\s+/g, ''));
+    
     if (item.toggleMenu) {
       const isOpening = !openMenus[item.toggleMenu];
-
       const newOpenMenus = Object.keys(openMenus).reduce((acc, key) => {
         acc[key] = false;
         return acc;
@@ -110,7 +139,10 @@ function Sidebar({ onToggle, setProjectname, onOpenProjectModal })
         if (item.subItems && item.subItems.length > 0) {
           const firstSubItem = item.subItems[0];
           setActiveItem(firstSubItem.name);
-          navigate(firstSubItem.path);
+          setActiveTab(firstSubItem.name);
+          if (firstSubItem.path) {
+            navigate(firstSubItem.path);
+          }
         }
       } else if (item.path) {
         navigate(item.path);
@@ -126,6 +158,7 @@ function Sidebar({ onToggle, setProjectname, onOpenProjectModal })
         tagInfo: false,
         specManagement: false,
         mto: false,
+        commentManagement: false,
       });
       navigate(item.path);
     }
@@ -166,13 +199,24 @@ function Sidebar({ onToggle, setProjectname, onOpenProjectModal })
   }, []);
 
   const menuItems = [
-    { icon: faFighterJet, name: "iRoamer", path: "/iroamer" },
-    { icon: faBoxes, name: "Bulk Model Import", path: "/bulk-model-import" },
+    { 
+      icon: faFighterJet, 
+      name: "iRoamer", 
+      path: "/iroamer",
+      activeLink: "three"
+    },
+    { 
+      icon: faArchive, 
+      name: "Bulk Model Import", 
+      path: "/bulk-model-import",
+      activeLink: "bulk"
+    },
     {
-      icon: faSitemap,
+      icon: faSliders,
       name: "Tree Management",
       path: "/tree-management/review",
       toggleMenu: "treeManagement",
+      activeLink: "treemanagement",
       subItems: [
         { name: "Review", path: "/tree-management/review" },
         {
@@ -184,7 +228,6 @@ function Sidebar({ onToggle, setProjectname, onOpenProjectModal })
           name: "Discipline Register",
           isModal: true,
           modalName: "disciplineRegister",
-       
         },
         {
           name: "System Register",
@@ -194,10 +237,11 @@ function Sidebar({ onToggle, setProjectname, onOpenProjectModal })
       ],
     },
     {
-      icon: faGlobe,
+      icon: faArchive,
       name: "Global Model",
       path: "/global-model/open",
       toggleMenu: "globalModel",
+      activeLink: "expandglobal",
       subItems: [
         { name: "Open Global Model", path: "/global-model/open" },
         { name: "Assign Token", path: "/global-model/assign-token" },
@@ -211,6 +255,7 @@ function Sidebar({ onToggle, setProjectname, onOpenProjectModal })
       name: "Tags",
       path: "/tags/review",
       toggleMenu: "tags",
+      activeLink: "expandtag",
       subItems: [
         { name: "Review", path: "/tags/review" },
         { name: "Register", path: "/tags/register" },
@@ -221,27 +266,50 @@ function Sidebar({ onToggle, setProjectname, onOpenProjectModal })
       name: "Tag Info",
       path: "/tag-info/review",
       toggleMenu: "tagInfo",
+      activeLink: "taginfo",
       subItems: [{ name: "Review", path: "/tag-info/review" }],
     },
     {
-      icon: faFileAlt,
+      icon: faBook,
       name: "Documents",
       path: "/documents/review",
       toggleMenu: "documents",
-    subItems: [
+      activeLink: "expanddocument",
+      subItems: [
         { name: "Review", path: "/documents/review" },
         { name: "Register", path: "/documents/register" },
       ],
     },
-    { icon: faListUl, name: "Line List", path: "/line-list" },
-    { icon: faListUl, name: "Equipment List", path: "/equipment-list" },
-    { icon: faListUl, name: "Valve List", path: "/valve-list" },
-    { icon: faPenSquare, name: "Smart P&ID", path: "/spid" },
+    { 
+      icon: faListUl, 
+      name: "Line List", 
+      path: "/line-list",
+      activeLink: "linelist"
+    },
+    { 
+      icon: faListUl, 
+      name: "Equipment List", 
+      path: "/equipment-list",
+      activeLink: "equipmentlist"
+    },
+    { 
+      icon: faListUl, 
+      name: "Valve List", 
+      path: "/valve-list",
+      activeLink: "valvelist"
+    },
+    { 
+      icon: faPenSquare, 
+      name: "Smart P&ID", 
+      path: "/spid",
+      activeLink: "spid"
+    },
     {
       icon: faListUl,
       name: "Spec Management",
       path: "/spec-management/1",
       toggleMenu: "specManagement",
+      activeLink: "specmanagement",
       subItems: [
         { name: "Spec 1", path: "/spec-management/1" },
         { name: "Spec 2", path: "/spec-management/2" },
@@ -255,6 +323,7 @@ function Sidebar({ onToggle, setProjectname, onOpenProjectModal })
       name: "MTO",
       path: "/mto/1",
       toggleMenu: "mto",
+      activeLink: "mto",
       subItems: [
         { name: "MTO 1", path: "/mto/1" },
         { name: "MTO 2", path: "/mto/2" },
@@ -262,116 +331,168 @@ function Sidebar({ onToggle, setProjectname, onOpenProjectModal })
       ],
     },
     {
-      icon: faCommentAlt,
+      icon: faSliders,
       name: "Comment Management",
       path: "/comment-review",
-         toggleMenu: "CommentManagement",
+      toggleMenu: "commentManagement",
+      activeLink: "comment",
       subItems: [
         { name: "Comment Review", path: "/comment-review" },
         { name: "Comment Status Table", path: "/comment-status" },
-       
       ],
-
     },
-    { icon: faBriefcase, name: "Work Package", path: "/work-package" },
+    { 
+      icon: faSuitcase, 
+      name: "Color Management", 
+      path: "/color-management",
+      activeLink: "color"
+    },
+    { 
+      icon: faSuitcase, 
+      name: "Work Package", 
+      path: "/work-package",
+      activeLink: "package"
+    },
+    { 
+      icon: faLineChart, 
+      name: "4D Plan", 
+      path: "/4d-plan",
+      activeLink: "4dplan"
+    },
   ];
 
+  const handleShowContents = () => {
+    setShowCOntents(!showContents);
+  };
+
   return (
-    <div className={`sidebar ${isCollapsed ? "collapsed" : ""}`}>
-      <div className="sidebar-toggle" onClick={handleToggle}>
-        <img src={treeIcon} alt="Toggle Sidebar" className="tree-toggle-icon" />
-      </div>
-
-      {!isCollapsed && (
-        <div className="sidebar-menu" ref={sidebarMenuRef}>
-          <div className="open-project-section">
-            <div className="p-3">
-                 <span onClick={onOpenProjectModal}>
-              <FontAwesomeIcon icon={faFolderOpen} />
-              Project Management
-            </span>
-            </div>
-         
-            {showProjectName && (
-               <ProjectDetails 
-    showProjectDetails={showProjectDetails}
-    setShowProjectDetails={setShowProjectDetails}
-    onAddArea={() => console.log("Add area clicked")} // Add your actual handler
-  />
-            )}
+    <>
+      <ul>
+        <li>
+          <div
+            id="openFileButton"
+            class="dropdown"
+            onClick={onOpenProjectModal}
+          >
+            <i class="fa fa-folder-open"></i>Open Project
+            <div class="dropdown-content"></div>
           </div>
-
-          {menuItems.map((item) => (
-            <React.Fragment key={item.name}>
+          {projectName &&
+            (showContents ? (
               <div
-                className={`menu-item ${
-                  activeItem === item.name ? "active" : ""
-                }`}
-                onClick={() => handleItemClick(item)}
+                style={{
+                  width: "100%",
+                  display: "flex",
+                  justifyContent: "center",
+                  alignItems: "center",
+                }}
               >
-                <FontAwesomeIcon icon={item.icon} />
-                <span>{item.name}</span>
-                {item.toggleMenu && (
-                  <FontAwesomeIcon
-                    icon={
-                      openMenus[item.toggleMenu]
-                        ? faChevronDown
-                        : faChevronRight
-                    }
-                    className="submenu-toggle-icon"
-                    style={{ marginLeft: "auto" }}
-                  />
-                )}
+                <i
+                  class="fa-solid fa-caret-down fs-3 text-secondary"
+                  onClick={handleShowContents}
+                ></i>
               </div>
-
-              {item.toggleMenu &&
-                openMenus[item.toggleMenu] &&
-                item.subItems && (
-                  <div className="submenu">
-                    {item.subItems.map((subItem) => (
-                      <div
-                        key={subItem.name}
-                        className={`submenu-item ${
-                          activeItem === subItem.name ? "active" : ""
-                        }`}
-                        onClick={() =>
-                          handleSubItemClick(
-                            subItem.name,
-                            subItem.path,
-                            subItem.isModal,
-                            subItem.modalName
-                          )
-                        }
-                      >
-                        {subItem.name}
-                      </div>
-                    ))}
+            ) : (
+              <>
+                <div>
+                  <div className="project-folder">
+                    <div
+                      className="tree"
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        padding: "7px",
+                      }}
+                    >
+                      <span>{projectName}</span>
+                      <span>
+                        <i
+                          className="fa-solid fa-eye"
+                          style={{
+                            fontSize: "12px",
+                            marginRight: "9px",
+                          }}
+                        ></i>
+                        <FontAwesomeIcon
+                          icon={faPlusCircle}
+                          className="ms-2"
+                          style={{ fontSize: "15px" }}
+                        />
+                      </span>
+                    </div>
                   </div>
-                )}
-            </React.Fragment>
-          ))}
+                </div>
+                <div
+                  style={{
+                    width: "100%",
+                    display: "flex",
+                    justifyContent: "center",
+                    alignItems: "center",
+                  }}
+                >
+                  <i
+                    class="fa-solid fa-caret-up fs-3 text-secondary"
+                    onClick={handleShowContents}
+                  ></i>
+                </div>
+              </>
+            ))}
+        </li>
+        {menuItems.map((item, index) => (
+          <li key={index}>
+            <div
+              className={
+                activeLink === item.activeLink ? "sideLnkActive" : "sideLnkInactive"
+              }
+              onClick={() => handleItemClick(item)}
+              style={{ cursor: "pointer" }}
+            >
+              <FontAwesomeIcon icon={item.icon} className="sideLnkIcon" />
+              <a className="sideLnk">{item.name}</a>
+            </div>
+            
+            {item.subItems && openMenus[item.toggleMenu] && (
+              <ul className="sub-menu">
+                {item.subItems.map((subItem, subIndex) => (
+                  <li key={subIndex}>
+                    <div
+                      className={
+                        activeTab === subItem.name ? "tabActive" : "tabInactive"
+                      }
+                      onClick={() => 
+                        handleSubItemClick(
+                          subItem.name, 
+                          subItem.path, 
+                          subItem.isModal, 
+                          subItem.modalName
+                        )
+                      }
+                      style={{ cursor: "pointer" }}
+                    >
+                      <a className="sideLnk">{subItem.name}</a>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </li> 
+        ))}
+      </ul>
 
-          <div className="views-section">
-            <div className="views-empty">(Empty)</div>
-          </div>
-        </div>
+      {/* Modals */}
+      {openModal.areaRegister && (
+        <Arearegister onClose={() => handleCloseModal("areaRegister")} />
       )}
-      <Arearegister
-        isOpen={openModal.areaRegister}
-        onClose={() => handleCloseModal("areaRegister")}
-    
-      />
-      <DisciplineRegister
-        isOpen={openModal.disciplineRegister}
-        onClose={() => handleCloseModal("disciplineRegister")}
-   
-      />
-      <SystemRegister
-        isOpen={openModal.systemRegister}
-        onClose={() => handleCloseModal("systemRegister")}
-    
-      />
-    </div>
+      {openModal.disciplineRegister && (
+        <DisciplineRegister onClose={() => handleCloseModal("disciplineRegister")} />
+      )}
+      {openModal.systemRegister && (
+        <SystemRegister onClose={() => handleCloseModal("systemRegister")} />
+      )}
+      
+      {showProjectDetails && <ProjectDetails />}
+    </>
   );
 }
 
