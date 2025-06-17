@@ -1,0 +1,77 @@
+/* AxisIndicators.css */
+
+.axis-indicator {
+    position: absolute;
+    bottom: 20px;
+    right: 20px;
+    width: 100px;
+    height: 100px;
+    background-color: rgba(0, 0, 0, 0.3);
+    border-radius: 10px;
+    z-index: 90;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    user-select: none;
+    pointer-events: none; /* Allow interactions with objects behind it */
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
+    transition: opacity 0.2s ease;
+  }
+  
+  .cad-top-view-axis {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    width: 100px;
+    height: 100px;
+    background-color: rgba(0, 0, 0, 0.3);
+    border-radius: 10px;
+    z-index: 90;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    user-select: none;
+    pointer-events: none; /* Allow interactions with objects behind it */
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
+    transition: opacity 0.2s ease;
+  }
+  
+  /* Styling for text labels in the axis indicators */
+  text {
+    font-family: Arial, sans-serif;
+    font-weight: bold;
+    user-select: none;
+  }
+  
+  /* Add a slight glow effect to the axes */
+  .x-axis, .y-axis, .z-axis {
+    filter: drop-shadow(0 0 2px rgba(255, 255, 255, 0.5));
+  }
+  
+  /* Make the indicators fade when hidden */
+  .axis-indicator.hidden,
+  .cad-top-view-axis.hidden {
+    opacity: 0;
+    visibility: hidden;
+  }
+  
+  /* Add responsive rules for smaller screens */
+  @media (max-width: 768px) {
+    .axis-indicator,
+    .cad-top-view-axis {
+      width: 80px;
+      height: 80px;
+    }
+    
+    text {
+      font-size: 10px !important;
+    }
+  }
+  
+  @media (max-width: 480px) {
+    .axis-indicator,
+    .cad-top-view-axis {
+      width: 60px;
+      height: 60px;
+    }
+  }

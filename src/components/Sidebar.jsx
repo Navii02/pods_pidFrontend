@@ -241,8 +241,6 @@ function Sidebar({
       activeLink: "expandglobal",
       subItems: [
         { name: "Open Global Model", path: "/global-model/open" },
-        { name: "Assign Token", path: "/global-model/assign-token" },
-        { name: "Add World Box", path: "/global-model/add-world-box" },
         { name: "Create Global Model", path: "/global-model/create" },
         { name: "Delete Global Model", path: "/global-model/delete" },
       ],

@@ -1,8 +1,3 @@
-
-/**
- * Developed by POUL CONSULT, Hetlandsgata 9, 4344 Bryne.
- * @author JaleelaBasheer
- */
 import * as BABYLON from "@babylonjs/core";
 
 // Optimized Vector3 implementation
@@ -83,23 +78,14 @@ class Vector3 {
     }
   
     const initialFaceCount = indices.length / 3;
-    const vertexCount = positions.length / 3;
-    
-    // Improved skipping condition
-    const isTooSmall =
-      initialFaceCount <= 10 ||               // very few triangles
-      vertexCount <= 20 ||                    // too few vertices
-      (initialFaceCount <= 64 && vertexCount <= 50);  // small and simple
-    
-    if (isTooSmall) {
-      console.log("Skipping simplification — mesh is already very small.");
+    if (initialFaceCount <= 64) {
+      // No need to simplify very small meshes
       return {
         positions: positions,
         normals: normals,
         indices: indices
       };
     }
-    
   
     // Use TypedArrays for better performance
     const posArray = new Float32Array(positions);
@@ -126,7 +112,7 @@ class Vector3 {
     );
   
     // Create vertex data structure using pre-allocated arrays
-    // const vertexCount = positions.length / 3;
+    const vertexCount = positions.length / 3;
     const vertices = new Array(vertexCount);
     
     for (let i = 0; i < vertexCount; i++) {
