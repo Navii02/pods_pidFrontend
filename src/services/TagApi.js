@@ -95,10 +95,22 @@ try {
 
   }
   export const EditLinelist = async(data)=>{
+    try {
+       const response = await commonApi('PUT',`${url}/api/edit-line-list`,data)
+        return response
+    } catch (error) {
+      throw error
+    }
 
   }
-  export const deletelineList = async(nuber)=>{
-
+  export const deletelineList = async(tagId)=>{
+ 
+    try {
+       const response = await commonApi('DELETE',`${url}/api/delete-line-list/${tagId}`,)
+        return response
+    } catch (error) {
+      throw error
+    }
   }
   //EquipmentList
 
@@ -115,9 +127,23 @@ try {
 
   }
  export const EditEquipmentlist = async(data)=>{
+   try {
+       const response = await commonApi('PUT',`${url}/api/edit-equipment-list`,data)
+        return response
+    } catch (error) {
+      throw error
+    }
 
   }
-  export const deleteequipmentList = async(nuber)=>{
+  export const deleteequipmentList = async(tagId)=>{
+   
+     
+    try {
+       const response = await commonApi('DELETE',`${url}/api/delete-equipment-list/${tagId}`,)
+        return response
+    } catch (error) {
+      throw error
+    }
 
   }
   //valveList 
@@ -133,10 +159,23 @@ try {
   }
    export const saveimportedValveList = async(data)=>{
 
-  }
- export const EditValvelist = async(data)=>{
 
   }
-  export const deletevalveList = async(nuber)=>{
+ export const EditValvelist = async(data)=>{
+ try {
+       const response = await commonApi('PUT',`${url}/api/edit-valve-list`,data)
+        return response
+    } catch (error) {
+      throw error
+    }
+  }
+  export const deletevalveList = async(tagId)=>{
+   
+    try {
+       const response = await commonApi('DELETE',`${url}/api/delete-valve-list/${tagId}`,)
+        return response
+    } catch (error) {
+      throw error
+    }
 
   }

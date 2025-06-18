@@ -60,15 +60,22 @@ fetchEquipmentlist(projectId)
     seteditedEquipmentData({});
   };
 
-  const handleSave = async(tag) => {
-    console.log(editedEquipmentData);
-    const updatedLineList = [...allEquipementList];
-    updatedLineList[editedRowIndex] = { ...editedEquipmentData, tag: tag };
-
-    setEditedRowIndex(-1);
-    seteditedEquipmentData({});
- const response = await editedEquipmentData(editedEquipmentData)
-  };
+ const handleSave = async(tag) => {
+  try {
+    const response = await EditEquipmentlist(editedEquipmentData); 
+    if(response.status === 200) {
+      const updatedLineList = [...allEquipementList];
+      updatedLineList[editedRowIndex] = { ...editedEquipmentData, tag: tag };
+      setallEquipementList(updatedLineList);
+      setEditedRowIndex(-1);
+      seteditedEquipmentData({});
+    }
+  } catch (error) {
+    console.error("Error saving equipment:", error);
+    setModalMessage("Failed to save equipment data.");
+    setCustomAlert(true);
+  }
+};
 
   const handleChange = (field, value) => {
     seteditedEquipmentData({
@@ -253,7 +260,7 @@ fetchEquipmentlist(projectId)
                       :
                       <>
                         <i className="fa-solid fa-pencil" onClick={() => handleEditOpen(index)}></i>
-                        <i className="fa-solid fa-trash-can ms-3" onClick={() => handleDeleteEquipmentFromTable(equipment.tag)}></i>
+                        <i className="fa-solid fa-trash-can ms-3" onClick={() => handleDeleteEquipmentFromTable(equipment.tagId)}></i>
                       </>
                     }
                   </td>
