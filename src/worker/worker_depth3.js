@@ -19,7 +19,6 @@ class MeshLoaderWorkerDepth3 {
                 request.onerror = () => reject(request.error);
                 request.onsuccess = () => resolve(request.result);
             });
-            console.log('Depth 3 worker: Database initialized');
         } catch (error) {
             console.error('Depth 3 worker: Database initialization failed:', error);
         }
@@ -98,7 +97,6 @@ class MeshLoaderWorkerDepth3 {
             });
         } else {
             // Skip nodes without mesh data
-            console.log(`Depth 3 worker: No mesh data found for node ${nodeNumber}, skipping`);
             self.postMessage({
                 type: 'MESH_SKIPPED',
                 requestId,

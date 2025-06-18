@@ -2,7 +2,6 @@
 
 // meshProcessingWorker.js - Fixed version with proper error handling
 
-console.log('Worker script loaded');
 
 // meshProcessingWorker.js - Complete version with both new and legacy functions
 
@@ -13,11 +12,9 @@ const COVERAGE_THRESHOLDS = {
     SMALL: 0.3
 };
 
-console.log('Worker script loaded');
 
 self.onmessage = async function(e) {
     const { type, data, messageId } = e.data;
-    console.log('Worker received message:', type);
     
     try {
         switch (type) {
@@ -30,7 +27,6 @@ self.onmessage = async function(e) {
                 break;
                 
             case 'PROCESS_OCTREE_STRUCTURE':
-                console.log('Worker: Processing octree structure...');
                 const octreeResult = await processOctreeStructure(data);
                 self.postMessage({ 
                     type: 'OCTREE_STRUCTURE_COMPLETE', 
@@ -40,7 +36,6 @@ self.onmessage = async function(e) {
                 break;
                 
             case 'PROCESS_MODEL_CHUNK':
-                console.log('Worker: Processing model chunk...');
                 const chunkResult = await processModelChunk(data);
                 self.postMessage({ 
                     type: 'MODEL_CHUNK_COMPLETE', 
@@ -51,7 +46,6 @@ self.onmessage = async function(e) {
                 
             // YOUR ORIGINAL FUNCTIONS
             case 'PROCESS_MESH_CATEGORIZATION':
-                console.log('Worker: Processing mesh categorization...');
                 const categorizationResult = await processMeshCategorization(data);
                 self.postMessage({ 
                     type: 'CATEGORIZATION_COMPLETE', 
@@ -61,7 +55,6 @@ self.onmessage = async function(e) {
                 break;
                 
             case 'PROCESS_OVERLAPPING':
-                console.log('Worker: Processing overlapping...');
                 const overlapResult = await processOverlappingInWorker(data);
                 self.postMessage({ 
                     type: 'OVERLAP_PROCESSING_COMPLETE', 
@@ -116,26 +109,14 @@ async function processOctreeStructure({ octreeData }) {
         }
     }
     
-    console.log('Octree structure processed:');
-    for (let i = 0; i <= 4; i++) {
-        console.log(`  Depth ${i}: ${nodesByDepth[i].length} nodes`);
-    }
-    console.log(`  Total nodes: ${totalNodes}`);
-    
+       
     return { nodesByDepth };
 }
 
 // NEW: Process a chunk of models (for chunked processing)
 // Process a chunk of models (for chunked processing)
 async function processModelChunk({ modelChunk, nodesByDepth }) {
-    console.log(`Processing chunk of ${modelChunk.length} models...`);
-    
-    // DEBUG: Check what we received
-    console.log('=== WORKER DEBUG ===');
-    console.log('First model in chunk:', modelChunk[0]);
-    console.log('First model screenCoverage:', modelChunk[0]?.screenCoverage);
-    console.log('First model bounds:', modelChunk[0]?.bounds);
-    console.log('=== END WORKER DEBUG ===');
+   
     
     const finalPlacement = {
         depth0: [],
@@ -156,14 +137,12 @@ async function processModelChunk({ modelChunk, nodesByDepth }) {
         
         if (!model.screenCoverage) {
             skippedNoData++;
-            console.log(`Skipping model ${model.id}: screenCoverage=${model.screenCoverage}, bounds=${!!model.bounds}`);
             continue;
         }
         
         const category = categorizeModel(model.screenCoverage);
         if (!category) {
             skippedNoCategory++;
-            console.log(`No category for model ${model.id} with screenCoverage=${model.screenCoverage}`);
             continue;
         }
         
@@ -197,10 +176,7 @@ async function processModelChunk({ modelChunk, nodesByDepth }) {
         }
     }
     
-    console.log(`Chunk processed: ${processedCount} models, ${categorizedCount} categorized`);
-    console.log(`Skipped: ${skippedNoData} (no data), ${skippedNoCategory} (no category)`);
-    console.log('Placements:', Object.keys(finalPlacement).map(d => `${d}: ${finalPlacement[d].length}`).join(', '));
-    
+   
     return { 
         finalPlacement,
         stats: {
@@ -217,7 +193,6 @@ async function processModelChunk({ modelChunk, nodesByDepth }) {
 async function processMeshCategorization({ octreeData, modelMap }) {
     self.postMessage({ type: 'PROGRESS', data: { stage: 'COLLECTING_NODES', progress: 0 } });
     
-    console.log(octreeData, modelMap);
 
     // Step 1: Collect all nodes at all depths
     const nodesByDepth = { 0: [], 1: [], 2: [], 3: [], 4: [] };
@@ -324,7 +299,6 @@ async function processOverlappingInWorker({ meshesObj, category, nodesByDepth, m
         depth4: []
     };
     
-    console.log(meshesObj, category, nodesByDepth, modelMap, octreeData);
     
     let processedCount = 0;
     let overlappingCount = 0;

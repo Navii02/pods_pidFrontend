@@ -1,5 +1,8 @@
+/**
+ * Developed by POUL CONSULT, Hetlandsgata 9, 4344 Bryne.
+ * @author JaleelaBasheer
+ */
 import * as BABYLON from "@babylonjs/core";
-
 
 export class FreeCameraTouchInput {
     constructor() {

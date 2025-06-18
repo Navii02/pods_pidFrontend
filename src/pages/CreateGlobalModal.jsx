@@ -1,3 +1,7 @@
+/**
+ * Developed by POUL CONSULT, Hetlandsgata 9, 4344 Bryne.
+ * @author JaleelaBasheer
+ */
 import React, { useCallback, useState, useEffect, useRef } from "react";
 import * as BABYLON from "@babylonjs/core";
 import "@babylonjs/loaders";
@@ -120,7 +124,7 @@ function CreateGlobalModal() {
   };
 
   // Optimized mesh processing without simplification
-  const processMesh = async (mesh, fileId) => {
+  const processMesh = async (mesh, fileId,ParentFile) => {
     if (!mesh.geometry) return null;
     
     const meshId = meshIdCounter.current++;
@@ -153,7 +157,7 @@ function CreateGlobalModal() {
     const meshData = {
       fileName: originalMeshId,
       data: {
-        fileName: originalMeshId,
+        ParentFile:ParentFile,
         positions: Array.from(positions),
         normals: Array.from(normals),
         indices: Array.from(indices),
@@ -186,6 +190,7 @@ function CreateGlobalModal() {
           id: originalMeshId,
           fileId,
           screenCoverage,
+           ParentFile,
         },
         boundingInfo: mesh.getBoundingInfo(),
         transforms: {
@@ -221,7 +226,7 @@ function CreateGlobalModal() {
       // Process meshes in parallel
       for (const mesh of container.meshes) {
         if (!mesh.geometry) continue;
-        meshPromises.push(processMesh(mesh, fileId));
+        meshPromises.push(processMesh(mesh, fileId,file.name));
       }
       
       const results = (await Promise.all(meshPromises)).filter(Boolean);
@@ -245,133 +250,7 @@ function CreateGlobalModal() {
     }
   };
 
-  // Optimized file change handler
-  // const handleFileChange = useCallback(async (event) => {
-  //   const selectedFiles = Array.from(event.target.files);
-  //   setFiles(selectedFiles);
-    
-  //   try {
-  //     let allMeshInfos = [];
-  //     updateProgress({
-  //       stage: "Processing Files",
-  //       current: 0,
-  //       total: selectedFiles.length,
-  //       processingStage: 1,
-  //       subStage: "Initializing",
-  //       subProgress: 0,
-  //     });
-      
-  //     // Process files in batches
-  //     for (let i = 0; i < selectedFiles.length; i += BATCH_SIZE) {
-  //       const batch = selectedFiles.slice(i, i + BATCH_SIZE);
-  //       const batchResults = await Promise.all(batch.map((file) => processFile(file)));
-  //       allMeshInfos = allMeshInfos.concat(batchResults.flat());
-        
-  //       // Update progress percentage based on the files processed
-  //       const progress = Math.min(
-  //         Math.floor(((i + BATCH_SIZE) / selectedFiles.length) * 100),
-  //         100
-  //       );
-  //       updateProgress({
-  //         stage: "Processing Files",
-  //         processingStage: 1,
-  //         current: i + batch.length,
-  //         total: selectedFiles.length,
-  //         subStage: `Processing batch ${i / BATCH_SIZE + 1}`,
-  //         subProgress: progress,
-  //       });
-  //     }
-      
-  //     // Store all original meshes
-  //     updateProgress({
-  //       stage: "Storing Meshes",
-  //       processingStage: 2,
-  //       subStage: "Saving meshes to database",
-  //       subProgress: 0,
-  //     });
-      
-  //     await batchStoreInDB([
-  //       {
-  //         store: "originalMeshes",
-  //         key: "meshData",
-  //         data: allMeshInfos,
-  //       },
-  //     ]);
-      
-  //     updateProgress({
-  //       stage: "Storing Meshes",
-  //       processingStage: 2,
-  //       subStage: "Meshes stored successfully",
-  //       subProgress: 100,
-  //     });
-      
-  //     // Now create and store octree
-  //     updateProgress({
-  //       stage: "Creating Octree",
-  //       processingStage: 3,
-  //       subStage: "Building octree structure",
-  //       subProgress: 0,
-  //     });
-      
-  //     const octreeRoot = createOctreeBlock(
-  //       sceneRef.current,
-  //       getMinBounds(allMeshInfos),
-  //       getMaxBounds(allMeshInfos),
-  //       allMeshInfos,
-  //       0,
-  //       null
-  //     );
-      
-  //     const octreeInfo = createOctreeInfo(
-  //       octreeRoot,
-  //       getMinBounds(allMeshInfos),
-  //       getMaxBounds(allMeshInfos)
-  //     );
-      
-  //     await batchStoreInDB([
-  //       {
-  //         store: "octree",
-  //         key: "mainOctree",
-  //         data: octreeInfo,
-  //       },
-  //     ]);
-      
-  //     updateProgress({
-  //       stage: "Creating Octree",
-  //       processingStage: 3,
-  //       subStage: "Octree created successfully",
-  //       subProgress: 100,
-  //     });
-      
-  //     allMeshInfos = [];
-      
-  //     // Load models
-  //     updateProgress({
-  //       stage: "Loading Models",
-  //       processingStage: 4,
-  //       subStage: "Processing models",
-  //       subProgress: 0,
-  //     });
-      
-  //     await loadModels();
-
-      
-  //     updateProgress({
-  //       stage: "Complete",
-  //       processingStage: 5,
-  //       subStage: "Processing complete",
-  //       subProgress: 100,
-  //     });
-  //   } catch (error) {
-  //     console.error("Error:", error);
-  //     setStatus("Error: " + error.message);
-  //     updateProgress({
-  //       stage: "Error",
-  //       subStage: error.message,
-  //       subProgress: 0,
-  //     });
-  //   }
-  // }, []);
+ 
 
   const handleFileChange = useCallback(async (event) => {
     const selectedFiles = Array.from(event.target.files);
@@ -418,13 +297,7 @@ function CreateGlobalModal() {
             subProgress: 0,
         });
         
-        // await batchStoreInDB([
-        //     {
-        //         store: "originalMeshes",
-        //         key: "meshData",
-        //         data: allMeshInfos,
-        //     },
-        // ]);
+     
         
         updateProgress({
             stage: "Storing Meshes",

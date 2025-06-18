@@ -30,7 +30,6 @@ class MeshLoaderWorkerDepth2 {
                 };
             });
             this.isReady = true;
-            console.log('Depth 2 worker: Database initialized and ready');
             
             // Signal that worker is ready
             self.postMessage({
@@ -117,7 +116,6 @@ class MeshLoaderWorkerDepth2 {
             });
         } else {
             // Skip nodes without mesh data - don't treat as error
-            console.log(`Depth 2 worker: No mesh data found for node ${nodeNumber}, skipping`);
             self.postMessage({
                 type: 'MESH_SKIPPED',
                 requestId,
@@ -150,7 +148,6 @@ class MeshLoaderWorkerDepth2 {
                     successCount++;
                 } else {
                     // Skip nodes without mesh data
-                    console.log(`Depth 2 worker: No mesh data for node ${nodeNumber}, skipping`);
                     results.push({ nodeNumber, success: false, skipped: true, reason: 'No mesh data' });
                     skippedCount++;
                 }
@@ -159,7 +156,6 @@ class MeshLoaderWorkerDepth2 {
             }
         }
         
-        console.log(`Depth 2 worker: Batch complete - ${successCount} loaded, ${skippedCount} skipped`);
         
         self.postMessage({
             type: 'BATCH_LOADED',

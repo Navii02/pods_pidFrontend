@@ -4,6 +4,13 @@ import "@babylonjs/loaders";
 import "@babylonjs/gui";
 import { FreeCameraMouseInput } from "../Utils/FlyControls";
 import { FreeCameraTouchInput } from "../Utils/TouchControls";
+import * as GUI from "@babylonjs/gui";
+import {
+  calculateElevationAngle,
+  calculatePlanAngle,
+} from "../Utils/GeometryCalculation";
+import { getLineList } from "../services/TagApi";
+import {  getequipmentList } from '../services/TagApi';
 
 class WebWorkerTilesetLODManager {
   constructor(scene, camera) {
@@ -255,12 +262,9 @@ class WebWorkerTilesetLODManager {
         worker.onerror = (error) => {
           console.error(`Worker error for depth ${depth}:`, error);
         };
-        console.log(
-          `Worker for depth ${depth} created, waiting for ready signal...`
-        );
+      
       });
 
-      console.log("Web workers created, waiting for initialization...");
     } catch (error) {
       console.error("Failed to initialize web workers:", error);
       // Fallback to main thread loading
@@ -284,7 +288,6 @@ class WebWorkerTilesetLODManager {
 
     switch (type) {
       case "WORKER_READY":
-        console.log(`Worker for depth ${depth} is ready`);
         this.workerReadyStates.set(depth, true);
         this.checkAllWorkersReady();
         break;
@@ -320,9 +323,7 @@ class WebWorkerTilesetLODManager {
             Math.max(0, this.workerLoadCounts.get(depth) - 1)
           );
         }
-        console.log(
-          `Worker skipped node ${nodeNumber} at depth ${depth}: ${reason}`
-        );
+       
         this.pendingRequests.delete(requestId);
         break;
 
@@ -385,11 +386,9 @@ class WebWorkerTilesetLODManager {
         break;
 
       case "DISPOSAL_CACHE_CLEARED":
-        console.log("Disposal worker cache cleared");
         break;
 
       case "DISPOSAL_STATS":
-        console.log("Disposal worker stats:", stats);
         break;
 
       // Frustum culling worker message types
@@ -398,7 +397,6 @@ class WebWorkerTilesetLODManager {
           "frustum",
           Math.max(0, this.workerLoadCounts.get("frustum") - 1)
         );
-        console.log(`Frustum updated with ${event.data.planesCount} planes`);
         this.pendingRequests.delete(requestId);
         break;
 
@@ -421,17 +419,13 @@ class WebWorkerTilesetLODManager {
         break;
 
       case "CULLING_CACHE_CLEARED":
-        console.log("Frustum worker cache cleared");
         break;
 
       case "CULLING_STATS":
-        console.log("Frustum worker stats:", stats);
         break;
 
       case "BUFFER_MULTIPLIER_SET":
-        console.log(
-          `Frustum buffer multiplier set to ${event.data.bufferMultiplier}`
-        );
+       
         break;
 
       // Distance calculation worker messages
@@ -446,11 +440,9 @@ class WebWorkerTilesetLODManager {
         break;
 
       case "DISTANCE_WORKER_INITIALIZED":
-        console.log("Distance calculation worker initialized with node data");
         this.distanceWorkerInitialized = true;
         this.pendingRequests.delete(requestId);
         // Now we can start depth 2 loading
-        console.log("Starting depth 2 loading...");
         this.loadAllDepth2Meshes();
         break;
 
@@ -470,7 +462,6 @@ class WebWorkerTilesetLODManager {
         break;
 
       case "NODES_UPDATED":
-        console.log("Distance worker nodes updated");
         this.pendingRequests.delete(requestId);
         break;
 
@@ -486,9 +477,7 @@ class WebWorkerTilesetLODManager {
     );
     if (allReady && !this.allWorkersReady) {
       this.allWorkersReady = true;
-      console.log(
-        "All workers (including disposal, frustum, and distance workers) are ready!"
-      );
+     
 
       // Initialize distance worker with node data - but don't start loading yet
       // Loading will start when we receive DISTANCE_WORKER_INITIALIZED message
@@ -530,7 +519,6 @@ class WebWorkerTilesetLODManager {
       requestId,
     });
 
-    console.log(`Initializing distance worker with ${nodeData.length} nodes`);
     return true;
   }
 
@@ -747,11 +735,7 @@ class WebWorkerTilesetLODManager {
       this.distanceWorkerStats.averageCalculationTime =
         statistics.averageCalculationTime;
 
-      console.log(
-        `Distance calculation: ${statistics.calculationTime.toFixed(2)}ms for ${
-          statistics.processedNodes
-        } nodes`
-      );
+     
     }
   }
 
@@ -768,9 +752,7 @@ class WebWorkerTilesetLODManager {
     });
 
     if (updatedCount > 0) {
-      console.log(
-        `Updated visibility for ${updatedCount} meshes via distance worker`
-      );
+      
     }
   }
 
@@ -890,9 +872,7 @@ class WebWorkerTilesetLODManager {
   handleFrustumCullingResults(results, stats) {
     const { visible, hidden, dispose, reload } = results;
 
-    console.log(
-      `Frustum culling: V:${visible.length} H:${hidden.length} D:${dispose.length} R:${reload.length}`
-    );
+   
 
     // Update visibility states
     visible.forEach((nodeNumber) => {
@@ -900,7 +880,6 @@ class WebWorkerTilesetLODManager {
       const mesh = this.activeMeshes.get(nodeNumber);
       if (mesh && !mesh.isVisible) {
         mesh.isVisible = true;
-        console.log(`Frustum: Showing mesh ${nodeNumber}`);
       }
     });
 
@@ -909,7 +888,6 @@ class WebWorkerTilesetLODManager {
       const mesh = this.activeMeshes.get(nodeNumber);
       if (mesh && mesh.isVisible) {
         mesh.isVisible = false;
-        console.log(`Frustum: Hiding mesh ${nodeNumber}`);
       }
     });
 
@@ -924,9 +902,7 @@ class WebWorkerTilesetLODManager {
           this.disposedByFrustum.add(nodeNumber);
         });
         this.unloadMeshes(filteredDispose);
-        console.log(
-          `Frustum: Disposed ${filteredDispose.length} meshes outside buffer`
-        );
+       
       }
     }
 
@@ -946,9 +922,7 @@ class WebWorkerTilesetLODManager {
               center
             );
             this.addToLoadingQueue(nodeNumber, depth, distance * 0.5); // Higher priority for reload
-            console.log(
-              `Frustum: Reloading mesh ${nodeNumber} at depth ${depth}`
-            );
+           
           }
         }
       });
@@ -957,9 +931,7 @@ class WebWorkerTilesetLODManager {
 
   // Handle mesh disposal completion
   handleMeshDisposed(requestId, nodeNumber, priority) {
-    console.log(
-      `Mesh disposal completed for node ${nodeNumber} (priority: ${priority})`
-    );
+  
     this.pendingRequests.delete(requestId);
 
     // Additional cleanup if needed
@@ -969,13 +941,10 @@ class WebWorkerTilesetLODManager {
 
   // Handle batch disposal completion
   handleBatchDisposed(requestId, results, stats) {
-    console.log(
-      `Batch disposal completed: ${stats.successCount}/${stats.totalCount} meshes disposed`
-    );
+  
 
     results.forEach((result) => {
       if (result.success) {
-        console.log(`Successfully disposed mesh for node ${result.nodeNumber}`);
       } else {
         console.warn(
           `Failed to dispose mesh for node ${result.nodeNumber}:`,
@@ -1009,9 +978,7 @@ class WebWorkerTilesetLODManager {
             const shouldBeVisible = this.shouldMeshBeVisible(nodeNumber, depth);
             mesh.isVisible = shouldBeVisible;
 
-            console.log(
-              `Successfully loaded mesh for node ${nodeNumber} at depth ${depth} (visible: ${shouldBeVisible})`
-            );
+            
           }
         } catch (error) {
           console.error(`Error creating mesh for node ${nodeNumber}:`, error);
@@ -1087,11 +1054,7 @@ class WebWorkerTilesetLODManager {
       queue.splice(30); // Keep top 30 priority items
     }
 
-    console.log(
-      `Added node ${nodeNumber} (depth ${depth}) to queue: priority=${finalPriority.toFixed(
-        1
-      )}, importance=${importance.toFixed(1)}`
-    );
+    
   }
 
   isNodeInQueue(nodeNumber, depth) {
@@ -1192,9 +1155,7 @@ class WebWorkerTilesetLODManager {
       priority,
     });
 
-    console.log(
-      `Requested disposal for ${nodeNumbers.length} nodes with priority ${priority}`
-    );
+   
   }
 
   // MODIFIED: Improved queue processor with frame budget
@@ -1336,11 +1297,7 @@ class WebWorkerTilesetLODManager {
       timestamp: performance.now(),
     });
 
-    console.log(
-      `Requested mesh load for node ${nodeNumber} at depth ${depth} (${
-        isUrgent ? "URGENT" : "normal"
-      }, priority: ${priority.toFixed(1)})`
-    );
+   
   }
 
   shouldLoadNode(nodeNumber, depth) {
@@ -1374,13 +1331,10 @@ class WebWorkerTilesetLODManager {
 
   // Load all depth 2 meshes immediately (no distance checking)
   async loadAllDepth2Meshes() {
-    console.log("Loading all depth 2 meshes immediately (base LOD level)...");
 
     try {
       const depth2Nodes = this.getNodesAtDepth(2);
-      console.log(
-        `Found ${depth2Nodes.length} depth 2 nodes to load immediately`
-      );
+    
 
       const worker = this.workers.get(2);
       if (!worker) {
@@ -1404,9 +1358,7 @@ class WebWorkerTilesetLODManager {
         timestamp: performance.now(),
       });
 
-      console.log(
-        `Sending batch request to depth 2 worker for ${depth2Nodes.length} nodes`
-      );
+     
       worker.postMessage({
         type: "PRELOAD_BATCH",
         nodeNumbers: depth2Nodes,
@@ -1420,14 +1372,8 @@ class WebWorkerTilesetLODManager {
   handleBatchLoaded(data) {
     const { requestId, results, depth, stats } = data;
 
-    console.log(
-      `Batch loaded for depth ${depth}: ${results.length} items processed`
-    );
-    if (stats) {
-      console.log(
-        `Stats: ${stats.successCount} loaded, ${stats.skippedCount} skipped, ${stats.totalCount} total`
-      );
-    }
+   
+   
 
     // Process each result using for...of to preserve this context
     const processResults = async () => {
@@ -1441,7 +1387,6 @@ class WebWorkerTilesetLODManager {
             );
             if (mesh) {
               mesh.isVisible = true; // Depth 2 meshes are always visible initially
-              console.log(`Batch loaded mesh for node ${result.nodeNumber}`);
             }
           } catch (error) {
             console.error(
@@ -1451,7 +1396,6 @@ class WebWorkerTilesetLODManager {
           }
         } else if (result.skipped) {
           // Skip nodes without mesh data - this is normal, not an error
-          console.log(`Skipped node ${result.nodeNumber}: ${result.reason}`);
         } else {
           // Only log actual errors, not missing mesh data
           if (!result.reason || result.reason !== "No mesh data") {
@@ -1467,11 +1411,7 @@ class WebWorkerTilesetLODManager {
       if (depth === 2) {
         this.depth2LoadedInitially = true;
         this.loadedDepths.add(2);
-        console.log(
-          `Depth 2 initial loading completed. ${
-            stats?.successCount || 0
-          } meshes loaded.`
-        );
+        
       }
     };
 
@@ -1525,9 +1465,7 @@ class WebWorkerTilesetLODManager {
 
     const existingMesh = this.activeMeshes.get(nodeNumber);
     if (existingMesh && this.nodeDepths.get(nodeNumber) === depth) {
-      console.log(
-        `Mesh for node ${nodeNumber} at depth ${depth} already loaded`
-      );
+      
       return existingMesh;
     }
 
@@ -1650,11 +1588,7 @@ class WebWorkerTilesetLODManager {
     this.activeMeshes.set(nodeNumber, mesh);
     this.loadedNodeNumbers.add(nodeNumber);
 
-    console.log(
-      `Created mesh for node ${nodeNumber} in ${(
-        performance.now() - startTime
-      ).toFixed(2)}ms`
-    );
+   
     return mesh;
   }
 
@@ -1680,6 +1614,7 @@ class WebWorkerTilesetLODManager {
           metadataId: meshInfo.metadataId,
           screenCoverage: meshInfo.screenCoverage,
           name: meshInfo.name,
+          parentFileName: meshInfo.parentFileName,
           nodeNumber: this.metadata.nodeNumber,
         };
       }
@@ -1860,7 +1795,6 @@ class WebWorkerTilesetLODManager {
     nodeNumbers.forEach((nodeNumber) => {
       const mesh = this.activeMeshes.get(nodeNumber);
       if (mesh) {
-        console.log(`Unloading mesh for node ${nodeNumber}`);
         mesh.dispose();
         this.activeMeshes.delete(nodeNumber);
         this.loadedNodeNumbers.delete(nodeNumber);
@@ -2092,13 +2026,7 @@ class WebWorkerTilesetLODManager {
     this.threshold30Percent = maxDistance * 0.5;
     this.threshold80Percent = maxDistance * 0.9;
 
-    console.log(
-      `Progressive distance thresholds set: Max = ${this.maxDistance.toFixed(
-        1
-      )}, 30% = ${this.threshold30Percent.toFixed(
-        1
-      )}, 80% = ${this.threshold80Percent.toFixed(1)}`
-    );
+  
   }
 
   async processOctreeNodes(rootBlock, depth = 0, parent = null) {
@@ -2138,13 +2066,7 @@ class WebWorkerTilesetLODManager {
   async initWithOctreeData(octreeData) {
     try {
       await this.processOctreeNodes(octreeData.data.blockHierarchy);
-      console.log(
-        `Processed nodes: Depth 2: ${
-          this.getNodesAtDepth(2).length
-        }, Depth 3: ${this.getNodesAtDepth(3).length}, Depth 4: ${
-          this.getNodesAtDepth(4).length
-        }`
-      );
+     
       return true;
     } catch (error) {
       console.error("Error initializing progressive LOD Manager:", error);
@@ -2400,7 +2322,6 @@ class WebWorkerTilesetLODManager {
       type: "CLEAR_DISPOSAL_CACHE",
     });
 
-    console.log("Requested disposal worker cache clear");
   }
 
   // Frustum culling control methods
@@ -2498,14 +2419,11 @@ class WebWorkerTilesetLODManager {
       this.maxMeshesPerFrame = Math.min(3, this.maxMeshesPerFrame + 1);
     }
 
-    console.log(
-      `Adjusted: meshCreationBudget=${this.meshCreationBudget}ms, maxMeshesPerFrame=${this.maxMeshesPerFrame}`
-    );
+   
   }
 
   // MODIFIED: Enhanced dispose method
   dispose() {
-    console.log("Disposing WebWorker TilesetLODManager...");
 
     // Stop frame scheduler
     this.isSchedulerRunning = false;
@@ -2614,7 +2532,7 @@ class SpatialOptimization {
   }
 }
 
-const BabylonLODManager = ({mode,viewMode,setViewMode}) => {
+const BabylonLODManager = ({mode,viewMode,setViewMode,leftNavVisible,showMeasure,showWireFrame,setShowWireFrame}) => {
   const canvasRef = useRef(null);
   const sceneRef = useRef(null);
   const engineRef = useRef(null);
@@ -2679,6 +2597,42 @@ const BabylonLODManager = ({mode,viewMode,setViewMode}) => {
     nodeCounter: 1,
   });
 
+   const [allEquipementList, setallEquipementList]= useState([])
+        const projectString = sessionStorage.getItem("selectedProject");
+        const project = projectString ? JSON.parse(projectString) : null;
+        const projectId = project?.projectId;
+        const fetchEquipmentlist =async(projectId)=>{
+          const response = await getequipmentList(projectId)
+          if(response.status===200)
+          {
+            console.log(response.data);
+            setallEquipementList(response.data)
+          }
+        }
+  
+    useEffect(() => {
+  fetchEquipmentlist(projectId)
+    }, []);
+
+
+      const [allLineList,setAllLinelist]=useState([])
+    
+       const fetchLineList  = async(projectId)=>{
+        const response = await getLineList(projectId)
+        if(response.status===200){
+        console.log(response.data);
+
+      setAllLinelist(response.data)
+    
+        }
+       }
+      useEffect(() => {
+        fetchLineList(projectId)
+     
+      }, []);
+    
+  
+
   const [performanceStats, setPerformanceStats] = useState({
     frameTimeTracker: { meshCreation: 0, cameraUpdate: 0, lodUpdate: 0 },
     taskQueueLengths: {},
@@ -2692,7 +2646,31 @@ const BabylonLODManager = ({mode,viewMode,setViewMode}) => {
   const [showPerformancePanel, setShowPerformancePanel] = useState(false);
   const fpsRef = useRef({ frames: 0, lastTime: performance.now() });
   const [preVRCameraState, setPreVRCameraState] = useState(null);
+ const [showMeasureDetails, setShowMeasureDetails] = useState(false);
+      const [showMeasureDetailsAbove, setshowMeasureDetailsAbove] =
+        useState(false);
+      const [allLabels, setAllLabels] = useState([]);
 
+      const [point1, setPoint1] = useState(null);
+      const [point2, setPoint2] = useState(null);
+      const [distance, setDistance] = useState(null);
+      const [differences, setDifferences] = useState({
+        diffX: null,
+        diffY: null,
+        diffZ: null,
+      });
+      const [angles, setAngles] = useState({
+        horizontalAngle: null,
+        verticalAngle: null,
+      });
+
+        const measurementRef = useRef({
+        pointA: null,
+        pointB: null,
+        line: null,
+        text: null,
+        markers: [],
+      });
   // Update the tracking variables to match Fbxload.js structure
   let nodesAtDepth = new Array(MAX_DEPTH + 1).fill(0);
   let nodeNumbersByDepth = Array.from({ length: MAX_DEPTH + 1 }, () => []);
@@ -2812,7 +2790,6 @@ const BabylonLODManager = ({mode,viewMode,setViewMode}) => {
   // Emergency camera creation function
   const createEmergencyCamera = useCallback(
     (scene) => {
-      console.log("Creating emergency camera...");
       try {
         const emergencyCamera = createOrbitCamera(scene);
         scene.activeCamera = emergencyCamera;
@@ -3334,7 +3311,6 @@ const restoreCameraState = useCallback((scene, cameraState) => {
   // Add this useEffect in BabylonLODManager after the existing useEffects
 useEffect(() => {
   if (mode && sceneRef.current) {
-    console.log('Mode changed to:', mode);
     if (mode === 'orbit') {
       toggleCamera('orbit');
     } else if (mode === 'fly') {
@@ -3568,14 +3544,12 @@ useEffect(() => {
         2,
         Math.min(16, budget)
       );
-      console.log(`Mesh creation budget set to ${budget}ms`);
     }
   }, []);
 
   const adjustMaxMeshesPerFrame = useCallback((count) => {
     if (lodManagerRef.current) {
       lodManagerRef.current.maxMeshesPerFrame = Math.max(1, Math.min(5, count));
-      console.log(`Max meshes per frame set to ${count}`);
     }
   }, []);
 
@@ -3686,60 +3660,7 @@ useEffect(() => {
     </div>
   );
 
-  // // Initialize cameras
-  // const initializeCameras = useCallback(
-  //   (scene) => {
-  //     const orbitCamera = createOrbitCamera(scene);
-  //     orbitCamera.attachControl(canvasRef.current, false);
-  //     scene.activeCamera = orbitCamera;
-  //     cameraRef.current = orbitCamera;
-  //     setCameraType("orbit");
-  //   },
-  //   [createOrbitCamera]
-  // );
 
-  // // Toggle between camera types
-  // const toggleCamera = useCallback(
-  //   (type) => {
-  //     if (
-  //       !sceneRef.current ||
-  //       !engineRef.current ||
-  //       !sceneRef.current.activeCamera
-  //     )
-  //       return;
-
-  //     const scene = sceneRef.current;
-  //     const canvas = canvasRef.current;
-  //     const currentCamera = scene.activeCamera;
-  //     const cameraPosition = currentCamera.position.clone();
-  //     const cameraTarget = currentCamera.target
-  //       ? currentCamera.target.clone()
-  //       : currentCamera.getTarget().clone();
-
-  //     currentCamera.dispose();
-
-  //     let newCamera;
-  //     if (type === "fly") {
-  //       newCamera = createFlyCamera(scene, cameraPosition, cameraTarget);
-  //     } else {
-  //       newCamera = createOrbitCamera(scene, cameraPosition, cameraTarget);
-  //     }
-
-  //     newCamera.attachControl(canvas, false);
-  //     scene.activeCamera = newCamera;
-
-  //     cameraRef.current = newCamera;
-  //     setCameraType(type);
-
-  //     // Update LOD manager with new camera
-  //     if (lodManagerRef.current) {
-  //       lodManagerRef.current.camera = newCamera;
-  //       lodManagerRef.current.lastCameraPosition = null;
-  //       lodManagerRef.current.update();
-  //     }
-  //   },
-  //   [createFlyCamera, createOrbitCamera]
-  // );
 
   // Update camera speed for fly camera
   const updateCameraSpeed = useCallback(
@@ -3776,57 +3697,7 @@ useEffect(() => {
     [cameraSpeed]
   );
 
-  // Function to calculate cumulative bounding box
-  const calculateCumulativeBoundingBox = useCallback((meshes) => {
-    let min = new BABYLON.Vector3(Infinity, Infinity, Infinity);
-    let max = new BABYLON.Vector3(-Infinity, -Infinity, -Infinity);
 
-    meshes.forEach((mesh) => {
-      if (!mesh.isVisible || !mesh.geometry) return;
-      const boundingInfo = mesh.getBoundingInfo();
-      const worldMatrix = mesh.computeWorldMatrix(true);
-
-      const localMin = boundingInfo.boundingBox.minimumWorld;
-      const localMax = boundingInfo.boundingBox.maximumWorld;
-
-      min = BABYLON.Vector3.Minimize(min, localMin);
-      max = BABYLON.Vector3.Maximize(max, localMax);
-    });
-
-    const size = max.subtract(min);
-    const maxDimension = Math.max(size.x, size.y, size.z);
-    const padding = maxDimension * 0.01;
-
-    min = min.add(new BABYLON.Vector3(-padding, -padding, -padding));
-    max = max.add(new BABYLON.Vector3(padding, padding, padding));
-
-    console.log("Cumulative Bounding Box:", {
-      min: min.asArray(),
-      max: max.asArray(),
-      size: size.asArray(),
-    });
-
-    return { minimum: min, maximum: max };
-  }, []);
-
-  // Function to position camera
-  const positionCameraForBoundingBox = useCallback((minimum, maximum) => {
-    if (!cameraRef.current) return;
-
-    const camera = cameraRef.current;
-    const center = BABYLON.Vector3.Center(minimum, maximum);
-    const size = maximum.subtract(minimum);
-    const maxDimension = Math.max(size.x, size.y, size.z);
-
-    camera.setTarget(center);
-    camera.radius = maxDimension * 1.5;
-    camera.alpha = Math.PI / 4;
-    camera.beta = Math.PI / 3;
-
-    camera.lowerRadiusLimit = maxDimension * 0.5;
-    camera.upperRadiusLimit = maxDimension * 3;
-    camera.wheelPrecision = maxDimension * 0.05;
-  }, []);
 
   // // Function to create wireframe visualization
   const createWireframeBox = useCallback(
@@ -4023,243 +3894,6 @@ useEffect(() => {
     }
   };
 
-  // Improved createOctreeBlock function
-  const createOctreeBlock = (
-    scene,
-    minimum,
-    maximum,
-    meshInfos,
-    depth = 0,
-    parent = null
-  ) => {
-    console.log(
-      `Creating block at depth ${depth}, received ${meshInfos.length} meshes`
-    );
-
-    // Ensure we have valid Vector3 objects for min and max
-    const min =
-      minimum instanceof BABYLON.Vector3
-        ? minimum
-        : new BABYLON.Vector3(minimum.x || 0, minimum.y || 0, minimum.z || 0);
-    const max =
-      maximum instanceof BABYLON.Vector3
-        ? maximum
-        : new BABYLON.Vector3(maximum.x || 0, maximum.y || 0, maximum.z || 0);
-
-    // Create the basic octree block
-    const block = new BABYLON.OctreeBlock(min, max, [], parent);
-    block.depth = depth;
-    block.nodeNumber = nodeCounter++;
-
-    // For the root node, we include ALL meshes
-    // For child nodes, we filter based on overlap
-    const meshInfosInBlock =
-      depth === 0
-        ? [...meshInfos]
-        : meshInfos.filter((meshInfo) => {
-            if (!meshInfo || !meshInfo.boundingBox) return false;
-
-            try {
-              // Get the bounding box information
-              let worldMin, worldMax;
-
-              // Extract bounds based on available properties
-              if (
-                meshInfo.boundingBox.minimumWorld &&
-                meshInfo.boundingBox.maximumWorld
-              ) {
-                worldMin = vectorFromAny(meshInfo.boundingBox.minimumWorld);
-                worldMax = vectorFromAny(meshInfo.boundingBox.maximumWorld);
-              } else if (
-                meshInfo.transforms &&
-                meshInfo.transforms.worldMatrix
-              ) {
-                const localMin = vectorFromAny(meshInfo.boundingBox.min);
-                const localMax = vectorFromAny(meshInfo.boundingBox.max);
-
-                // Create matrix for transformation
-                const worldMatrix = Array.isArray(
-                  meshInfo.transforms.worldMatrix
-                )
-                  ? BABYLON.Matrix.FromArray(meshInfo.transforms.worldMatrix)
-                  : meshInfo.transforms.worldMatrix;
-
-                // Transform to world space
-                worldMin = BABYLON.Vector3.TransformCoordinates(
-                  localMin,
-                  worldMatrix
-                );
-                worldMax = BABYLON.Vector3.TransformCoordinates(
-                  localMax,
-                  worldMatrix
-                );
-              } else {
-                // Use raw values with fallbacks
-                worldMin = new BABYLON.Vector3(
-                  meshInfo.boundingBox.min
-                    ? meshInfo.boundingBox.min[0] || 0
-                    : 0,
-                  meshInfo.boundingBox.min
-                    ? meshInfo.boundingBox.min[1] || 0
-                    : 0,
-                  meshInfo.boundingBox.min
-                    ? meshInfo.boundingBox.min[2] || 0
-                    : 0
-                );
-                worldMax = new BABYLON.Vector3(
-                  meshInfo.boundingBox.max
-                    ? meshInfo.boundingBox.max[0] || 0
-                    : 0,
-                  meshInfo.boundingBox.max
-                    ? meshInfo.boundingBox.max[1] || 0
-                    : 0,
-                  meshInfo.boundingBox.max
-                    ? meshInfo.boundingBox.max[2] || 0
-                    : 0
-                );
-              }
-
-              // Use bounding box overlap test
-              const overlap = !(
-                worldMin.x > max.x ||
-                worldMax.x < min.x ||
-                worldMin.y > max.y ||
-                worldMax.y < min.y ||
-                worldMin.z > max.z ||
-                worldMax.z < min.z
-              );
-
-              return overlap;
-            } catch (error) {
-              console.error("Error checking mesh overlap:", error, meshInfo);
-              return false;
-            }
-          });
-
-    // Helper to convert any type to Vector3
-    function vectorFromAny(value) {
-      if (!value) return new BABYLON.Vector3(0, 0, 0);
-
-      if (value instanceof BABYLON.Vector3) return value;
-
-      if (Array.isArray(value)) {
-        return new BABYLON.Vector3(value[0] || 0, value[1] || 0, value[2] || 0);
-      }
-
-      return new BABYLON.Vector3(value.x || 0, value.y || 0, value.z || 0);
-    }
-
-    // Store mesh info in block with consistent structure
-    block.meshInfos = meshInfosInBlock.map((info) => ({
-      id: info.metadata?.id || "unknown",
-      boundingBox: info.boundingBox || null,
-    }));
-
-    // Update tracking variables
-    if (!nodesAtDepth[depth]) nodesAtDepth[depth] = 0;
-    nodesAtDepth[depth]++;
-
-    if (!nodeNumbersByDepth[depth]) nodeNumbersByDepth[depth] = [];
-    nodeNumbersByDepth[depth].push(block.nodeNumber);
-
-    nodeDepths.set(block.nodeNumber, block.meshInfos);
-    nodeContents.set(block.nodeNumber, block.meshInfos);
-
-    // Update statistics for meshes
-    if (meshInfosInBlock.length > 0) {
-      if (!nodesAtDepthWithBoxes[depth]) nodesAtDepthWithBoxes[depth] = 0;
-      nodesAtDepthWithBoxes[depth]++;
-
-      if (!boxesAtDepth[depth]) boxesAtDepth[depth] = new Set();
-
-      meshInfosInBlock.forEach((meshInfo) => {
-        boxesAtDepth[depth].add(meshInfo.metadata?.id || "unknown");
-      });
-    }
-
-    // Create child blocks if not at max depth and have meshes
-    if (depth < MAX_DEPTH && meshInfosInBlock.length > 0) {
-      const center = new BABYLON.Vector3(
-        (min.x + max.x) / 2,
-        (min.y + max.y) / 2,
-        (min.z + max.z) / 2
-      );
-
-      block.blocks = [];
-
-      // Create all 8 child octants
-      for (let x = 0; x < 2; x++) {
-        for (let y = 0; y < 2; y++) {
-          for (let z = 0; z < 2; z++) {
-            const childMin = new BABYLON.Vector3(
-              x === 0 ? min.x : center.x,
-              y === 0 ? min.y : center.y,
-              z === 0 ? min.z : center.z
-            );
-            const childMax = new BABYLON.Vector3(
-              x === 0 ? center.x : max.x,
-              y === 0 ? center.y : max.y,
-              z === 0 ? center.z : max.z
-            );
-
-            // Only process if we have meshes
-            if (meshInfosInBlock.length > 0) {
-              const childBlock = createOctreeBlock(
-                scene,
-                childMin,
-                childMax,
-                meshInfosInBlock,
-                depth + 1,
-                block
-              );
-
-              // Only add if the child has meshes or child blocks
-              if (
-                childBlock &&
-                (childBlock.blocks?.length > 0 ||
-                  childBlock.meshInfos?.length > 0)
-              ) {
-                block.blocks.push(childBlock);
-                nodeParents.set(childBlock.nodeNumber, block.nodeNumber);
-              }
-            }
-          }
-        }
-      }
-    }
-
-    // Add visualization if needed
-    if (scene) {
-      createWireframeBox(min, max, depth);
-    }
-
-    return block;
-  };
-
-  // Function to print octree structure
-  const printOctreeStructure = useCallback(() => {
-    console.log("\nOctree Structure:");
-    for (let depth = 0; depth <= maxDepth; depth++) {
-      console.log(`\nDepth ${depth}:`);
-      console.log(`Nodes: ${meshState.nodeNumbersByDepth[depth].join(", ")}`);
-      meshState.nodeNumbersByDepth[depth].forEach((nodeNum) => {
-        const meshes = meshState.nodeContents.get(nodeNum);
-        console.log(`Node ${nodeNum}: ${meshes?.length || 0} meshes`);
-      });
-    }
-  }, [meshState, maxDepth]);
-
-  // Function to verify mesh distribution
-  const verifyMeshDistribution = useCallback(
-    (allMeshes) => {
-      console.log("\nMesh Distribution:");
-      for (let depth = 0; depth <= maxDepth; depth++) {
-        const meshesAtDepth = Array.from(meshState.boxesAtDepth[depth] || []);
-        console.log(`Depth ${depth}: ${meshesAtDepth.length} meshes`);
-      }
-    },
-    [meshState.boxesAtDepth, maxDepth]
-  );
 
   const fitCameraToOctree = useCallback((camera, maximum, minimum) => {
     const maxVector =
@@ -4391,7 +4025,6 @@ useEffect(() => {
         request.onerror = () => reject(request.error);
       });
 
-      console.log("Retrieved octree data:", octreeData);
 
       if (!octreeData) {
         throw new Error("No octree data found");
@@ -4423,264 +4056,227 @@ useEffect(() => {
       const lodManager = new WebWorkerTilesetLODManager(scene, camera);
       lodManagerRef.current = lodManager;
 
-      // Helper function for merged mesh info (defined before setupPointerObservers)
-      const showMergedMeshInfo = (pickedMesh) => {
-        console.log("=== MERGED MESH DETAILS ===");
-        const meta = pickedMesh.metadata;
-        console.log("Merged Mesh Details:", {
-          name: pickedMesh.name,
-          nodeNumber: meta.nodeNumber || "N/A",
-          depth: meta.depth || "N/A",
-          originalMeshCount: meta.originalMeshCount || "N/A",
-          totalVertices: pickedMesh.getTotalVertices(),
-          totalIndices: pickedMesh.getTotalIndices(),
-        });
-
-        // Show all original meshes contained in this merged mesh
-        if (
-          meta.metadata.vertexMappings &&
-          meta.metadata.vertexMappings.length > 0
-        ) {
-          console.log("Contains original meshes:");
-          meta.vertexMappings.forEach((mapping, index) => {
-            console.log(
-              `  ${index + 1}. ${mapping.name || mapping.meshId} (${
-                mapping.fileName
-              })`
-            );
-          });
-        }
-
-        // Update React state for merged mesh
-        setSelectedMeshInfo({
-          type: "merged",
-          name: pickedMesh.name,
-          nodeNumber: meta.nodeNumber,
-          depth: meta.depth,
-          originalMeshCount: meta.originalMeshCount,
-          totalVertices: pickedMesh.getTotalVertices(),
-          totalIndices: pickedMesh.getTotalIndices(),
-        });
-      };
-
       // Setup pointer observers with proper scope
       // Replace the existing setupPointerObservers function with this enhanced version
-      const setupPointerObservers = (scene, lodManager) => {
-        console.log(
-          "Setting up pointer observers for individual mesh selection and small mesh hiding"
-        );
+      // const setupPointerObservers = (scene, lodManager) => {
+      //   console.log(
+      //     "Setting up pointer observers for individual mesh selection and small mesh hiding"
+      //   );
 
-        // Remove any existing pointer observers
-        if (scene.onPointerObservable.hasObservers()) {
-          scene.onPointerObservable.clear();
-        }
+      //   // Remove any existing pointer observers
+      //   if (scene.onPointerObservable.hasObservers()) {
+      //     scene.onPointerObservable.clear();
+      //   }
 
-        // Main pointer event handler
-        scene.onPointerObservable.add((pointerInfo) => {
-          const camera = scene.activeCamera;
-          if (!camera || !pointerInfo || !pointerInfo.event) return;
+      //   // Main pointer event handler
+      //   scene.onPointerObservable.add((pointerInfo) => {
+      //     const camera = scene.activeCamera;
+      //     if (!camera || !pointerInfo || !pointerInfo.event) return;
 
-          try {
-            switch (pointerInfo.type) {
-              case BABYLON.PointerEventTypes.POINTERDOWN:
-                handleMeshSelection(pointerInfo);
+      //     try {
+      //       switch (pointerInfo.type) {
+      //         case BABYLON.PointerEventTypes.POINTERDOWN:
+      //           handleMeshSelection(pointerInfo);
 
-                break;
+      //           break;
 
-              case BABYLON.PointerEventTypes.POINTERUP:
-                handleMeshSelection(pointerInfo);
+      //         case BABYLON.PointerEventTypes.POINTERUP:
+      //           handleMeshSelection(pointerInfo);
 
-                break;
+      //           break;
 
-              case BABYLON.PointerEventTypes.POINTERDOUBLETAP:
-                // Handle double-click to clear highlights
-                if (pointerInfo.pickInfo && pointerInfo.pickInfo.pickedMesh) {
-                  const pickedMesh = pointerInfo.pickInfo.pickedMesh;
-                  if (typeof pickedMesh.clearHighlight === "function") {
-                    pickedMesh.clearHighlight();
-                    console.log("Cleared mesh highlighting");
-                  }
-                }
-                break;
-            }
-          } catch (error) {
-            console.error("Error in pointer event handler:", error);
-            // Reset state on error
-          }
-        });
+      //         case BABYLON.PointerEventTypes.POINTERDOUBLETAP:
+      //           // Handle double-click to clear highlights
+      //           if (pointerInfo.pickInfo && pointerInfo.pickInfo.pickedMesh) {
+      //             const pickedMesh = pointerInfo.pickInfo.pickedMesh;
+      //             if (typeof pickedMesh.clearHighlight === "function") {
+      //               pickedMesh.clearHighlight();
+      //               console.log("Cleared mesh highlighting");
+      //             }
+      //           }
+      //           break;
+      //       }
+      //     } catch (error) {
+      //       console.error("Error in pointer event handler:", error);
+      //       // Reset state on error
+      //     }
+      //   });
 
-        // Helper function to handle mesh selection (existing logic)
-        const handleMeshSelection = (pointerInfo) => {
-          const pickResult = pointerInfo.pickInfo;
+      //   // Helper function to handle mesh selection (existing logic)
+      //   const handleMeshSelection = (pointerInfo) => {
+      //     const pickResult = pointerInfo.pickInfo;
 
-          // Add null check for pickResult
-          if (!pickResult || !pickResult.hit || !pickResult.pickedMesh) {
-            console.log("No mesh picked");
-            return;
-          }
+      //     // Add null check for pickResult
+      //     if (!pickResult || !pickResult.hit || !pickResult.pickedMesh) {
+      //       console.log("No mesh picked");
+      //       return;
+      //     }
 
-          const pickedMesh = pickResult.pickedMesh;
-          console.log(`=== CLICK DETECTED ===`);
-          console.log(`Picked mesh: ${pickedMesh.name}`);
-          console.log(`Face ID: ${pickResult.faceId}`);
-          console.log(`Mesh metadata:`, pickedMesh.metadata);
+      //     const pickedMesh = pickResult.pickedMesh;
+      //     console.log(`=== CLICK DETECTED ===`);
+      //     console.log(`Picked mesh: ${pickedMesh.name}`);
+      //     console.log(`Face ID: ${pickResult.faceId}`);
+      //     console.log(`Mesh metadata:`, pickedMesh.metadata);
 
-          // Skip wireframes and non-LOD meshes
-          if (
-            pickedMesh.name.includes("octreeVisBox_") ||
-            pickedMesh.name.includes("wireframe") ||
-            !pickedMesh.metadata
-          ) {
-            console.log("Skipping non-LOD mesh or wireframe");
-            return;
-          }
+      //     // Skip wireframes and non-LOD meshes
+      //     if (
+      //       pickedMesh.name.includes("octreeVisBox_") ||
+      //       pickedMesh.name.includes("wireframe") ||
+      //       !pickedMesh.metadata
+      //     ) {
+      //       console.log("Skipping non-LOD mesh or wireframe");
+      //       return;
+      //     }
 
-          // Check if this is a merged mesh with vertex mappings
-          if (
-            pickedMesh.metadata.mergedVertexData?.vertexMappings &&
-            pickResult.faceId !== undefined
-          ) {
-            console.log(
-              `Attempting to identify individual mesh from face ${pickResult.faceId}`
-            );
-            console.log(
-              `Available vertex mappings:`,
-              pickedMesh.metadata.mergedVertexData.vertexMappings.length
-            );
+      //     // Check if this is a merged mesh with vertex mappings
+      //     if (
+      //       pickedMesh.metadata.mergedVertexData?.vertexMappings &&
+      //       pickResult.faceId !== undefined
+      //     ) {
+      //       console.log(
+      //         `Attempting to identify individual mesh from face ${pickResult.faceId}`
+      //       );
+      //       console.log(
+      //         `Available vertex mappings:`,
+      //         pickedMesh.metadata.mergedVertexData.vertexMappings.length
+      //       );
 
-            // Check if the utility method exists
-            if (typeof pickedMesh.getClickedOriginalMesh === "function") {
-              const originalMeshInfo = pickedMesh.getClickedOriginalMesh(
-                pickResult.faceId
-              );
+      //       // Check if the utility method exists
+      //       if (typeof pickedMesh.getClickedOriginalMesh === "function") {
+      //         const originalMeshInfo = pickedMesh.getClickedOriginalMesh(
+      //           pickResult.faceId
+      //         );
 
-              if (originalMeshInfo) {
-                console.log("=== INDIVIDUAL MESH DETAILS ===");
-                console.log("Original Mesh Info:", {
-                  meshId: originalMeshInfo.meshId,
-                  meshIndex: originalMeshInfo.meshIndex,
-                  fileName: originalMeshInfo.fileName,
-                  name: originalMeshInfo.name,
-                  metadataId: originalMeshInfo.metadataId,
-                  screenCoverage: originalMeshInfo.screenCoverage,
-                  nodeNumber: originalMeshInfo.nodeNumber,
-                  faceId: originalMeshInfo.faceId,
-                  relativeFaceId: originalMeshInfo.relativeFaceId,
-                  vertexRange: `${originalMeshInfo.startVertex} - ${
-                    originalMeshInfo.startVertex + originalMeshInfo.vertexCount
-                  }`,
-                  indexRange: `${originalMeshInfo.startIndex} - ${
-                    originalMeshInfo.startIndex + originalMeshInfo.indexCount
-                  }`,
-                });
+      //         if (originalMeshInfo) {
+      //           console.log("=== INDIVIDUAL MESH DETAILS ===");
+      //           console.log("Original Mesh Info:", {
+      //             meshId: originalMeshInfo.meshId,
+      //             meshIndex: originalMeshInfo.meshIndex,
+      //             fileName: originalMeshInfo.fileName,
+      //             name: originalMeshInfo.name,
+      //             metadataId: originalMeshInfo.metadataId,
+      //             screenCoverage: originalMeshInfo.screenCoverage,
+      //             nodeNumber: originalMeshInfo.nodeNumber,
+      //             faceId: originalMeshInfo.faceId,
+      //             relativeFaceId: originalMeshInfo.relativeFaceId,
+      //             vertexRange: `${originalMeshInfo.startVertex} - ${
+      //               originalMeshInfo.startVertex + originalMeshInfo.vertexCount
+      //             }`,
+      //             indexRange: `${originalMeshInfo.startIndex} - ${
+      //               originalMeshInfo.startIndex + originalMeshInfo.indexCount
+      //             }`,
+      //           });
 
-                // Highlight the individual mesh
-                if (typeof pickedMesh.highlightOriginalMesh === "function") {
-                  pickedMesh.highlightOriginalMesh(originalMeshInfo.meshId);
-                }
+      //           // Highlight the individual mesh
+      //           if (typeof pickedMesh.highlightOriginalMesh === "function") {
+      //             pickedMesh.highlightOriginalMesh(originalMeshInfo.meshId);
+      //           }
 
-                // Extract individual mesh data if the method exists
-                if (
-                  typeof pickedMesh.extractIndividualMeshData === "function"
-                ) {
-                  const individualMeshData =
-                    pickedMesh.extractIndividualMeshData(
-                      originalMeshInfo.meshIndex
-                    );
-                  if (individualMeshData) {
-                    console.log("Individual Mesh Geometry:", {
-                      vertexCount: individualMeshData.vertexCount,
-                      indexCount: individualMeshData.indexCount,
-                      hasNormals: !!individualMeshData.normals,
-                      hasColors: !!individualMeshData.colors,
-                    });
-                  }
+      //           // Extract individual mesh data if the method exists
+      //           if (
+      //             typeof pickedMesh.extractIndividualMeshData === "function"
+      //           ) {
+      //             const individualMeshData =
+      //               pickedMesh.extractIndividualMeshData(
+      //                 originalMeshInfo.meshIndex
+      //               );
+      //             if (individualMeshData) {
+      //               console.log("Individual Mesh Geometry:", {
+      //                 vertexCount: individualMeshData.vertexCount,
+      //                 indexCount: individualMeshData.indexCount,
+      //                 hasNormals: !!individualMeshData.normals,
+      //                 hasColors: !!individualMeshData.colors,
+      //               });
+      //             }
 
-                  // Update UI state with individual mesh info
-                  if (typeof setSelectedMeshInfo === "function") {
-                    setSelectedMeshInfo({
-                      type: "individual",
-                      meshId: originalMeshInfo.meshId,
-                      name: originalMeshInfo.name,
-                      fileName: originalMeshInfo.fileName,
-                      nodeNumber: originalMeshInfo.nodeNumber,
-                      screenCoverage: originalMeshInfo.screenCoverage,
-                      vertexCount: individualMeshData?.vertexCount || 0,
-                      faceCount: Math.floor(
-                        (individualMeshData?.indexCount || 0) / 3
-                      ),
-                    });
-                  }
-                } else {
-                  console.warn(
-                    "extractIndividualMeshData method not found on mesh"
-                  );
-                }
-              } else {
-                console.log(
-                  "Could not identify individual mesh from clicked face"
-                );
-                showMergedMeshInfo(pickedMesh);
-              }
-            } else {
-              console.warn("getClickedOriginalMesh method not found on mesh");
-              showMergedMeshInfo(pickedMesh);
-            }
-          } else {
-            console.log("No vertex mappings or face ID available");
-            showMergedMeshInfo(pickedMesh);
-          }
-        };
+      //             // Update UI state with individual mesh info
+      //             if (typeof setSelectedMeshInfo === "function") {
+      //               setSelectedMeshInfo({
+      //                 type: "individual",
+      //                 meshId: originalMeshInfo.meshId,
+      //                 name: originalMeshInfo.name,
+      //                 fileName: originalMeshInfo.fileName,
+      //                 nodeNumber: originalMeshInfo.nodeNumber,
+      //                 screenCoverage: originalMeshInfo.screenCoverage,
+      //                 vertexCount: individualMeshData?.vertexCount || 0,
+      //                 faceCount: Math.floor(
+      //                   (individualMeshData?.indexCount || 0) / 3
+      //                 ),
+      //               });
+      //             }
+      //           } else {
+      //             console.warn(
+      //               "extractIndividualMeshData method not found on mesh"
+      //             );
+      //           }
+      //         } else {
+      //           console.log(
+      //             "Could not identify individual mesh from clicked face"
+      //           );
+      //           showMergedMeshInfo(pickedMesh);
+      //         }
+      //       } else {
+      //         console.warn("getClickedOriginalMesh method not found on mesh");
+      //         showMergedMeshInfo(pickedMesh);
+      //       }
+      //     } else {
+      //       console.log("No vertex mappings or face ID available");
+      //       showMergedMeshInfo(pickedMesh);
+      //     }
+      //   };
 
-        // Helper function for merged mesh info
-        const showMergedMeshInfo = (pickedMesh) => {
-          console.log("=== MERGED MESH DETAILS ===");
-          const meta = pickedMesh.metadata;
-          console.log("Merged Mesh Details:", {
-            name: pickedMesh.name,
-            nodeNumber: meta.nodeNumber || "N/A",
-            depth: meta.depth || "N/A",
-            originalMeshCount: meta.originalMeshCount || "N/A",
-            totalVertices: pickedMesh.getTotalVertices(),
-            totalIndices: pickedMesh.getTotalIndices(),
-          });
+      //   // Helper function for merged mesh info
+      //   const showMergedMeshInfo = (pickedMesh) => {
+      //     console.log("=== MERGED MESH DETAILS ===");
+      //     const meta = pickedMesh.metadata;
+      //     console.log("Merged Mesh Details:", {
+      //       name: pickedMesh.name,
+      //       nodeNumber: meta.nodeNumber || "N/A",
+      //       depth: meta.depth || "N/A",
+      //       originalMeshCount: meta.originalMeshCount || "N/A",
+      //       totalVertices: pickedMesh.getTotalVertices(),
+      //       totalIndices: pickedMesh.getTotalIndices(),
+      //     });
 
-          // Show all original meshes contained in this merged mesh
-          if (
-            meta.metadata?.vertexMappings &&
-            meta.metadata.vertexMappings.length > 0
-          ) {
-            console.log("Contains original meshes:");
-            meta.vertexMappings.forEach((mapping, index) => {
-              console.log(
-                `  ${index + 1}. ${mapping.name || mapping.meshId} (${
-                  mapping.fileName
-                })`
-              );
-            });
-          }
+      //     // Show all original meshes contained in this merged mesh
+      //     if (
+      //       meta.metadata?.vertexMappings &&
+      //       meta.metadata.vertexMappings.length > 0
+      //     ) {
+      //       console.log("Contains original meshes:");
+      //       meta.vertexMappings.forEach((mapping, index) => {
+      //         console.log(
+      //           `  ${index + 1}. ${mapping.name || mapping.meshId} (${
+      //             mapping.fileName
+      //           })`
+      //         );
+      //       });
+      //     }
 
-          // Update React state for merged mesh
-          if (typeof setSelectedMeshInfo === "function") {
-            setSelectedMeshInfo({
-              type: "merged",
-              name: pickedMesh.name,
-              nodeNumber: meta.nodeNumber,
-              depth: meta.depth,
-              originalMeshCount: meta.originalMeshCount,
-              totalVertices: pickedMesh.getTotalVertices(),
-              totalIndices: pickedMesh.getTotalIndices(),
-            });
-          }
-        };
+      //     // Update React state for merged mesh
+      //     if (typeof setSelectedMeshInfo === "function") {
+      //       setSelectedMeshInfo({
+      //         type: "merged",
+      //         name: pickedMesh.name,
+      //         nodeNumber: meta.nodeNumber,
+      //         depth: meta.depth,
+      //         originalMeshCount: meta.originalMeshCount,
+      //         totalVertices: pickedMesh.getTotalVertices(),
+      //         totalIndices: pickedMesh.getTotalIndices(),
+      //       });
+      //     }
+      //   };
 
-        console.log(
-          "Pointer observers setup complete with mouse-based small mesh hiding"
-        );
-      };
+      //   console.log(
+      //     "Pointer observers setup complete with mouse-based small mesh hiding"
+      //   );
+      // };
 
       // Setup pointer observers
-      setupPointerObservers(scene, lodManager);
+      // setupPointerObservers(scene, lodManager);
+
+      const enhancedSetupPointerObservers = setupPointerObservers; // Use the enhanced version
+enhancedSetupPointerObservers(scene, lodManager);
 
       // Calculate distance thresholds
       const maxDistance = fitCameraToOctree(camera, maxVector, minVector);
@@ -4763,1415 +4359,7 @@ useEffect(() => {
     }
   }, [initDB, createWireframeBox, fitCameraToOctree, isLoading]);
 
-  // File loading handler with all the original complex logic
-  const handleFileLoad = useCallback(
-    async (files) => {
-      if (
-        !files ||
-        files.length === 0 ||
-        !sceneRef.current ||
-        !cameraRef.current
-      )
-        return;
 
-      const scene = sceneRef.current;
-      const camera = cameraRef.current;
-      let newFileCounter = fileCounter;
-
-      const calculateScreenCoverage = (mesh, camera, engine) => {
-        try {
-          // Get the bounding info
-          const boundingInfo = mesh.getBoundingInfo();
-          if (!boundingInfo) return 0;
-
-          const boundingBox = boundingInfo.boundingBox;
-
-          // Safely get the center and size
-          const centerWorld = boundingBox.centerWorld || boundingBox.center;
-
-          // Calculate size properly with null checks
-          let minimumWorld = boundingBox.minimumWorld;
-          let maximumWorld = boundingBox.maximumWorld;
-
-          if (!minimumWorld || !maximumWorld) {
-            // Fallback to local bounds if world bounds aren't available
-            minimumWorld = boundingBox.minimum;
-            maximumWorld = boundingBox.maximum;
-          }
-
-          // Safely calculate size
-          const size = maximumWorld.subtract(minimumWorld);
-
-          // Calculate dimensions safely
-          const dimensions = [
-            Math.abs(size.x) || 0.001,
-            Math.abs(size.y) || 0.001,
-            Math.abs(size.z) || 0.001,
-          ];
-
-          // Find maximum dimension
-          const maxDimension = Math.max(...dimensions);
-
-          // Get other dimensions
-          const otherDimensions = dimensions.filter(
-            (dim) => dim !== maxDimension
-          );
-
-          // Calculate average of other dimensions with fallback
-          const averageOfOthers =
-            otherDimensions.length > 0
-              ? otherDimensions.reduce((a, b) => a + b, 0) /
-                otherDimensions.length
-              : maxDimension / 2;
-
-          // Calculate screen radius with null checks
-          const cameraRadius = camera.radius || 10; // Default if not available
-          const radiusScreen = averageOfOthers / cameraRadius;
-
-          // Get render width with fallback
-          const renderWidth =
-            engine && engine.getRenderWidth ? engine.getRenderWidth() : 1024; // Fallback to reasonable default
-
-          return radiusScreen * renderWidth;
-        } catch (error) {
-          console.warn("Error calculating screen coverage:", error);
-          return 0; // Return 0 as fallback
-        }
-      };
-
-      const processMeshDataOffline = (meshDataArray) => {
-        let totalVertices = 0;
-        let totalIndices = 0;
-        let hasColors = false;
-
-        // First pass to determine sizes and if any mesh uses color
-        meshDataArray.forEach((mesh) => {
-          totalVertices += mesh.positions.length / 3;
-          totalIndices += mesh.indices.length;
-          if (mesh.color || mesh.colors) hasColors = true;
-        });
-
-        const mergedPositions = new Float32Array(totalVertices * 3);
-        const mergedIndices = new Uint32Array(totalIndices);
-        const mergedNormals = new Float32Array(totalVertices * 3);
-        const mergedColors = hasColors
-          ? new Float32Array(totalVertices * 4)
-          : null;
-
-        let vertexOffset = 0;
-        let indexOffset = 0;
-
-        meshDataArray.forEach((mesh) => {
-          const vertexCount = mesh.positions.length / 3;
-
-          // Handle transforms
-          if (mesh.transforms) {
-            const matrix = mesh.transforms.worldMatrix
-              ? BABYLON.Matrix.FromArray(mesh.transforms.worldMatrix)
-              : BABYLON.Matrix.Compose(
-                  new BABYLON.Vector3(
-                    ...Object.values(mesh.transforms.scaling)
-                  ),
-                  BABYLON.Quaternion.FromEulerAngles(
-                    mesh.transforms.rotation[0],
-                    mesh.transforms.rotation[1],
-                    mesh.transforms.rotation[2]
-                  ),
-                  new BABYLON.Vector3(
-                    ...Object.values(mesh.transforms.position)
-                  )
-                );
-
-            for (let i = 0; i < vertexCount; i++) {
-              const pos = BABYLON.Vector3.TransformCoordinates(
-                new BABYLON.Vector3(
-                  mesh.positions[i * 3],
-                  mesh.positions[i * 3 + 1],
-                  mesh.positions[i * 3 + 2]
-                ),
-                matrix
-              );
-              const targetIndex = (vertexOffset + i) * 3;
-              mergedPositions[targetIndex] = pos.x;
-              mergedPositions[targetIndex + 1] = pos.y;
-              mergedPositions[targetIndex + 2] = pos.z;
-            }
-          } else {
-            mergedPositions.set(mesh.positions, vertexOffset * 3);
-          }
-
-          // Normals
-          if (mesh.normals) {
-            mergedNormals.set(mesh.normals, vertexOffset * 3);
-          }
-
-          // Colors
-          if (hasColors && mergedColors) {
-            if (mesh.colors) {
-              // Per-vertex colors already available
-              mergedColors.set(mesh.colors, vertexOffset * 4);
-            } else if (mesh.color) {
-              // Fill with mesh color for each vertex
-              for (let i = 0; i < vertexCount; i++) {
-                const colorIndex = (vertexOffset + i) * 4;
-                mergedColors[colorIndex] = mesh.color.r;
-                mergedColors[colorIndex + 1] = mesh.color.g;
-                mergedColors[colorIndex + 2] = mesh.color.b;
-                mergedColors[colorIndex + 3] = 1.0; // Alpha
-              }
-            }
-          }
-
-          // Indices
-          for (let i = 0; i < mesh.indices.length; i++) {
-            mergedIndices[indexOffset + i] = mesh.indices[i] + vertexOffset;
-          }
-
-          vertexOffset += vertexCount;
-          indexOffset += mesh.indices.length;
-        });
-
-        return {
-          positions: mergedPositions,
-          indices: mergedIndices,
-          normals: mergedNormals,
-          colors: mergedColors,
-        };
-      };
-
-      const extractMeshData = (mesh) => {
-        if (!mesh.geometry) return null;
-
-        // Generate unique mesh IDs
-        const originalMeshId = `ori_${String(
-          meshIdCounter.current.current
-        ).padStart(7, "0")}`;
-        meshIdCounter.current.current++;
-
-        try {
-          // Extract geometry data
-          const positions = mesh.getVerticesData(
-            BABYLON.VertexBuffer.PositionKind
-          );
-          const normals = mesh.getVerticesData(BABYLON.VertexBuffer.NormalKind);
-          const indices = mesh.getIndices();
-
-          if (!positions || !normals || !indices) {
-            console.warn(`Mesh ${mesh.name} is missing required geometry data`);
-            return null;
-          }
-
-          // Calculate screen coverage using the utility function
-          const screenCoverage = calculateScreenCoverage(
-            mesh,
-            camera,
-            scene.getEngine()
-          );
-
-          const meshData = {
-            fileName: originalMeshId,
-            data: {
-              fileName: originalMeshId,
-              positions: Array.from(positions),
-              normals: Array.from(normals),
-              indices: Array.from(indices),
-              boundingBox: mesh.getBoundingInfo().boundingBox,
-              name: mesh.name,
-              metadata: {
-                id: originalMeshId,
-                fileId: originalMeshId.split("_")[0],
-                screenCoverage,
-                geometryInfo: {
-                  totalVertices: mesh.getTotalVertices(),
-                  totalIndices: mesh.getTotalIndices(),
-                  faceCount: mesh.getTotalIndices() / 3,
-                },
-              },
-              transforms: {
-                position: mesh.position.asArray(),
-                rotation: mesh.rotation.asArray(),
-                scaling: mesh.scaling.asArray(),
-                worldMatrix: mesh.getWorldMatrix().toArray(),
-              },
-            },
-          };
-
-          // Store reference to original mesh data for later use
-          processedMeshesRef.current.set(originalMeshId, meshData);
-
-          return {
-            meshData: meshData.data,
-            originalMeshId,
-          };
-        } catch (error) {
-          console.error(`Error extracting data from mesh ${mesh.name}:`, error);
-          return null;
-        }
-      };
-
-      // Batch storage function for IndexedDB operations
-      const batchStoreInDB = async (operations) => {
-        const db = await initDB();
-        const stores = new Map();
-
-        // Group operations by store
-        operations.forEach((op) => {
-          if (!stores.has(op.store)) {
-            stores.set(op.store, []);
-          }
-          stores.get(op.store).push(op);
-        });
-
-        // Process each store in parallel
-        await Promise.all(
-          Array.from(stores.entries()).map(([storeName, ops]) => {
-            const transaction = db.transaction(storeName, "readwrite");
-            const store = transaction.objectStore(storeName);
-
-            return Promise.all(
-              ops.map(
-                (op) =>
-                  new Promise((resolve, reject) => {
-                    const request = store.put(op.data, op.key);
-                    request.onsuccess = resolve;
-                    request.onerror = reject;
-                  })
-              )
-            );
-          })
-        );
-      };
-
-      const allMeshInfos = [];
-      const newLoadedMeshes = [...loadedMeshes];
-
-      const checkCompletion = async () => {
-        const storeProcessedMeshes = async () => {
-          try {
-            const originalMeshData = [];
-            const dbOperations = [];
-
-            // Collect all original mesh info for octree creation
-            console.log(processedMeshesRef.current);
-
-            processedMeshesRef.current.forEach((value, key) => {
-              originalMeshData.push(value);
-            });
-            console.log(originalMeshData);
-
-            originalMeshData.forEach((meshData) => {
-              allMeshInfos.push({
-                metadata: {
-                  id: meshData.fileName,
-                  fileId: meshData.fileName.split("_")[0],
-                  screenCoverage: meshData.data.metadata.screenCoverage || 0,
-                },
-                boundingBox: {
-                  minimumWorld: meshData.data.boundingBox.minimumWorld,
-                  maximumWorld: meshData.data.boundingBox.maximumWorld,
-                },
-                transforms: {
-                  worldMatrix: meshData.data.transforms.worldMatrix,
-                },
-              });
-            });
-
-            // Store each original mesh individually too
-            originalMeshData.forEach((meshData) => {
-              dbOperations.push({
-                store: "originalMeshes",
-                key: meshData.fileName,
-                data: meshData,
-              });
-            });
-
-            // Execute the database operations
-            await batchStoreInDB(dbOperations);
-          } catch (error) {
-            console.error("Error storing data in IndexedDB:", error);
-          }
-        };
-
-        await storeProcessedMeshes();
-      };
-
-      for (let file of files) {
-        newFileCounter++;
-
-        try {
-          const result = await BABYLON.SceneLoader.ImportMeshAsync(
-            "",
-            "",
-            file,
-            scene
-          );
-          const newMeshes = result.meshes.filter(
-            (mesh) =>
-              mesh.name !== "__root__" && mesh.isVisible && mesh.geometry
-          );
-
-          // Process all valid meshes
-          const meshDataArray = [];
-          newMeshes.forEach((mesh) => {
-            // Extract mesh data for simplification
-            const meshData = extractMeshData(mesh);
-            if (meshData) {
-              meshDataArray.push(meshData);
-            }
-          });
-
-          newLoadedMeshes.push(...newMeshes);
-          console.log(`Loaded ${file.name} with ${newMeshes.length} meshes`);
-        } catch (error) {
-          console.error(`Error loading ${file.name}:`, error);
-        }
-      }
-
-      setLoadedMeshes(newLoadedMeshes);
-      setFileCounter(newFileCounter);
-
-      await checkCompletion();
-
-      if (newLoadedMeshes.length > 0) {
-        console.log(newLoadedMeshes);
-        const bounds = calculateCumulativeBoundingBox(newLoadedMeshes);
-
-        scene.meshes
-          .filter((mesh) => mesh.name.startsWith("octreeVisBox_"))
-          .forEach((mesh) => mesh.dispose());
-
-        const octreeRoot = createOctreeBlock(
-          scene,
-          bounds.minimum,
-          bounds.maximum,
-          allMeshInfos,
-          0,
-          null
-        );
-
-        const createOctreeInfo = (octreeRoot, cumulativeMin, cumulativeMax) => {
-          // Reset total count for safety
-          const totalMeshes = Object.values(boxesAtDepth).reduce(
-            (total, set) => total + set.size,
-            0
-          );
-
-          // Log the root block's meshInfos for debugging
-          console.log(
-            "Root block meshInfos count:",
-            octreeRoot.meshInfos ? octreeRoot.meshInfos.length : 0
-          );
-
-          // Make sure we have the right structure for the octree data
-          return {
-            name: "mainOctree",
-            data: {
-              blockHierarchy: serializeBlock(
-                octreeRoot,
-                cumulativeMin,
-                cumulativeMax
-              ),
-              version: "1.0",
-            },
-            bounds: {
-              min: serializeVector3(cumulativeMin),
-              max: serializeVector3(cumulativeMax),
-            },
-            properties: {
-              maxDepth: MAX_DEPTH,
-              minSize: MIN_SIZE,
-              totalNodes: nodeCounter,
-              nodesPerLevel: Array(MAX_DEPTH + 1)
-                .fill(0)
-                .map((_, i) => nodesAtDepth[i] || 0),
-              nodesWithBoxes: nodesAtDepthWithBoxes,
-            },
-            statistics: {
-              totalMeshes,
-              meshesPerLevel: Object.fromEntries(
-                Array(MAX_DEPTH + 1)
-                  .fill(0)
-                  .map((_, i) => [
-                    i,
-                    boxesAtDepth[i] ? boxesAtDepth[i].size : 0,
-                  ])
-              ),
-              nodeDistribution: Array(MAX_DEPTH + 1)
-                .fill(0)
-                .map((_, i) => ({
-                  depth: i,
-                  totalNodes: nodesAtDepth[i] || 0,
-                  nodesWithContent: nodesAtDepthWithBoxes[i] || 0,
-                })),
-            },
-            timestamp: new Date().toISOString(),
-          };
-        };
-
-        // Helper function to serialize a block - updated to ensure consistent structure
-        const serializeBlock = (block, min, max) => {
-          if (!block) {
-            console.warn("Attempted to serialize a null block");
-            return null;
-          }
-
-          // Ensure we have the necessary properties
-          const minPoint = block.minPoint || min;
-          const maxPoint = block.maxPoint || max;
-
-          // Ensure meshInfos is an array
-          const meshInfos = Array.isArray(block.meshInfos)
-            ? block.meshInfos
-            : [];
-
-          // Ensure each meshInfo has at least an id
-          const processedMeshInfos = meshInfos.map((info) => {
-            if (typeof info === "object") {
-              return {
-                id: info.id || info.metadata?.id || "unknown",
-                ...info,
-              };
-            } else {
-              return { id: "unknown" };
-            }
-          });
-
-          return {
-            bounds: {
-              min: serializeVector3(minPoint),
-              max: serializeVector3(maxPoint),
-            },
-            meshInfos: processedMeshInfos,
-            properties: {
-              depth: block.depth || 0,
-              nodeNumber: block.nodeNumber || 0,
-              capacity: block.meshInfos ? block.meshInfos.length : 0,
-            },
-            relationships: {
-              childBlocks: Array.isArray(block.blocks)
-                ? block.blocks
-                    .filter((childBlock) => childBlock) // Filter out null blocks
-                    .map((childBlock) =>
-                      serializeBlock(
-                        childBlock,
-                        childBlock.minPoint,
-                        childBlock.maxPoint
-                      )
-                    )
-                : [],
-              parentNode: block.parent ? block.parent.nodeNumber : null,
-            },
-          };
-        };
-
-        // Helper function to serialize a Vector3 consistently
-        const serializeVector3 = (vector) => {
-          // Handle different vector formats
-          if (!vector) {
-            console.warn("Attempted to serialize a null vector");
-            return { x: 0, y: 0, z: 0 };
-          }
-
-          // Support both object notation and array notation
-          if (Array.isArray(vector)) {
-            return {
-              x: vector[0] || 0,
-              y: vector[1] || 0,
-              z: vector[2] || 0,
-            };
-          }
-
-          return {
-            x: vector.x || 0,
-            y: vector.y || 0,
-            z: vector.z || 0,
-          };
-        };
-
-        // Create octree info for storage
-        const octreeInfo = createOctreeInfo(
-          octreeRoot,
-          bounds.minimum,
-          bounds.maximum
-        );
-
-        // Store each original mesh individually too
-
-        // Store the octree
-        await batchStoreInDB([
-          {
-            store: "octree",
-            key: "mainOctree",
-            data: octreeInfo,
-          },
-        ]);
-
-        const loadModels = async () => {
-          console.log("Starting to process models with overlap detection...");
-
-          try {
-            const db = await initDB();
-            console.log("Database initialized:", db.name, db.version);
-
-            const tx = db.transaction(["octree", "originalMeshes"], "readonly");
-
-            const octreeStore = tx.objectStore("octree");
-            const meshStore = tx.objectStore("originalMeshes");
-
-            const [octreeData, lowPolyModels] = await Promise.all([
-              new Promise((resolve, reject) => {
-                const request = octreeStore.get("mainOctree");
-                request.onsuccess = () => resolve(request.result);
-                request.onerror = () => reject(request.error);
-              }),
-              new Promise((resolve, reject) => {
-                const request = meshStore.getAll();
-                request.onsuccess = () => resolve(request.result);
-                request.onerror = () => reject(request.error);
-              }),
-            ]);
-
-            console.log("Octree:", octreeData);
-            console.log("Low poly models:", lowPolyModels);
-
-            console.log("Raw octree data from database:", octreeData);
-
-            if (!octreeData) {
-              console.error(
-                "No octree data found. You need to load and process models first."
-              );
-              return;
-            }
-            // Create model lookup map
-            const modelMap = new Map();
-            lowPolyModels.forEach((model) => {
-              if (model.fileName) {
-                modelMap.set(model.fileName, model);
-              }
-              if (model.data?.metadata?.id) {
-                modelMap.set(model.data.metadata.id, model);
-              }
-            });
-
-            console.log(`Loaded ${lowPolyModels.length} models`);
-
-            // Step 1: Collect all nodes at all depths
-            console.log("\nSTEP 1: Collecting nodes at all depths...");
-            const nodesByDepth = { 0: [], 1: [], 2: [], 3: [], 4: [] };
-            const stack = [{ block: octreeData.data.blockHierarchy, depth: 0 }];
-
-            while (stack.length > 0) {
-              const { block, depth } = stack.pop();
-
-              if (depth <= 4) {
-                nodesByDepth[depth].push({
-                  block: block,
-                  nodeNumber: block.properties.nodeNumber,
-                  meshIds: block.meshInfos
-                    ? block.meshInfos.map((info) => info.id)
-                    : [],
-                  bounds: block.bounds,
-                });
-
-                if (block.relationships?.childBlocks) {
-                  stack.push(
-                    ...block.relationships.childBlocks.map((child) => ({
-                      block: child,
-                      depth: depth + 1,
-                    }))
-                  );
-                }
-              }
-            }
-
-            // Log node counts
-            for (let i = 0; i <= 4; i++) {
-              console.log(`  Depth ${i}: ${nodesByDepth[i].length} nodes`);
-            }
-
-            // Arrays to store categorized meshes (steps 2-4)
-            const largeMeshes = {}; // depth 2, coverage >= 2
-            const mediumMeshes = {}; // depth 3, 1 <= coverage < 2
-            const smallMeshes = {}; // depth 4, coverage < 1
-
-            // Final placement arrays for each depth
-            const finalPlacement = {
-              depth0: [],
-              depth1: [],
-              depth2: [],
-              depth3: [],
-              depth4: [],
-            };
-
-            // STEP 2: Process depth 2 for large meshes
-            console.log(
-              "\nSTEP 2: Processing depth 2 for LARGE meshes (coverage >= 2)..."
-            );
-            for (const node of nodesByDepth[2]) {
-              const nodeLargeMeshes = [];
-
-              for (const meshId of node.meshIds) {
-                let model = modelMap.get(meshId);
-
-                if (!model) {
-                  const matchingKey = Array.from(modelMap.keys()).find((key) =>
-                    key.includes(meshId)
-                  );
-                  if (matchingKey) {
-                    model = modelMap.get(matchingKey);
-                  }
-                }
-
-                if (model && model.data.metadata.screenCoverage !== undefined) {
-                  const coverage = model.data.metadata.screenCoverage;
-
-                  // Only consider large meshes at depth 2
-                  if (coverage >= COVERAGE_THRESHOLDS.LARGE) {
-                    const meshInfo = {
-                      meshId: meshId,
-                      nodeNumber: node.nodeNumber,
-                      depth: 2,
-                      screenCoverage: coverage,
-                      bounds: model.data.bounds || node.bounds,
-                    };
-
-                    // Store by node number for easier lookup
-                    if (!largeMeshes[node.nodeNumber]) {
-                      largeMeshes[node.nodeNumber] = [];
-                    }
-                    largeMeshes[node.nodeNumber].push(meshInfo);
-                    nodeLargeMeshes.push(meshInfo);
-                  }
-                }
-              }
-
-              if (nodeLargeMeshes.length > 0) {
-                console.log(
-                  `  Node ${node.nodeNumber}: ${nodeLargeMeshes.length} large meshes`
-                );
-              }
-            }
-
-            // Count total large meshes
-            const totalLargeMeshes = Object.values(largeMeshes).reduce(
-              (sum, arr) => sum + arr.length,
-              0
-            );
-            console.log(`  Total large meshes at depth 2: ${totalLargeMeshes}`);
-
-            // STEP 3: Process depth 3 for medium meshes
-            console.log(
-              "\nSTEP 3: Processing depth 3 for MEDIUM meshes (1 <= coverage < 2)..."
-            );
-            for (const node of nodesByDepth[3]) {
-              const nodeMediumMeshes = [];
-
-              for (const meshId of node.meshIds) {
-                let model = modelMap.get(meshId);
-
-                if (!model) {
-                  const matchingKey = Array.from(modelMap.keys()).find((key) =>
-                    key.includes(meshId)
-                  );
-                  if (matchingKey) {
-                    model = modelMap.get(matchingKey);
-                  }
-                }
-
-                if (model && model.data.metadata.screenCoverage !== undefined) {
-                  const coverage = model.data.metadata.screenCoverage;
-
-                  // Only consider medium meshes at depth 3
-                  if (
-                    coverage >= COVERAGE_THRESHOLDS.MEDIUM &&
-                    coverage < COVERAGE_THRESHOLDS.LARGE
-                  ) {
-                    const meshInfo = {
-                      meshId: meshId,
-                      nodeNumber: node.nodeNumber,
-                      depth: 3,
-                      screenCoverage: coverage,
-                      bounds: model.data.bounds || node.bounds,
-                    };
-
-                    // Store by node number
-                    if (!mediumMeshes[node.nodeNumber]) {
-                      mediumMeshes[node.nodeNumber] = [];
-                    }
-                    mediumMeshes[node.nodeNumber].push(meshInfo);
-                    nodeMediumMeshes.push(meshInfo);
-                  }
-                }
-              }
-
-              if (nodeMediumMeshes.length > 0) {
-                console.log(
-                  `  Node ${node.nodeNumber}: ${nodeMediumMeshes.length} medium meshes`
-                );
-              }
-            }
-
-            // Count total medium meshes
-            const totalMediumMeshes = Object.values(mediumMeshes).reduce(
-              (sum, arr) => sum + arr.length,
-              0
-            );
-            console.log(
-              `  Total medium meshes at depth 3: ${totalMediumMeshes}`
-            );
-
-            // STEP 4: Process depth 4 for small meshes
-            console.log(
-              "\nSTEP 4: Processing depth 4 for SMALL meshes (coverage < 1)..."
-            );
-            for (const node of nodesByDepth[4]) {
-              const nodeSmallMeshes = [];
-
-              for (const meshId of node.meshIds) {
-                let model = modelMap.get(meshId);
-
-                if (!model) {
-                  const matchingKey = Array.from(modelMap.keys()).find((key) =>
-                    key.includes(meshId)
-                  );
-                  if (matchingKey) {
-                    model = modelMap.get(matchingKey);
-                  }
-                }
-
-                if (model && model.data.metadata.screenCoverage !== undefined) {
-                  const coverage = model.data.metadata.screenCoverage;
-
-                  // Only consider small meshes at depth 4
-                  if (coverage < COVERAGE_THRESHOLDS.MEDIUM) {
-                    const meshInfo = {
-                      meshId: meshId,
-                      nodeNumber: node.nodeNumber,
-                      depth: 4,
-                      screenCoverage: coverage,
-                      bounds: model.data.bounds || node.bounds,
-                    };
-
-                    // Store by node number
-                    if (!smallMeshes[node.nodeNumber]) {
-                      smallMeshes[node.nodeNumber] = [];
-                    }
-                    smallMeshes[node.nodeNumber].push(meshInfo);
-                    nodeSmallMeshes.push(meshInfo);
-                  }
-                }
-              }
-
-              if (nodeSmallMeshes.length > 0) {
-                console.log(
-                  `  Node ${node.nodeNumber}: ${nodeSmallMeshes.length} small meshes`
-                );
-              }
-            }
-
-            // Count total small meshes
-            const totalSmallMeshes = Object.values(smallMeshes).reduce(
-              (sum, arr) => sum + arr.length,
-              0
-            );
-            console.log(`  Total small meshes at depth 4: ${totalSmallMeshes}`);
-
-            // STEPS 5-8: Process overlapping meshes
-            console.log(
-              "\nSTEPS 5-8: Processing overlapping meshes and creating final placement..."
-            );
-
-            // Process small meshes first (depth 4)
-            console.log("\nProcessing small meshes (depth 4) for overlap...");
-            await processOverlapping(
-              smallMeshes,
-              "small",
-              nodesByDepth,
-              modelMap,
-              octreeData.data,
-              finalPlacement
-            );
-
-            // Process medium meshes next (depth 3)
-            console.log("\nProcessing medium meshes (depth 3) for overlap...");
-            await processOverlapping(
-              mediumMeshes,
-              "medium",
-              nodesByDepth,
-              modelMap,
-              octreeData.data,
-              finalPlacement
-            );
-
-            // Process large meshes last (depth 2)
-            console.log("\nProcessing large meshes (depth 2) for overlap...");
-            await processOverlapping(
-              largeMeshes,
-              "large",
-              nodesByDepth,
-              modelMap,
-              octreeData.data,
-              finalPlacement
-            );
-
-            // Output the final placement arrays
-            console.log("\nFINAL PLACEMENT ARRAYS BY DEPTH:");
-            for (let depth = 0; depth <= 4; depth++) {
-              const depthKey = `depth${depth}`;
-              const byCategory = {
-                large: finalPlacement[depthKey].filter(
-                  (m) => m.category === "large"
-                ).length,
-                medium: finalPlacement[depthKey].filter(
-                  (m) => m.category === "medium"
-                ).length,
-                small: finalPlacement[depthKey].filter(
-                  (m) => m.category === "small"
-                ).length,
-              };
-
-              console.log(
-                `  Depth ${depth}: ${finalPlacement[depthKey].length} total meshes`
-              );
-              console.log(
-                `    Large: ${byCategory.large}, Medium: ${byCategory.medium}, Small: ${byCategory.small}`
-              );
-
-              // Show node distribution for this depth
-              const nodeDistribution = {};
-              finalPlacement[depthKey].forEach((item) => {
-                const nodeKey = `node${item.placedNodeNumber}`;
-                if (!nodeDistribution[nodeKey]) {
-                  nodeDistribution[nodeKey] = {
-                    total: 0,
-                    large: 0,
-                    medium: 0,
-                    small: 0,
-                  };
-                }
-                nodeDistribution[nodeKey].total++;
-                nodeDistribution[nodeKey][item.category]++;
-              });
-
-              // Print node distribution if there are nodes
-              if (Object.keys(nodeDistribution).length > 0) {
-                console.log("    Node distribution:");
-                Object.entries(nodeDistribution).forEach(
-                  ([nodeKey, counts]) => {
-                    console.log(
-                      `      ${nodeKey}: ${counts.total} meshes (L:${counts.large}, M:${counts.medium}, S:${counts.small})`
-                    );
-                  }
-                );
-              }
-            }
-
-            // Create final mesh placement map
-            const meshPlacementMap = new Map();
-
-            // Organize by node
-            for (let depth = 0; depth <= 4; depth++) {
-              const depthKey = `depth${depth}`;
-              finalPlacement[depthKey].forEach((meshInfo) => {
-                const nodeKey = `node${meshInfo.placedNodeNumber}`;
-
-                if (!meshPlacementMap.has(nodeKey)) {
-                  meshPlacementMap.set(nodeKey, []);
-                }
-
-                meshPlacementMap.get(nodeKey).push({
-                  meshId: meshInfo.meshId,
-                  category: meshInfo.category,
-                  screenCoverage: meshInfo.screenCoverage,
-                  originalNode: meshInfo.originalNodeNumber,
-                  originalDepth: meshInfo.originalDepth,
-                });
-              });
-            }
-
-            // Step 10: Merge and store meshes by node
-            console.log("\nSTEP 10: Merging and storing meshes by node...");
-            const allMergedMeshes = [];
-
-            for (const [nodeKey, meshes] of meshPlacementMap.entries()) {
-              const nodeNumber = parseInt(nodeKey.replace("node", ""));
-              console.log(
-                `  Processing ${meshes.length} meshes for node ${nodeNumber}`
-              );
-
-              const meshesToMerge = [];
-              const meshKeys = [];
-
-              for (const meshInfo of meshes) {
-                let model = modelMap.get(meshInfo.meshId);
-
-                if (!model) {
-                  const matchingKey = Array.from(modelMap.keys()).find((key) =>
-                    key.includes(meshInfo.meshId)
-                  );
-                  if (matchingKey) {
-                    model = modelMap.get(matchingKey);
-                  }
-                }
-
-                if (model) {
-                  const meshData = {
-                    positions: new Float32Array(model.data.positions),
-                    indices: new Uint32Array(model.data.indices),
-                    normals: model.data.normals
-                      ? new Float32Array(model.data.normals)
-                      : null,
-                    transforms: model.data.transforms,
-                    color: model.data.color,
-                  };
-
-                  meshesToMerge.push(meshData);
-                  meshKeys.push({
-                    meshId: meshInfo.meshId,
-                    category: meshInfo.category,
-                    screenCoverage: meshInfo.screenCoverage,
-                    originalNode: meshInfo.originalNode,
-                    originalDepth: meshInfo.originalDepth,
-                  });
-                }
-              }
-
-              if (meshesToMerge.length > 0) {
-                const mergedVertexData = processMeshDataOffline(meshesToMerge);
-                const meshId = `merged_node${nodeNumber}`;
-
-                allMergedMeshes.push({
-                  id: meshId,
-                  name: meshId,
-                  vertexData: mergedVertexData,
-                  colors: mergedVertexData.colors,
-                  transforms: {
-                    position: { x: 0, y: 0, z: 0 },
-                    rotation: { x: 0, y: 0, z: 0 },
-                    scaling: { x: 1, y: 1, z: 1 },
-                    worldMatrix: [
-                      1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1,
-                    ],
-                  },
-                  metadata: {
-                    nodeNumber: nodeNumber,
-                    meshCount: meshesToMerge.length,
-                    originalMeshKeys: meshKeys,
-                    categories: {
-                      small: meshKeys.filter((m) => m.category === "small")
-                        .length,
-                      medium: meshKeys.filter((m) => m.category === "medium")
-                        .length,
-                      large: meshKeys.filter((m) => m.category === "large")
-                        .length,
-                    },
-                  },
-                });
-              }
-            }
-
-            // Store merged meshes in database
-            const storeTx = db.transaction(
-              ["mergedMeshes", "octree"],
-              "readwrite"
-            );
-            const mergedStore = storeTx.objectStore("mergedMeshes");
-
-            console.log(`  Storing ${allMergedMeshes.length} merged meshes`);
-
-            for (let i = 0; i < allMergedMeshes.length; i += STORE_CHUNK_SIZE) {
-              const storeChunk = allMergedMeshes.slice(i, i + STORE_CHUNK_SIZE);
-              await Promise.all(
-                storeChunk.map(async (data) => {
-                  await mergedStore.put(data, data.id);
-                })
-              );
-            }
-
-            // Store placement summary with depth-specific statistics
-            const placementSummary = {
-              totalMeshes: allMergedMeshes.length,
-              byCategory: {
-                small: finalPlacement.depth0
-                  .concat(
-                    finalPlacement.depth1,
-                    finalPlacement.depth2,
-                    finalPlacement.depth3,
-                    finalPlacement.depth4
-                  )
-                  .filter((m) => m.category === "small").length,
-                medium: finalPlacement.depth0
-                  .concat(
-                    finalPlacement.depth1,
-                    finalPlacement.depth2,
-                    finalPlacement.depth3,
-                    finalPlacement.depth4
-                  )
-                  .filter((m) => m.category === "medium").length,
-                large: finalPlacement.depth0
-                  .concat(
-                    finalPlacement.depth1,
-                    finalPlacement.depth2,
-                    finalPlacement.depth3,
-                    finalPlacement.depth4
-                  )
-                  .filter((m) => m.category === "large").length,
-              },
-              byDepth: {
-                depth0: finalPlacement.depth0.length,
-                depth1: finalPlacement.depth1.length,
-                depth2: finalPlacement.depth2.length,
-                depth3: finalPlacement.depth3.length,
-                depth4: finalPlacement.depth4.length,
-              },
-              nodeMap: Object.fromEntries(meshPlacementMap),
-              processedAt: new Date().toISOString(),
-            };
-
-            await mergedStore.put(placementSummary, "placementSummary");
-
-            // Update octree
-            await storeTx.objectStore("octree").put(octreeData, "mainOctree");
-            await storeTx.done;
-
-            console.log("\nProcessing complete!");
-            console.log(
-              `Stored ${allMergedMeshes.length} merged meshes with overlap detection`
-            );
-            console.log("Final placement summary:", placementSummary.byDepth);
-
-            return {
-              mergedMeshes: allMergedMeshes,
-              placementSummary: placementSummary,
-              finalPlacement: finalPlacement,
-            };
-          } catch (error) {
-            console.error("Error in loadModels:", error);
-            throw error;
-          }
-        };
-
-        // Process overlapping meshes function
-        async function processOverlapping(
-          meshesObj,
-          category,
-          nodesByDepth,
-          modelMap,
-          octreeData,
-          finalPlacement
-        ) {
-          // Track processed mesh IDs to avoid duplicates
-          const processedIds = new Set();
-          let processedCount = 0;
-          let overlappingCount = 0;
-          let relocatedCount = 0;
-
-          // Process all nodes that have meshes of this category
-          for (const [nodeNumber, meshes] of Object.entries(meshesObj)) {
-            console.log(
-              `  Processing node ${nodeNumber} with ${meshes.length} ${category} meshes`
-            );
-
-            for (const meshInfo of meshes) {
-              // Skip if already processed
-              if (processedIds.has(meshInfo.meshId)) continue;
-              processedIds.add(meshInfo.meshId);
-              processedCount++;
-
-              // Get the node containing this mesh
-              const nodeInfo = nodesByDepth[meshInfo.depth].find(
-                (n) => n.nodeNumber === meshInfo.nodeNumber
-              );
-              if (!nodeInfo) {
-                console.log(
-                  `    Warning: Node ${meshInfo.nodeNumber} not found at depth ${meshInfo.depth}`
-                );
-                continue;
-              }
-
-              // // Check if mesh overlaps with other meshes in the same node
-              // const hasOverlap = checkMeshOverlapInNode(
-              //     meshInfo.bounds,
-              //     nodeInfo.meshIds,
-              //     meshInfo.meshId,
-              //     modelMap
-              // );
-
-              // Get all other nodes at the same depth (excluding current node)
-              const sameDepthNodes = nodesByDepth[meshInfo.depth].filter(
-                (n) => n.nodeNumber !== meshInfo.nodeNumber
-              );
-
-              // Collect all mesh IDs in other nodes at same depth
-              const meshIdsAtSameDepth = sameDepthNodes.flatMap(
-                (n) => n.meshIds
-              );
-
-              // Optionally include current node if you want to check both
-              // const meshIdsAtSameDepth = nodesByDepth[meshInfo.depth]
-              //     .flatMap(n => n.meshIds)
-              //     .filter(id => id !== meshInfo.meshId);
-
-              // Check overlap against all meshes at same depth
-              const hasOverlap = checkMeshOverlapInNode(
-                meshInfo.bounds,
-                meshIdsAtSameDepth,
-                meshInfo.meshId,
-                modelMap
-              );
-
-              let placedDepth = meshInfo.depth;
-              let placedNodeNumber = meshInfo.nodeNumber;
-
-              if (hasOverlap) {
-                overlappingCount++;
-                console.log(
-                  `    Mesh ${meshInfo.meshId} overlaps in node ${meshInfo.nodeNumber}`
-                );
-
-                // Find a parent node where the mesh doesn't overlap
-                const nonOverlappingParent = findNonOverlappingParent(
-                  octreeData,
-                  meshInfo.bounds,
-                  meshInfo.meshId,
-                  meshInfo.nodeNumber,
-                  modelMap
-                );
-
-                if (nonOverlappingParent) {
-                  relocatedCount++;
-                  placedDepth = nonOverlappingParent.depth;
-                  placedNodeNumber = nonOverlappingParent.nodeNumber;
-                  console.log(
-                    `      Relocated to node ${placedNodeNumber} at depth ${placedDepth}`
-                  );
-                } else {
-                  // Place at root if no non-overlapping parent found
-                  placedDepth = 0;
-                  placedNodeNumber = 1; // Root node is typically node 1
-                  console.log(`      Relocated to root node at depth 0`);
-                  relocatedCount++;
-                }
-              }
-
-              // Add mesh to the appropriate depth array in finalPlacement
-              finalPlacement[`depth${placedDepth}`].push({
-                meshId: meshInfo.meshId,
-                category: category,
-                screenCoverage: meshInfo.screenCoverage,
-                originalNodeNumber: meshInfo.nodeNumber,
-                originalDepth: meshInfo.depth,
-                placedNodeNumber: placedNodeNumber,
-                placedDepth: placedDepth,
-                bounds: meshInfo.bounds,
-              });
-            }
-          }
-
-          console.log(`  Processed ${processedCount} ${category} meshes`);
-          console.log(`  Found ${overlappingCount} overlapping meshes`);
-          console.log(`  Relocated ${relocatedCount} meshes to parent nodes`);
-        }
-
-        // Helper function to check if a mesh overlaps with others in the same node
-        function checkMeshOverlapInNode(
-          meshBounds,
-          nodeMeshIds,
-          currentMeshId,
-          modelMap
-        ) {
-          // Skip self-comparison
-          const otherMeshIds = nodeMeshIds.filter((id) => id !== currentMeshId);
-
-          for (const otherMeshId of otherMeshIds) {
-            let otherModel = modelMap.get(otherMeshId);
-
-            if (!otherModel) {
-              const matchingKey = Array.from(modelMap.keys()).find((key) =>
-                key.includes(otherMeshId)
-              );
-              if (matchingKey) {
-                otherModel = modelMap.get(matchingKey);
-              }
-            }
-
-            if (otherModel && otherModel.data.bounds) {
-              const otherBounds = otherModel.data.bounds;
-
-              // Check for overlap using bounding box
-              if (checkBoundsOverlap(meshBounds, otherBounds)) {
-                return true;
-              }
-            }
-          }
-
-          return false;
-        }
-
-        // Helper function to check if two bounding boxes overlap
-        function checkBoundsOverlap(bounds1, bounds2) {
-          // Simple AABB overlap check
-          return (
-            bounds1.min.x <= bounds2.max.x &&
-            bounds1.max.x >= bounds2.min.x &&
-            bounds1.min.y <= bounds2.max.y &&
-            bounds1.max.y >= bounds2.min.y &&
-            bounds1.min.z <= bounds2.max.z &&
-            bounds1.max.z >= bounds2.min.z
-          );
-        }
-
-        // Helper function to find a parent node where the mesh doesn't overlap
-        function findNonOverlappingParent(
-          octreeData,
-          meshBounds,
-          meshId,
-          currentNodeNumber,
-          modelMap
-        ) {
-          // Navigate up the octree to find parent nodes
-          const findNodeAndPath = (block, nodeNumber, path = []) => {
-            if (!block) return null;
-
-            if (
-              block.properties &&
-              block.properties.nodeNumber === nodeNumber
-            ) {
-              return { node: block, path };
-            }
-
-            if (block.relationships && block.relationships.childBlocks) {
-              for (let i = 0; i < block.relationships.childBlocks.length; i++) {
-                const result = findNodeAndPath(
-                  block.relationships.childBlocks[i],
-                  nodeNumber,
-                  [...path, i]
-                );
-                if (result) return result;
-              }
-            }
-
-            return null;
-          };
-
-          // Get parent node from path
-          const getParentNode = (node, path) => {
-            if (!node || path.length === 0) return null;
-
-            // Find the parent depth
-            const parentDepth = node.properties.depth - 1;
-            if (parentDepth < 0) return null;
-
-            // Get parent node by traversing up one level in the octree
-            let parentNode = octreeData;
-            let currentPath = [];
-
-            for (let i = 0; i < path.length - 1; i++) {
-              currentPath.push(path[i]);
-              if (
-                !parentNode.relationships ||
-                !parentNode.relationships.childBlocks
-              ) {
-                return null;
-              }
-              parentNode = parentNode.relationships.childBlocks[path[i]];
-            }
-
-            return parentNode;
-          };
-
-          // Start from the current node
-          const nodeResult = findNodeAndPath(octreeData, currentNodeNumber);
-          if (!nodeResult) return null;
-
-          const { node, path } = nodeResult;
-
-          // Get parent node
-          let currentNode = node;
-          let currentPath = path;
-          let currentDepth = node.properties.depth;
-
-          while (currentDepth > 0) {
-            const parentNode = getParentNode(currentNode, currentPath);
-            if (!parentNode) break;
-
-            // Check if mesh overlaps in parent node
-            const parentMeshIds = parentNode.meshInfos
-              ? parentNode.meshInfos.map((info) => info.id)
-              : [];
-
-            const hasOverlap = checkMeshOverlapInNode(
-              meshBounds,
-              parentMeshIds,
-              meshId,
-              modelMap
-            );
-
-            if (!hasOverlap) {
-              return {
-                depth: parentNode.properties.depth,
-                nodeNumber: parentNode.properties.nodeNumber,
-              };
-            }
-
-            // Move up to the next parent
-            currentNode = parentNode;
-            currentPath = currentPath.slice(0, -1);
-            currentDepth--;
-          }
-
-          return null; // No non-overlapping parent found
-        }
-
-        // All the complex octree processing and database operations would continue here...
-        // (The remaining logic follows the same pattern as the original code)
-
-        positionCameraForBoundingBox(bounds.minimum, bounds.maximum);
-        printOctreeStructure();
-        verifyMeshDistribution(newLoadedMeshes);
-        await loadModels();
-        // await loadModelsWithWorker();
-      }
-    },
-    [
-      fileCounter,
-      loadedMeshes,
-      calculateCumulativeBoundingBox,
-      createOctreeBlock,
-      positionCameraForBoundingBox,
-      printOctreeStructure,
-      verifyMeshDistribution,
-      initDB,
-    ]
-  );
-  // Process overlapping meshes function
-
-  // Reset handler
-  const resetScene = useCallback(() => {
-    if (!sceneRef.current || !cameraRef.current) return;
-
-    sceneRef.current.meshes.slice().forEach((mesh) => mesh.dispose());
-
-    setLoadedMeshes([]);
-    setFileCounter(0);
-
-    setMeshState({
-      nodesAtDepth: new Array(maxDepth + 1).fill(0),
-      nodeNumbersByDepth: Array.from({ length: maxDepth + 1 }, () => []),
-      nodesAtDepthWithBoxes: new Array(maxDepth + 1).fill(0),
-      boxesAtDepth: Array.from({ length: maxDepth + 1 }, () => new Set()),
-      nodeContents: new Map(),
-      nodeDepths: new Map(),
-      nodeParents: new Map(),
-      nodeCounter: 1,
-    });
-
-    cameraRef.current.setTarget(BABYLON.Vector3.Zero());
-    cameraRef.current.radius = 1000;
-
-    meshIdCounter.current = { current: 1 };
-    processedMeshesRef.current = new Map();
-  }, [maxDepth]);
 
   const handleDoubleClick = (event) => {
     if (!sceneRef.current && !canvasRef.current) return;
@@ -6449,7 +4637,382 @@ useEffect(() => {
             setViewMode("");
           };
         }, []);
-  
+
+          useEffect(() => {
+        let observer = null;
+
+        if (showMeasure) {
+          let unit =  "m";
+          let scaleValue =  1;
+          if (!sceneRef.current) return;
+          const scene = sceneRef.current;
+
+          // Store observer reference for measurement
+          observer = scene.onPointerObservable.add((pointerInfo) => {
+            if (pointerInfo.event.button !== 0) {
+              return;
+            }
+            if (pointerInfo.type === BABYLON.PointerEventTypes.POINTERDOWN) {
+              // Only process left mouse button clicks (button 0)
+              if (pointerInfo.event.button !== 0) {
+                return;
+              }
+
+              if (pointerInfo.pickInfo.hit) {
+                const mesh = pointerInfo.pickInfo.pickedMesh;
+
+                // Skip environment meshes
+                if (
+                  mesh.name.includes("skyBox") ||
+                  mesh.name.includes("ground") ||
+                  mesh.name.includes("water")
+                ) {
+                  clearMeasurement();
+                  setshowMeasureDetailsAbove(false);
+                  return;
+                }
+
+                // Handle the measurement
+                handleMeasurementPick(pointerInfo.pickInfo, unit, scaleValue);
+
+                // Find the topmost pickable parent mesh with metadata
+                let targetMesh = mesh;
+                while (
+                  targetMesh &&
+                  (!targetMesh.metadata ||
+                    Object.keys(targetMesh.metadata).length === 0)
+                ) {
+                  targetMesh = targetMesh.parent;
+                }
+              } else {
+                // clearMeasurement();
+                // setshowMeasureDetailsAbove(false);
+              }
+            }
+          });
+        } else {
+          // Cleanup when showMeasure becomes false
+          clearMeasurement();
+          setshowMeasureDetailsAbove(false);
+        }
+
+        // Cleanup function to remove event listener
+        return () => {
+          if (sceneRef.current && observer) {
+            sceneRef.current.onPointerObservable.remove(observer);
+          }
+        };
+      }, [showMeasure]);
+
+            const handleMeasurementPick = (pickInfo, unit, scaleValue) => {
+        if (!showMeasure || !pickInfo.hit || !pickInfo.pickedMesh) return;
+
+        // Skip measurement markers themselves
+        const mesh = pickInfo.pickedMesh;
+        if (
+          mesh.name.startsWith("measureMarker") ||
+          mesh.name.startsWith("pointLabel") ||
+          mesh.name.startsWith("measureTextPlane") ||
+          mesh.name.startsWith("xLine") ||
+          mesh.name.startsWith("yLine") ||
+          mesh.name.startsWith("zLine") ||
+          mesh.name.startsWith("measureLine") ||
+          mesh.name === "box" ||
+          mesh.name.includes("Line")
+        ) {
+          return;
+        }
+
+        // Get the exact position in world space
+        const pickedPoint = pickInfo.pickedPoint;
+
+        // If this is the first point
+        if (!measurementRef.current.pointA) {
+          // Clear any previous measurement first
+          clearMeasurement();
+
+          // Set first point
+          measurementRef.current.pointA = pickedPoint.clone();
+          createPointMarker(pickedPoint.clone());
+
+          // Update UI state
+          setPoint1({
+            x: pickedPoint.x.toFixed(2),
+            y: pickedPoint.y.toFixed(2),
+            z: pickedPoint.z.toFixed(2),
+          });
+        }
+        // If this is the second point
+        else if (!measurementRef.current.pointB) {
+          measurementRef.current.pointB = pickedPoint.clone();
+          createPointMarker(pickedPoint.clone());
+
+          // Create line between points
+          updateMeasurementLine();
+
+          // Update UI state with calculated values
+          setPoint2({
+            x: pickedPoint.x.toFixed(2),
+            y: pickedPoint.y.toFixed(2),
+            z: pickedPoint.z.toFixed(2),
+          });
+
+          // Calculate differences
+          const p1 = measurementRef.current.pointA;
+          const p2 = measurementRef.current.pointB;
+
+          // Raw differences (no scale)
+          const rawDiffX = Math.abs(p2.x - p1.x);
+          const rawDiffY = Math.abs(p2.y - p1.y);
+          const rawDiffZ = Math.abs(p2.z - p1.z);
+
+          // Apply scale
+          const scaledDiffX = (rawDiffX * parseFloat(scaleValue)).toFixed(2);
+          const scaledDiffY = (rawDiffY * parseFloat(scaleValue)).toFixed(2);
+          const scaledDiffZ = (rawDiffZ * parseFloat(scaleValue)).toFixed(2);
+
+          setDifferences({
+            diffX: scaledDiffX,
+            diffY: scaledDiffY,
+            diffZ: scaledDiffZ,
+          });
+
+          const distance = BABYLON.Vector3.Distance(p1, p2).toFixed(2);
+          const rawDistance = BABYLON.Vector3.Distance(p1, p2) * scaleValue;
+          setDistance(`${rawDistance.toFixed(2)} ${unit}`);
+
+          // Calculate angles similar to the provided code
+          const horizontalAngle = calculatePlanAngle(p1, p2).toFixed(2);
+          const verticalAngle = calculateElevationAngle(p1, p2).toFixed(2);
+
+          setAngles({
+            horizontalAngle: horizontalAngle + "°",
+            verticalAngle: verticalAngle + "°",
+          });
+          setshowMeasureDetailsAbove(true);
+        }
+        // If we already have two points, start a new measurement
+        else {
+          clearMeasurement();
+          setshowMeasureDetailsAbove(false);
+
+          // Set new first point
+          measurementRef.current.pointA = pickedPoint.clone();
+          createPointMarker(pickedPoint.clone());
+
+          // Update UI state
+          setPoint1({
+            x: pickedPoint.x.toFixed(2),
+            y: pickedPoint.y.toFixed(2),
+            z: pickedPoint.z.toFixed(2),
+          });
+        }
+      };
+
+      // Create a point marker for measurement
+      const createPointMarker = (position) => {
+        const scene = sceneRef.current;
+        if (!scene) return null;
+
+        // Create a container for all marker elements
+        const markerContainer = new BABYLON.TransformNode(
+          "measureMarkerContainer",
+          scene
+        );
+        markerContainer.position = position.clone();
+
+        // Create invisible box as attachment point
+        const box = BABYLON.MeshBuilder.CreateBox(
+          "measureMarkerBox",
+          { size: 0.1 },
+          scene
+        );
+        box.isVisible = false;
+        box.isPickable = false;
+        box.parent = markerContainer;
+        box.position = BABYLON.Vector3.Zero(); // Local position is zero relative to container
+
+        // Create GUI for the marker (X-shaped cross)
+        const advancedTexture = GUI.AdvancedDynamicTexture.CreateFullscreenUI(
+          "MarkerUI",
+          true,
+          scene
+        );
+
+        // Create rectangle container
+        const container = new GUI.Rectangle();
+        container.width = "9px";
+        container.height = "9px";
+        container.color = "transparent";
+        container.background = "transparent";
+        advancedTexture.addControl(container);
+        container.linkWithMesh(box);
+
+        // Create diagonal line 1 (top-left to bottom-right)
+        const line1 = new GUI.Line();
+        line1.x1 = 0;
+        line1.y1 = 0;
+        line1.x2 = 8;
+        line1.y2 = 8;
+        line1.lineWidth = 2;
+        line1.color = "#FFA500"; // Orange color
+        container.addControl(line1);
+
+        // Create diagonal line 2 (top-right to bottom-left)
+        const line2 = new GUI.Line();
+        line2.x1 = 8;
+        line2.y1 = 0;
+        line2.x2 = 0;
+        line2.y2 = 8;
+        line2.lineWidth = 2;
+        line2.color = "#FFA500"; // Orange color
+        container.addControl(line2);
+
+        // Store elements for later cleanup
+        const elem = {
+          box: box,
+          container: container,
+          markerContainer: markerContainer,
+          gui: advancedTexture,
+        };
+
+        // Add to marker array for tracking
+        measurementRef.current.markers.push(elem);
+
+        return markerContainer;
+      };
+
+      // Update measurement line
+      const updateMeasurementLine = () => {
+        const scene = sceneRef.current;
+        if (!scene) return;
+
+        const { pointA, pointB, line, text } = measurementRef.current;
+
+        if (pointA && pointB) {
+          // If a line already exists, dispose it
+          if (line) {
+            line.dispose();
+          }
+
+          // If a text mesh exists, dispose it
+          if (text) {
+            text.dispose();
+          }
+
+          // Create a new line
+          const points = [pointA.clone(), pointB.clone()];
+
+          const newLine = BABYLON.MeshBuilder.CreateLines(
+            "measureLine",
+            { points: points },
+            scene
+          );
+          newLine.color = new BABYLON.Color3(1, 0.647, 0);
+          measurementRef.current.line = newLine;
+
+          // Calculate distance
+          const distance = BABYLON.Vector3.Distance(pointA, pointB);
+
+          // Create a midpoint for the text label
+          const midPoint = BABYLON.Vector3.Center(pointA, pointB);
+
+          // Create a dynamic texture for the distance text
+          const textureWidth = 256;
+          const textureHeight = 64;
+          const dynamicTexture = new BABYLON.DynamicTexture(
+            "measureTextTexture",
+            { width: textureWidth, height: textureHeight },
+            scene,
+            false
+          );
+          dynamicTexture.hasAlpha = true;
+        }
+      };
+
+      // Clear measurement function
+      const clearMeasurement = () => {
+        // Reset state variables
+        setPoint1(null);
+        setPoint2(null);
+        setDistance(null);
+        setDifferences({
+          diffX: null,
+          diffY: null,
+          diffZ: null,
+        });
+        setAngles({
+          horizontalAngle: null,
+          verticalAngle: null,
+        });
+
+        // Remove line if it exists
+        if (measurementRef.current.line) {
+          measurementRef.current.line.dispose();
+          measurementRef.current.line = null;
+        }
+
+        // Remove text if it exists
+        if (measurementRef.current.text) {
+          measurementRef.current.text.dispose();
+          measurementRef.current.text = null;
+        }
+
+        // Remove all markers and their children
+        measurementRef.current.markers.forEach((marker) => {
+          if (marker) {
+            // Clean up GUI elements first
+            if (marker.container) {
+              marker.container.dispose();
+            }
+            if (marker.gui) {
+              marker.gui.dispose();
+            }
+            // Then dispose the mesh objects
+            if (marker.box) {
+              marker.box.dispose();
+            }
+            if (marker.markerContainer) {
+              marker.markerContainer.dispose();
+            }
+          }
+        });
+
+        // Reset measurement state
+        measurementRef.current = {
+          pointA: null,
+          pointB: null,
+          line: null,
+          text: null,
+          markers: [],
+        };
+      };
+     const handleShowMeasureDetails = () => {
+        setShowMeasureDetails(!showMeasureDetails);
+      };
+
+       const handleWireFrame = () => {
+        if (!sceneRef.current) return;
+        const scene = sceneRef.current;
+        // scene.meshes.forEach((mesh) => {
+        //   if (
+        //     mesh.material &&
+        //     mesh.name !== "skyBox" &&
+        //     mesh.name !== "waterMesh" &&
+        //     mesh.name !== "ground"
+        //   ) {
+        //     mesh.material.wireframe = !mesh.material.wireframe;
+        //   }
+        // });
+        scene.forceWireframe = !scene.forceWireframe;
+        setShowWireFrame((prev) => !prev);
+      };
+
+           useEffect(() => {
+        if (showWireFrame) {
+          handleWireFrame();
+        }
+      }, [showWireFrame]);
 
   function clearAllPipingStores() {
     const confirmClear = window.confirm(
@@ -6489,6 +5052,363 @@ useEffect(() => {
     };
   }
 
+
+// Selection mode state
+const [isSelectionMode, setIsSelectionMode] = useState(false);
+const [selectedItem, setSelectedItem] = useState(false);
+const [selectedItemName, setSelectedItemName] = useState("");
+const [backgroundColorTag, setBackgroundColorTag] = useState({});
+const [tagInfo, setTagInfo] = useState({});
+const [fileInfoDetails, setFileInfoDetails] = useState(null);
+const [commentPosition, setCommentPosition] = useState(null);
+
+// Add these refs
+const selectedMeshRef = useRef(null);
+const highlightedMeshRef = useRef(null);
+const highlightMaterialRef = useRef(null);
+
+// Enhanced mesh selection functions (replace the existing ones)
+const highlightMesh = useCallback((mesh) => {
+  if (!mesh || !sceneRef.current) return;
+
+  // Create highlight material if it doesn't exist
+  if (!highlightMaterialRef.current) {
+    highlightMaterialRef.current = new BABYLON.StandardMaterial(
+      "highlightMaterial",
+      sceneRef.current
+    );
+    highlightMaterialRef.current.diffuseColor = new BABYLON.Color3(1, 1, 0); // Yellow
+    highlightMaterialRef.current.specularColor = new BABYLON.Color3(0.5, 0.5, 0.5);
+    highlightMaterialRef.current.emissiveColor = new BABYLON.Color3(0.3, 0.3, 0);
+    highlightMaterialRef.current.backFaceCulling = false;
+    highlightMaterialRef.current.twoSidedLighting = true;
+  }
+
+  // Store original material if not already stored
+  if (mesh.originalMaterial) {
+    mesh.material = highlightMaterialRef.current;
+    highlightedMeshRef.current = mesh;
+  } else if (mesh.material) {
+    // Store original material
+    mesh.originalMaterial = mesh.material;
+    mesh.material = highlightMaterialRef.current;
+    highlightedMeshRef.current = mesh;
+  }
+}, []);
+
+const dehighlightMesh = useCallback(() => {
+  if (highlightedMeshRef.current && highlightedMeshRef.current.originalMaterial) {
+    highlightedMeshRef.current.material = highlightedMeshRef.current.originalMaterial;
+    
+    // Clear individual mesh highlighting if it exists
+    if (typeof highlightedMeshRef.current.clearHighlight === 'function') {
+      highlightedMeshRef.current.clearHighlight();
+    }
+    
+    highlightedMeshRef.current = null;
+  }
+}, []);
+
+// Function to toggle selection mode
+const toggleSelectionMode = useCallback(() => {
+  setIsSelectionMode(prev => {
+    const newMode = !prev;
+    
+    if (!newMode) {
+      // Exiting selection mode - clear all selections
+      clearSelection();
+    }
+    
+    console.log(`Selection mode: ${newMode ? 'ON' : 'OFF'}`);
+    return newMode;
+  });
+}, []);
+
+// Helper function to clear selection
+const clearSelection = useCallback(() => {
+  dehighlightMesh();
+  selectedMeshRef.current = null;
+  
+  setSelectedItem(false);
+  setSelectedItemName("");
+  setSelectedMeshInfo(null);
+  setBackgroundColorTag({});
+  setTagInfo({});
+  setFileInfoDetails(null);
+  setCommentPosition(null);
+  
+  // Clear any clip planes or other scene modifications
+  if (sceneRef.current && sceneRef.current.clipPlane) {
+    sceneRef.current.clipPlane = null;
+  }
+}, [dehighlightMesh]);
+
+// Enhanced pointer observers with selection mode control (replace the existing setupPointerObservers)
+const setupPointerObservers = useCallback((scene, lodManager) => {
+  console.log("Setting up enhanced pointer observers with selection mode control");
+
+  // Remove any existing pointer observers
+  if (scene.onPointerObservable.hasObservers()) {
+    scene.onPointerObservable.clear();
+  }
+
+  // Main pointer event handler
+  scene.onPointerObservable.add((pointerInfo) => {
+    const camera = scene.activeCamera;
+    if (!camera || !pointerInfo || !pointerInfo.event) return;
+
+    try {
+      switch (pointerInfo.type) {
+        case BABYLON.PointerEventTypes.POINTERDOWN:
+          handlePointerDown(pointerInfo);
+          break;
+
+        case BABYLON.PointerEventTypes.POINTERDOUBLETAP:
+          // Handle double-click to clear highlights (only in selection mode)
+          if (isSelectionMode && pointerInfo.pickInfo && pointerInfo.pickInfo.pickedMesh) {
+            const pickedMesh = pointerInfo.pickInfo.pickedMesh;
+            if (typeof pickedMesh.clearHighlight === "function") {
+              pickedMesh.clearHighlight();
+              console.log("Cleared mesh highlighting");
+            }
+          }
+          break;
+      }
+    } catch (error) {
+      console.error("Error in pointer event handler:", error);
+    }
+  });
+
+  // Enhanced pointer down handler
+  const handlePointerDown = (pointerInfo) => {
+    const { event, pickInfo } = pointerInfo;
+    const isLeftClick = event.button === 0;
+    const isRightClick = event.button === 2;
+
+    // Handle left click
+    if (isLeftClick) {
+      if (isSelectionMode) {
+        // Selection mode is active
+        if (pickInfo?.hit && pickInfo?.pickedMesh) {
+          handleMeshSelection(pickInfo);
+        } else {
+          // Clicked on empty space - exit selection mode
+          console.log("Clicked on empty space, exiting selection mode");
+          setIsSelectionMode(false);
+          clearSelection();
+        }
+      }
+      // If not in selection mode, do nothing (or handle other interactions)
+    }
+
+    // Handle right-click (only in selection mode)
+    if (isRightClick && isSelectionMode) {
+      event.preventDefault();
+      
+      if (pickInfo?.hit && pickInfo?.pickedMesh) {
+        console.log("Right-click on mesh in selection mode:", pickInfo.pickedMesh.name);
+        
+        // You can implement context menu functionality here
+        showContextMenu(event.clientX, event.clientY, pickInfo.pickedMesh);
+      } else {
+        // Right-click on empty space
+        showContextMenu(event.clientX, event.clientY, null);
+      }
+    }
+  };
+
+  // Mesh selection handler (only called when in selection mode)
+  const handleMeshSelection = (pickInfo) => {
+    const pickedMesh = pickInfo.pickedMesh;
+
+    console.log("=== MESH SELECTION ===");
+    console.log("Picked mesh:", pickedMesh.name);
+    console.log("Mesh metadata:", pickedMesh.metadata);
+
+    // Skip wireframes and environment meshes
+    if (
+      pickedMesh.name.includes("octreeVisBox_") ||
+      pickedMesh.name.includes("wireframe") ||
+      pickedMesh.name.includes("skyBox") ||
+      pickedMesh.name.includes("ground") ||
+      pickedMesh.name.includes("water") ||
+      pickedMesh.name.includes("measureMarker") ||
+      pickedMesh.name.includes("measureLine") ||
+      !pickedMesh.metadata
+    ) {
+      console.log("Skipping environment mesh or wireframe");
+      return;
+    }
+
+    // Clear previous selection
+    dehighlightMesh();
+
+    // Check if this is a merged mesh with vertex mappings
+    if (
+      pickedMesh.metadata.isLodMesh &&
+      pickedMesh.metadata.vertexMappings &&
+      pickInfo.faceId !== undefined
+    ) {
+      console.log("Processing merged mesh selection...");
+      
+      // Get the clicked original mesh info
+      if (typeof pickedMesh.getClickedOriginalMesh === "function") {
+        const originalMeshInfo = pickedMesh.getClickedOriginalMesh(pickInfo.faceId);
+
+        if (originalMeshInfo) {
+          console.log("=== INDIVIDUAL MESH SELECTED ===");
+          console.log("Selected mesh info:", originalMeshInfo);
+
+          // Store selected mesh reference
+          selectedMeshRef.current = pickedMesh;
+
+          // Highlight the individual mesh within the merged mesh
+          if (typeof pickedMesh.highlightOriginalMesh === "function") {
+            pickedMesh.highlightOriginalMesh(originalMeshInfo.meshId);
+          }
+
+          // Set selection state
+          setSelectedItem(true);
+          setSelectedItemName({ name: originalMeshInfo.name || originalMeshInfo.meshId });
+
+          // Store intersection point for potential comment/annotation placement
+          const intersectionPoint = pickInfo.pickedPoint;
+          setCommentPosition({
+            intersectionPointX: intersectionPoint.x,
+            intersectionPointY: intersectionPoint.y,
+            intersectionPointZ: intersectionPoint.z,
+          });
+
+          // Process tag information
+          const meshFileName = originalMeshInfo.fileName || originalMeshInfo.meshId;
+          const tagKey = meshFileName;
+
+          if (tagKey) {
+            setBackgroundColorTag({ [tagKey]: true });
+          }
+
+          // Set detailed mesh information
+          setSelectedMeshInfo({
+            type: "individual",
+            meshId: originalMeshInfo.meshId,
+            name: originalMeshInfo.name || originalMeshInfo.meshId,
+            fileName: originalMeshInfo.fileName,
+            parentFileName: originalMeshInfo.parentFileName,
+            nodeNumber: originalMeshInfo.nodeNumber,
+            screenCoverage: originalMeshInfo.screenCoverage,
+            faceId: originalMeshInfo.faceId,
+            relativeFaceId: originalMeshInfo.relativeFaceId,
+          });
+
+          // Set tag info
+          setTagInfo({
+            filename: tagKey,
+            meshname: originalMeshInfo.name || originalMeshInfo.meshId,
+            meshId: originalMeshInfo.meshId,
+            parentFileName: originalMeshInfo.parentFileName,
+            nodeNumber: originalMeshInfo.nodeNumber,
+          });
+
+        } else {
+          console.log("Could not identify individual mesh, selecting entire merged mesh");
+          handleMergedMeshSelection(pickedMesh, pickInfo);
+        }
+      } else {
+        console.log("getClickedOriginalMesh method not available, selecting entire merged mesh");
+        handleMergedMeshSelection(pickedMesh, pickInfo);
+      }
+    } else {
+      // Handle non-merged mesh or mesh without vertex mappings
+      console.log("Processing non-merged mesh selection");
+      handleStandardMeshSelection(pickedMesh, pickInfo);
+    }
+  };
+
+  // Helper function for merged mesh selection (fallback)
+  const handleMergedMeshSelection = (pickedMesh, pickInfo) => {
+    selectedMeshRef.current = pickedMesh;
+    highlightMesh(pickedMesh);
+
+    setSelectedItem(true);
+    setSelectedItemName({ name: pickedMesh.name });
+
+    const intersectionPoint = pickInfo.pickedPoint;
+    setCommentPosition({
+      intersectionPointX: intersectionPoint.x,
+      intersectionPointY: intersectionPoint.y,
+      intersectionPointZ: intersectionPoint.z,
+    });
+
+    setSelectedMeshInfo({
+      type: "merged",
+      name: pickedMesh.name,
+      nodeNumber: pickedMesh.metadata.nodeNumber,
+      depth: pickedMesh.metadata.depth,
+      originalMeshCount: pickedMesh.metadata.meshCount,
+      totalVertices: pickedMesh.getTotalVertices(),
+      totalIndices: pickedMesh.getTotalIndices(),
+    });
+
+    setTagInfo({
+      filename: pickedMesh.name,
+      meshname: pickedMesh.name,
+    });
+  };
+
+  // Helper function for standard mesh selection
+  const handleStandardMeshSelection = (pickedMesh, pickInfo) => {
+    selectedMeshRef.current = pickedMesh;
+    highlightMesh(pickedMesh);
+
+    setSelectedItem(true);
+    setSelectedItemName({ name: pickedMesh.name });
+
+    const intersectionPoint = pickInfo.pickedPoint;
+    setCommentPosition({
+      intersectionPointX: intersectionPoint.x,
+      intersectionPointY: intersectionPoint.y,
+      intersectionPointZ: intersectionPoint.z,
+    });
+
+    // Process tag information for standard mesh
+    const tagData = pickedMesh.metadata.tagNo || pickedMesh.metadata;
+    const tagKey = tagData.tag || pickedMesh.name;
+
+    if (tagKey) {
+      setBackgroundColorTag({ [tagKey]: true });
+    }
+
+    if (tagData.fileDetails) {
+      setFileInfoDetails(tagData.fileDetails);
+    }
+
+    setTagInfo({
+      filename: tagData.tag || pickedMesh.name,
+      meshname: pickedMesh.name,
+    });
+  };
+
+  // Context menu function (implement as needed)
+  const showContextMenu = (x, y, mesh) => {
+    console.log(`Context menu at (${x}, ${y}) for mesh:`, mesh?.name || "empty space");
+    
+    // You can implement a context menu here
+    // For example, create a div with menu options and position it at (x, y)
+    
+    // Simple example (you can enhance this):
+    if (mesh) {
+      console.log("Available actions for mesh:", mesh.name);
+      // Show mesh-specific context menu
+    } else {
+      console.log("Available general actions");
+      // Show general context menu
+    }
+  };
+
+  console.log("Enhanced pointer observers setup complete with selection mode control");
+}, [isSelectionMode, highlightMesh, dehighlightMesh, clearSelection]);
+
+
   return (
     <div >
       {/* Canvas */}
@@ -6497,15 +5417,7 @@ useEffect(() => {
         style={{ position: "absolute", width: "100%", height: "100vh" }}
       />
 
-      {/* Hidden file input */}
-      {/* <input
-        ref={fileInputRef}
-        type="file"
-        accept=".glb"
-        multiple
-        className="hidden"
-        onChange={(e) => handleFileLoad(Array.from(e.target.files || []))}
-      /> */}
+   
 
       {/* File Panel */}
       <div
@@ -6518,12 +5430,7 @@ useEffect(() => {
           gap: "1px",
         }}
       >
-        {/*  <button
-          onClick={() => fileInputRef.current?.click()}
-          className="btn btn-success"
-        >
-          Load GLB Files
-        </button> */}
+  
 
         <button
           style={{ zIndex: "1000" }}
@@ -6533,12 +5440,12 @@ useEffect(() => {
           open Model
         </button>
 
-        <button onClick={resetScene} className="btn btn-secondary">
-          Reset Scene
-        </button>
-
         <button onClick={clearAllPipingStores} className="btn btn-dark">
           Clear DB
+        </button>
+
+         <button onClick={toggleSelectionMode} className="btn btn-dark">
+         select
         </button>
 
       
@@ -6573,43 +5480,172 @@ useEffect(() => {
        
       </div>
 
-      {/* Camera Control Panel */}
-      {/* <div
-        style={{
-          position: "absolute",
-          top: "10px",
-          left: "180px",
-          display: "flex",
-          flexDirection: "column",
-          gap: "5px",
-        }}
-      ></div> */}
+      {showMeasure && (
+              <>
+                <div
+                  style={{
+                    position: "absolute",
+                    top: "33%",
+                    left: 0,
+                    display: "flex",
+                    flexDirection: "row",
+                    zIndex: 9999,
+                    fontSize: "13px",
+                  }}
+                >
+                  {showMeasureDetails ? (
+                    <>
+                      <div
+                        className="measureInfo"
+                        style={{ left: 0, zIndex: 1 }}
+                      >
+                        <table class="measureInfoTable">
+                          <tbody>
+                            <tr class="bottomBordered">
+                              <th class="measureCornerCell left"></th>
+                              <th>X</th>
+                              <th>Y</th>
+                              <th>Z</th>
+                            </tr>
+                            <tr>
+                              <th class="left">
+                                P<sub>1</sub>
+                              </th>
+                              <td>{point1 ? point1.x : ""}</td>
+                              <td>{point1 ? point1.z : ""}</td>
+                              <td>{point1 ? point1.y : ""}</td>
+                            </tr>
 
-      {/* LOD Info Panel */}
-      {/* <div style={{ position: "absolute", right: "60px", top: "10px" }}>
-        <div
-          className="text-white text-base leading-[40px]"
-          style={{
-            backgroundColor: "rgba(0,0,0,0.7)",
-            padding: "10px",
-            borderRadius: "5px",
-          }}
-        >
-          <div>Camera: {cameraType === "orbit" ? "Orbit" : "Fly"}</div>
-          <div>LOD Level: {lodInfo.level}</div>
-          <div>Distance: {lodInfo.distance}</div>
-          <div>
-            Thresholds: 30% = {lodInfo.threshold30}, 80% = {lodInfo.threshold80}
-          </div>
-          <div>Memory Usage: {lodInfo.memoryMB} MB</div>
-          <div>
-            Loaded Nodes: {lodInfo.loadedNodes}, Cached: {lodInfo.cachedMeshes}
-          </div>
-       
-        </div>
-      </div> */}
+                            <tr>
+                              <th class="left">
+                                P<sub>2</sub>
+                              </th>
+                              <td>{point1 ? point1.x : ""}</td>
+                              <td>{point1 ? point1.z : ""}</td>
+                              <td>{point1 ? point1.y : ""}</td>
+                            </tr>
+                            <tr>
+                              <th class="left">Difference</th>
+                              <td>{differences ? differences.diffX : ""}</td>
+                              <td>{differences ? differences.diffZ : ""}</td>
+                              <td>{differences ? differences.diffY : ""}</td>
+                            </tr>
+                            <tr class="topBordered">
+                              <th class="left">Distance</th>
+                              <td colspan="3">{distance ? distance : ""}</td>
+                            </tr>
+                            <tr class="topBordered">
+                              <th class="left">Angle</th>
+                              <td colspan="3">
+                                hor:{angles ? angles.horizontalAngle : ""}{" "}
+                                &emsp; ver:{angles ? angles.verticalAngle : ""}
+                              </td>
+                            </tr>
+                          </tbody>
+                        </table>
+                      </div>
+                    </>
+                  ) : (
+                    ""
+                  )}
+                  <button
+                    onClick={handleShowMeasureDetails}
+                    className="vertical-button"
+                  >
+                    Measurements
+                  </button>
+                </div>
+              </>
+            )}
 
-      {/* Speed Control Bar for Fly Camera */}
+            {/*showMeasureDetailsAbove */}
+
+            {showMeasureDetailsAbove && (
+              <div
+                style={{
+                  position: "absolute",
+                  left: "20px",
+                  top: "50px",
+                  zIndex: 1,
+                  fontFamily: "sans-serif",
+                  fontSize: "12px",
+                  color: "white",
+                  width: "80px",
+                }}
+              >
+                {/* Top bar: total distance */}
+                <div
+                  style={{
+                    backgroundColor: "orange",
+                    padding: "4px",
+                    textAlign: "center",
+                    fontWeight: "bold",
+                  }}
+                >
+                  {distance ? distance : ""}
+                </div>
+
+                {/* X, Y, Z labels and values */}
+                <div style={{ display: "flex", flexDirection: "row" }}>
+                  {/* Axis labels */}
+                  <div style={{ display: "flex", flexDirection: "column" }}>
+                    <div
+                      style={{
+                        backgroundColor: "red",
+                        padding: "4px",
+                        textAlign: "center",
+                        color: "white",
+                      }}
+                    >
+                      X
+                    </div>
+                    <div
+                      style={{
+                        backgroundColor: "green",
+                        padding: "4px",
+                        textAlign: "center",
+                        color: "white",
+                      }}
+                    >
+                      Y
+                    </div>
+                    <div
+                      style={{
+                        backgroundColor: "blue",
+                        padding: "4px",
+                        textAlign: "center",
+                        color: "white",
+                      }}
+                    >
+                      Z
+                    </div>
+                  </div>
+
+                  {/* Axis values */}
+                  <div style={{ backgroundColor: "#222", flexGrow: 1 }}>
+                    <div
+                      style={{
+                        padding: "4px 6px",
+                        borderBottom: "1px solid #333",
+                      }}
+                    >
+                      {differences ? differences.diffX : ""}
+                    </div>
+                    <div
+                      style={{
+                        padding: "4px 6px",
+                        borderBottom: "1px solid #333",
+                      }}
+                    >
+                      {differences ? differences.diffY : ""}
+                    </div>
+                    <div style={{ padding: "4px 6px" }}>
+                      {differences ? differences.diffZ : ""}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
       {speedBar}
     </div>
   );

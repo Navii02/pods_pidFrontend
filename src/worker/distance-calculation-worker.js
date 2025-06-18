@@ -22,7 +22,6 @@ class DistanceCalculationWorker {
       throw new Error('Invalid nodes data provided for initialization');
     }
     
-    console.log(`Distance worker: Initializing with ${nodes.length} nodes`);
     
     nodes.forEach(node => {
       if (!node.nodeNumber || !node.center || !node.depth) {
@@ -39,7 +38,6 @@ class DistanceCalculationWorker {
     });
     
     this.isReady = true;
-    console.log(`Distance worker initialized with ${this.nodeData.size} valid nodes`);
   }
 
   // Batch calculate distances and LOD decisions

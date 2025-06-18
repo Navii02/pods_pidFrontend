@@ -23,7 +23,6 @@ class FrustumCullingWorker {
             this.handleMessage(event);
         };
         
-        console.log('Frustum culling worker: Ready for culling operations');
     }
     
     async handleMessage(event) {
@@ -76,7 +75,6 @@ class FrustumCullingWorker {
             bufferPlanesCount: this.bufferFrustumPlanes.length
         });
         
-        console.log(`Frustum worker: Updated frustum planes (${this.frustumPlanes.length} planes)`);
     }
     
     async cullNodes(nodeData, requestId) {
@@ -159,7 +157,6 @@ class FrustumCullingWorker {
             }
         });
         
-        console.log(`Frustum worker: Culled ${nodeData.length} nodes - V:${visibleCount} H:${hiddenCount} D:${disposeCount} R:${reloadCount}`);
     }
     
     createBufferFrustum(cameraData) {
@@ -301,7 +298,6 @@ class FrustumCullingWorker {
             bufferMultiplier: this.bufferMultiplier
         });
         
-        console.log(`Frustum worker: Buffer multiplier set to ${this.bufferMultiplier}`);
     }
     
     getCullingStats(requestId) {
@@ -336,7 +332,6 @@ class FrustumCullingWorker {
             type: 'CULLING_CACHE_CLEARED'
         });
         
-        console.log('Frustum worker: Cache cleared');
     }
 }
 

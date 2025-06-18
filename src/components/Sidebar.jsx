@@ -125,47 +125,95 @@ function Sidebar({
     mto: false,
   });
 
-  const handleItemClick = (item) => {
-    setActiveItem(item.name);
-    setActiveLink(item.activeLink || item.name.toLowerCase().replace(/\s+/g, ''));
+  // Toggled options
+
+  // const handleItemClick = (item) => {
+  //   setActiveItem(item.name);
+  //   setActiveLink(item.activeLink || item.name.toLowerCase().replace(/\s+/g, ''));
     
-    if (item.toggleMenu) {
-      const isOpening = !openMenus[item.toggleMenu];
-      const newOpenMenus = Object.keys(openMenus).reduce((acc, key) => {
-        acc[key] = false;
-        return acc;
-      }, {});
+  //   if (item.toggleMenu) {
+  //     const isOpening = !openMenus[item.toggleMenu];
+  //     const newOpenMenus = Object.keys(openMenus).reduce((acc, key) => {
+  //       acc[key] = false;
+  //       return acc;
+  //     }, {});
 
-      if (isOpening) {
-        newOpenMenus[item.toggleMenu] = true;
-        if (item.subItems && item.subItems.length > 0) {
-          const firstSubItem = item.subItems[0];
-          setActiveItem(firstSubItem.name);
-          setActiveTab(firstSubItem.name);
-          if (firstSubItem.path) {
-            navigate(firstSubItem.path);
-          }
-        }
-      } else if (item.path) {
-        navigate(item.path);
+  //     if (isOpening) {
+  //       newOpenMenus[item.toggleMenu] = true;
+  //       if (item.subItems && item.subItems.length > 0) {
+  //         const firstSubItem = item.subItems[0];
+  //         setActiveItem(firstSubItem.name);
+  //         setActiveTab(firstSubItem.name);
+  //         if (firstSubItem.path) {
+  //           navigate(firstSubItem.path);
+  //         }
+  //       }
+  //     } else if (item.path) {
+  //       navigate(item.path);
+  //     }
+
+  //     setOpenMenus(newOpenMenus);
+  //   } else if (item.path) {
+  //     setOpenMenus({
+  //       documents: false,
+  //       tags: false,
+  //       treeManagement: false,
+  //       globalModel: false,
+  //       tagInfo: false,
+  //       specManagement: false,
+  //       mto: false,
+  //       commentManagement: false,
+  //     });
+  //     navigate(item.path);
+  //   }
+  // };
+
+// Non toggle options
+  const handleItemClick = (item) => {
+  setActiveItem(item.name);
+  setActiveLink(item.activeLink || item.name.toLowerCase().replace(/\s+/g, ''));
+  
+  if (item.toggleMenu) {
+    const newOpenMenus = { ...openMenus };
+    
+    // Always keep the clicked menu open
+    newOpenMenus[item.toggleMenu] = true;
+    
+    // Close other menus (optional - remove this if you want multiple menus open)
+    Object.keys(newOpenMenus).forEach(key => {
+      if (key !== item.toggleMenu) {
+        newOpenMenus[key] = false;
       }
+    });
 
-      setOpenMenus(newOpenMenus);
-    } else if (item.path) {
-      setOpenMenus({
-        documents: false,
-        tags: false,
-        treeManagement: false,
-        globalModel: false,
-        tagInfo: false,
-        specManagement: false,
-        mto: false,
-        commentManagement: false,
-      });
+    // If menu wasn't open before, navigate to first sub-item
+    if (!openMenus[item.toggleMenu] && item.subItems && item.subItems.length > 0) {
+      const firstSubItem = item.subItems[0];
+      setActiveItem(firstSubItem.name);
+      setActiveTab(firstSubItem.name);
+      if (firstSubItem.path) {
+        navigate(firstSubItem.path);
+      }
+    } else if (openMenus[item.toggleMenu] && item.path) {
+      // If menu was already open, navigate to main path
       navigate(item.path);
     }
-  };
 
+    setOpenMenus(newOpenMenus);
+  } else if (item.path) {
+    setOpenMenus({
+      documents: false,
+      tags: false,
+      treeManagement: false,
+      globalModel: false,
+      tagInfo: false,
+      specManagement: false,
+      mto: false,
+      commentManagement: false,
+    });
+    navigate(item.path);
+  }
+};
   useEffect(() => {
     const preventScrollChaining = (e) => {
       const target = e.currentTarget;

@@ -1,7 +1,14 @@
 import React, { useRef, useState } from "react";
 import CommentModal from "../components/CommentModal";
-import { faGear, faMousePointer, faPlane, faScissors, faUpRightAndDownLeftFromCenter } from "@fortawesome/free-solid-svg-icons";
+import {
+  faGear,
+  faMousePointer,
+  faPlane,
+  faScissors,
+  
+} from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { Axis3d } from "lucide-react";
 
 function Iroamer() {
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -17,7 +24,7 @@ function Iroamer() {
     { statusname: "Resolved" },
     { statusname: "Pending" },
   ];
- 
+
   const [viewMode, setViewMode] = useState("Top View");
 
   const [mode, setMode] = useState("");
@@ -25,18 +32,15 @@ function Iroamer() {
   const [showComment, setShowComment] = useState(false);
   const [selectedItem, setselectedItem] = useState(false);
   const [activeButton, setActiveButton] = useState(null);
-  
+
   const [settingbox, setsettingbox] = useState(false);
 
- 
   const [showMeasure, setShowMeasure] = useState(false);
   const [showWireFrame, setShowWireFrame] = useState(false);
 
-
   const [savedViewDialog, setSavedViewDialog] = useState(false);
-  
-  const [enableClipping, setEnableClipping] = useState(false);
 
+  const [enableClipping, setEnableClipping] = useState(false);
 
   // ------------------------------------PID--------------------------
 
@@ -44,10 +48,9 @@ function Iroamer() {
   const [backgroundTheme, setBackgroundTheme] = useState("DEFAULT");
   const [groundSettingsVisible, setGroundSettingsVisible] = useState(false);
   const [waterSettingsVisible, setWaterSettingsVisible] = useState(false);
-  
- 
+
   const [clippingSetting, setClippingSetting] = useState(false);
-  
+
   // handel orbit control
   const handleOrbitClick = (buttonName) => {
     setMode("orbit");
@@ -124,14 +127,6 @@ function Iroamer() {
     setEnableClipping(!enableClipping);
   };
 
-  
- 
-
-
-
-
-
-
   const handleShowMeasure = (buttonName) => {
     setShowMeasure(!showMeasure);
     setActiveButton(buttonName);
@@ -147,346 +142,338 @@ function Iroamer() {
     setSavedViewDialog(true);
   };
 
-
-
   return (
     <div className="d-flex">
-      <div className="w-100">  <button onClick={() => setIsModalOpen(true)}>Open Comment Modal</button>
-
-      <CommentModal
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        content={mockContent}
-        allCommentStatus={mockStatusList}
-        docdetnum="DOC123"
-      /></div>
+      <div className="w-100">
+        {" "}
+        <button onClick={() => setIsModalOpen(true)}>Open Comment Modal</button>
+        <CommentModal
+          isOpen={isModalOpen}
+          onClose={() => setIsModalOpen(false)}
+          content={mockContent}
+          allCommentStatus={mockStatusList}
+          docdetnum="DOC123"
+        />
+      </div>
       <div>
-          <div class="right-sidenav">
-            <div className="rightSideNav">
-              <ul>
-                <li className={activeButton === "axis" ? "active" : ""}>
-                  <div className="tooltip-container">
-                    <span
-                      className="icon-tooltip"
-                      onClick={() => handleShowAxis("axis")}
-                      title="Show Axis"
-                    >
-                      {/* <Axis3d /> */}
-                    </span>
-                  </div>
-                </li>
+        <div class="right-sidenav">
+          <div className="rightSideNav">
+            <ul>
+              <li className={activeButton === "axis" ? "active" : ""}>
+                <div className="tooltip-container">
+                  <span
+                    className="icon-tooltip"
+                    onClick={() => handleShowAxis("axis")}
+                    title="Show Axis"
+                  >
+                    <Axis3d />
+                  </span>
+                </div>
+              </li>
 
-                <li className={activeButton === "orbit" ? "active" : ""}>
-                  <div className="tooltip-container">
-                    <span
-                      className="icon-tooltip"
-                      onClick={() => handleOrbitClick("orbit")}
-                      title="Orbit Camera"
-                    >
-                      <img
-                        style={{ width: "30px", height: "30px" }}
-                        src="images/orbit.png"
-                        alt=""
-                      />{" "}
-                    </span>
-                  </div>
-                </li>
+              <li className={activeButton === "orbit" ? "active" : ""}>
+                <div className="tooltip-container">
+                  <span
+                    className="icon-tooltip"
+                    onClick={() => handleOrbitClick("orbit")}
+                    title="Orbit Camera"
+                  >
+                    <img
+                      style={{ width: "30px", height: "30px" }}
+                      src="images/orbit.png"
+                      alt=""
+                    />{" "}
+                  </span>
+                </div>
+              </li>
 
-                <li className={activeButton === "fly" ? "active" : ""}>
-                  <div className="tooltip-container">
-                    <span
-                      className="icon-tooltip"
-                      onClick={() => handleFlyClick("fly")}
-                      title="Fly camera"
-                    >
-                                            <FontAwesomeIcon icon={faPlane}size="lg" />
+              <li className={activeButton === "fly" ? "active" : ""}>
+                <div className="tooltip-container">
+                  <span
+                    className="icon-tooltip"
+                    onClick={() => handleFlyClick("fly")}
+                    title="Fly camera"
+                  >
+                    <FontAwesomeIcon icon={faPlane} size="lg" />
+                  </span>
+                </div>
+              </li>
 
-                    </span>
-                  </div>
-                </li>
+              <li className={activeButton === "select" ? "active" : ""}>
+                <div className="tooltip-container">
+                  <span
+                    className="icon-tooltip"
+                    title="Selection"
+                    onClick={() => handleObjectselected("select")}
+                  >
+                    <FontAwesomeIcon icon={faMousePointer} size="lg" />
+                  </span>
+                </div>
+              </li>
+              <li className={activeButton === "clip" ? "active" : ""}>
+                <div
+                  className="tooltip-container"
+                  onContextMenu={(e) => {
+                    e.preventDefault(); // Prevent default right-click menu
+                    setClippingSetting(true);
+                  }}
+                  onClick={() => handleEnableSectioning("clip")}
+                >
+                  <span className="icon-tooltip" title="Enable sectioning">
+                    <FontAwesomeIcon icon={faScissors} size="lg" />
+                  </span>
+                </div>
+              </li>
 
-                <li className={activeButton === "select" ? "active" : ""}>
-                  <div className="tooltip-container">
-                    <span
-                      className="icon-tooltip"
-                      title="Selection"
-                      onClick={() => handleObjectselected("select")}
-                    >
-                      <FontAwesomeIcon icon={faMousePointer}size="lg" />
-                    </span>
-                  </div>
-                </li>
-                <li className={activeButton === "clip" ? "active" : ""}>
-                  <div
-                    className="tooltip-container"
+              <li className={activeButton === "fitview" ? "active" : ""}>
+                <div
+                  className="tooltip-container"
+                  onClick={() => handlezoomfit("fitview")}
+                >
+                  <span className="icon-tooltip" title="Fit View">
+                    <i class="fa-solid fa-arrows-to-dot fs-4"></i>{" "}
+                  </span>
+                </div>
+              </li>
+              <li className={activeButton === "setting" ? "active" : ""}>
+                <div
+                  className="tooltip-container"
+                  onClick={() => handleSetting("setting")}
+                >
+                  <span className="icon-tooltip" title="Setting">
+                    <FontAwesomeIcon icon={faGear} size="lg" />
+                  </span>
+                </div>
+              </li>
+
+              <li className={activeButton === "orthographic" ? "active" : ""}>
+                <div className="tooltip-container">
+                  <span
+                    className="icon-tooltip"
+                    onClick={() => handleorthoview("orthographic")}
+                    title="Orthographic View"
+                  >
+                    <img
+                      className="button"
+                      src="images/orthographic.png"
+                      alt=""
+                    />
+                  </span>
+                </div>
+              </li>
+              <li className={activeButton === "perspective" ? "active" : ""}>
+                <div className="tooltip-container">
+                  <span
+                    className="icon-tooltip"
+                    onClick={() => handleperspective("perspective")}
+                    title="Perspective View"
+                  >
+                    <img
+                      className="button"
+                      src="images/perspective.png"
+                      alt=""
+                    />
+                  </span>
+                </div>
+              </li>
+              <li className={activeButton === "front" ? "active" : ""}>
+                <div className="tooltip-container">
+                  <span
+                    className="icon-tooltip"
+                    onClick={() => handleorthofront("front")}
+                    title="Front View"
+                  >
+                    <img className="button" src="images/front.png" alt="" />
+                  </span>
+                </div>
+              </li>
+              <li className={activeButton === "left" ? "active" : ""}>
+                <div className="tooltip-container">
+                  <span
+                    className="icon-tooltip"
+                    onClick={() => handleortholeft("left")}
+                    title="Left View"
+                  >
+                    <img className="button" src="images/left.png" alt="" />
+                  </span>
+                </div>
+              </li>
+              <li className={activeButton === "back" ? "active" : ""}>
+                <div className="tooltip-container">
+                  <span
+                    className="icon-tooltip"
+                    onClick={() => handleorthoback("back")}
+                    title="Back View"
+                  >
+                    <img className="button" src="images/back.png" alt="" />
+                  </span>
+                </div>
+              </li>
+              <li className={activeButton === "right" ? "active" : ""}>
+                <div className="tooltip-container">
+                  <span
+                    className="icon-tooltip"
+                    onClick={() => handleorthoright("right")}
+                    title="Right View"
+                  >
+                    <img className="button" src="images/right.png" alt="" />
+                  </span>
+                </div>
+              </li>
+              <li className={activeButton === "top" ? "active" : ""}>
+                <div className="tooltip-container">
+                  <span
+                    className="icon-tooltip"
+                    onClick={() => handleorthotop("top")}
+                    title="Top View"
+                  >
+                    <img className="button" src="images/top.png" alt="" />
+                  </span>
+                </div>
+              </li>
+              <li className={activeButton === "bottom" ? "active" : ""}>
+                <div className="tooltip-container">
+                  <span
+                    className="icon-tooltip"
+                    onClick={() => handleorthobottom("bottom")}
+                    title="Bottom View"
+                  >
+                    <img className="button" src="images/bottom.png" alt="" />
+                  </span>
+                </div>
+              </li>
+              <li className={activeButton === "measure" ? "active" : ""}>
+                <div className="tooltip-container">
+                  <span
+                    className="icon-tooltip"
+                    onClick={() => handleShowMeasure("measure")}
+                    title="Measure"
+                  >
+                    <img
+                      id="measure"
+                      class="button"
+                      src="images/measure.png"
+                      alt=""
+                    />
+                  </span>
+                </div>
+              </li>
+              <li className={activeButton === "wireframe" ? "active" : ""}>
+                <div className="tooltip-container">
+                  <span
+                    className="icon-tooltip"
+                    onClick={() => handleWireFrame("wireframe")}
+                    title="Measure"
+                  >
+                    <img
+                      id="wireframe"
+                      class="button"
+                      src="images/wireframe.png"
+                      alt=""
+                    />
+                  </span>
+                </div>
+              </li>
+
+              <li className={activeButton === "savedview" ? "active" : ""}>
+                <div className="tooltip-container">
+                  <span
+                    className="icon-tooltip"
+                    onClick={() => handleSavedView("savedview")}
+                    title="Saved view"
+                  >
+                    <img
+                      id="measure"
+                      class="button"
+                      src="images/save-icon.png"
+                      alt=""
+                    />
+                  </span>
+                </div>
+              </li>
+
+              <li className={activeButton === "Background" ? "active" : ""}>
+                <div className="tooltip-container">
+                  <span
+                    className="icon-tooltip"
+                    title="Default background"
+                    onClick={() => {
+                      // Cycle through background themes
+                      switch (backgroundTheme) {
+                        case "DEFAULT":
+                          setBackgroundTheme("WHITE");
+                          setActiveButton("Background");
+                          break;
+                        case "WHITE":
+                          setBackgroundTheme("GROUND_SKY");
+                          setActiveButton("Background");
+                          break;
+                        case "GROUND_SKY":
+                          setBackgroundTheme("SEA_SKY");
+                          setActiveButton("Background");
+                          break;
+                        case "SEA_SKY":
+                          setBackgroundTheme("DEFAULT");
+                          setActiveButton("Background");
+                          break;
+                        default:
+                          setBackgroundTheme("DEFAULT");
+                          setActiveButton("Background");
+                      }
+                    }}
                     onContextMenu={(e) => {
                       e.preventDefault(); // Prevent default right-click menu
-                      setClippingSetting(true);
+
+                      // Only show settings for relevant themes
+                      if (backgroundTheme === "GROUND_SKY") {
+                        setGroundSettingsVisible(true);
+                      } else if (backgroundTheme === "SEA_SKY") {
+                        setWaterSettingsVisible(true);
+                      }
                     }}
-                    onClick={() => handleEnableSectioning("clip")}
                   >
-                    <span className="icon-tooltip" title="Enable sectioning">
-                      <FontAwesomeIcon icon={faScissors}size="lg" />
-                    </span>
-                  </div>
-                </li>
+                    <img
+                      id="theme"
+                      className="button"
+                      src="images/theme.png"
+                      alt=""
+                    />
+                  </span>
+                </div>
+              </li>
 
-                <li className={activeButton === "fitview" ? "active" : ""}>
-                  <div
-                    className="tooltip-container"
-                    onClick={() => handlezoomfit("fitview")}
+              <li className={activeButton === "4dplan" ? "active" : ""}>
+                <div className="tooltip-container">
+                  <span
+                    className="icon-tooltip"
+                    onClick={() => handleWireFrame("4dplan")}
+                    title="4D plan"
                   >
-                    <span className="icon-tooltip" title="Fit View">
-<FontAwesomeIcon icon={faUpRightAndDownLeftFromCenter} size="lg" />
-                    </span>
-                  </div>
-                </li>
-                <li className={activeButton === "setting" ? "active" : ""}>
-                  <div
-                    className="tooltip-container"
-                    onClick={() => handleSetting("setting")}
+                    <img
+                      id="4dplan"
+                      class="button"
+                      src="images/4d_plan.png"
+                      alt=""
+                    />
+                  </span>
+                </div>
+              </li>
+
+              <li className={activeButton === "comment" ? "active" : ""}>
+                <div className="tooltip-container">
+                  <span
+                    className="icon-tooltip"
+                    onClick={() => handlecomment("comment")}
+                    title="Show comment"
                   >
-                    <span className="icon-tooltip" title="Setting">
-                      <FontAwesomeIcon icon={faGear}size="lg" />
-
-                   
-                    </span>
-                  </div>
-                </li>
-
-                <li className={activeButton === "orthographic" ? "active" : ""}>
-                  <div className="tooltip-container">
-                    <span
-                      className="icon-tooltip"
-                      onClick={() => handleorthoview("orthographic")}
-                      title="Orthographic View"
-                    >
-                      <img
-                        className="button"
-                        src="images/orthographic.png"
-                        alt=""
-                      />
-                    </span>
-                  </div>
-                </li>
-                <li className={activeButton === "perspective" ? "active" : ""}>
-                  <div className="tooltip-container">
-                    <span
-                      className="icon-tooltip"
-                      onClick={() => handleperspective("perspective")}
-                      title="Perspective View"
-                    >
-                      <img
-                        className="button"
-                        src="images/perspective.png"
-                        alt=""
-                      />
-                    </span>
-                  </div>
-                </li>
-                <li className={activeButton === "front" ? "active" : ""}>
-                  <div className="tooltip-container">
-                    <span
-                      className="icon-tooltip"
-                      onClick={() => handleorthofront("front")}
-                      title="Front View"
-                    >
-                      <img className="button" src="images/front.png" alt="" />
-                    </span>
-                  </div>
-                </li>
-                <li className={activeButton === "left" ? "active" : ""}>
-                  <div className="tooltip-container">
-                    <span
-                      className="icon-tooltip"
-                      onClick={() => handleortholeft("left")}
-                      title="Left View"
-                    >
-                      <img className="button" src="images/left.png" alt="" />
-                    </span>
-                  </div>
-                </li>
-                <li className={activeButton === "back" ? "active" : ""}>
-                  <div className="tooltip-container">
-                    <span
-                      className="icon-tooltip"
-                      onClick={() => handleorthoback("back")}
-                      title="Back View"
-                    >
-                      <img className="button" src="images/back.png" alt="" />
-                    </span>
-                  </div>
-                </li>
-                <li className={activeButton === "right" ? "active" : ""}>
-                  <div className="tooltip-container">
-                    <span
-                      className="icon-tooltip"
-                      onClick={() => handleorthoright("right")}
-                      title="Right View"
-                    >
-                      <img className="button" src="images/right.png" alt="" />
-                    </span>
-                  </div>
-                </li>
-                <li className={activeButton === "top" ? "active" : ""}>
-                  <div className="tooltip-container">
-                    <span
-                      className="icon-tooltip"
-                      onClick={() => handleorthotop("top")}
-                      title="Top View"
-                    >
-                      <img className="button" src="images/top.png" alt="" />
-                    </span>
-                  </div>
-                </li>
-                <li className={activeButton === "bottom" ? "active" : ""}>
-                  <div className="tooltip-container">
-                    <span
-                      className="icon-tooltip"
-                      onClick={() => handleorthobottom("bottom")}
-                      title="Bottom View"
-                    >
-                      <img className="button" src="images/bottom.png" alt="" />
-                    </span>
-                  </div>
-                </li>
-                <li className={activeButton === "measure" ? "active" : ""}>
-                  <div className="tooltip-container">
-                    <span
-                      className="icon-tooltip"
-                      onClick={() => handleShowMeasure("measure")}
-                      title="Measure"
-                    >
-                      <img
-                        id="measure"
-                        class="button"
-                        src="images/measure.png"
-                                                alt=""
-
-                      />
-                    </span>
-                  </div>
-                </li>
-                <li className={activeButton === "wireframe" ? "active" : ""}>
-                  <div className="tooltip-container">
-                    <span
-                      className="icon-tooltip"
-                      onClick={() => handleWireFrame("wireframe")}
-                      title="Measure"
-                    >
-                      <img
-                        id="wireframe"
-                        class="button"
-                        src="images/wireframe.png"
-                                                alt=""
-
-                      />
-                    </span>
-                  </div>
-                </li>
-
-                <li className={activeButton === "savedview" ? "active" : ""}>
-                  <div className="tooltip-container">
-                    <span
-                      className="icon-tooltip"
-                      onClick={() => handleSavedView("savedview")}
-                      title="Saved view"
-                    >
-                      <img
-                        id="measure"
-                        class="button"
-                        src="images/save-icon.png"
-                        alt=""
-                      />
-                    </span>
-                  </div>
-                </li>
-
-                <li className={activeButton === "Background" ? "active" : ""}>
-                  <div className="tooltip-container">
-                    <span
-                      className="icon-tooltip"
-                      title="Default background"
-                      onClick={() => {
-                        // Cycle through background themes
-                        switch (backgroundTheme) {
-                          case "DEFAULT":
-                            setBackgroundTheme("WHITE");
-                            setActiveButton("Background");
-                            break;
-                          case "WHITE":
-                            setBackgroundTheme("GROUND_SKY");
-                            setActiveButton("Background");
-                            break;
-                          case "GROUND_SKY":
-                            setBackgroundTheme("SEA_SKY");
-                            setActiveButton("Background");
-                            break;
-                          case "SEA_SKY":
-                            setBackgroundTheme("DEFAULT");
-                            setActiveButton("Background");
-                            break;
-                          default:
-                            setBackgroundTheme("DEFAULT");
-                            setActiveButton("Background");
-                        }
-                      }}
-                      onContextMenu={(e) => {
-                        e.preventDefault(); // Prevent default right-click menu
-
-                        // Only show settings for relevant themes
-                        if (backgroundTheme === "GROUND_SKY") {
-                          setGroundSettingsVisible(true);
-                        } else if (backgroundTheme === "SEA_SKY") {
-                          setWaterSettingsVisible(true);
-                        }
-                      }}
-                    >
-                      <img
-                        id="theme"
-                        className="button"
-                        src="images/theme.png"
-                                                alt=""
-
-                      />
-                    </span>
-                  </div>
-                </li>
-
-                <li className={activeButton === "4dplan" ? "active" : ""}>
-                  <div className="tooltip-container">
-                    <span
-                      className="icon-tooltip"
-                      onClick={() => handleWireFrame("4dplan")}
-                      title="4D plan"
-                    >
-                      <img
-                        id="4dplan"
-                        class="button"
-                        src="images/4d_plan.png"
-                                                alt=""
-
-                      />
-                    </span>
-                  </div>
-                </li>
-
-                <li className={activeButton === "comment" ? "active" : ""}>
-                  <div className="tooltip-container">
-                    <span
-                      className="icon-tooltip"
-                      onClick={() => handlecomment("comment")}
-                      title="Show comment"
-                    >
-                      <i class="fa-solid fa-comment fs-4"></i>
-                    </span>
-                  </div>
-                </li>
-              </ul>
-            </div>
+                    <i class="fa-solid fa-comment fs-4"></i>
+                  </span>
+                </div>
+              </li>
+            </ul>
           </div>
+        </div>
       </div>
-    
     </div>
   );
 }

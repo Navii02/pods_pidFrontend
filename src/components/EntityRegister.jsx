@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import Modal from "react-bootstrap/Modal";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faTimes } from "@fortawesome/free-solid-svg-icons";
-import "../styles/TreeRegistration.css";
+// import "../styles/TreeRegistration.css";
 import { GetEntities, RegisterEnitity } from "../services/TreeManagementApi";
 
 
@@ -12,6 +12,7 @@ function EntityRegister({
   entityType,
   parentEntity,
   onSuccess,
+  expandedSystem
 }) {
   const [code, setCode] = useState("");
   const [name, setName] = useState("");
@@ -184,20 +185,36 @@ function EntityRegister({
   };
 
   return (
+
+    //   <Modal
+    //   onHide={handleClose}
+    //   show={showAreaDialog}
+    //   backdrop="static"
+    //   keyboard={false}
+    //   dialogClassName="custom-modal"
+    // ></Modal>
     <Modal
       show={isOpen}
       onHide={handleClose}
       keyboard={false}
       centered
-      dialogClassName="custom-modal-dialog"
-      contentClassName="custom-modal-content"
+      dialogClassName="custom-modal"
+      
     >
-      <Modal.Header className="custom-modal-header d-flex justify-content-between">
+      {/* <Modal.Header className="custom-modal-header d-flex justify-content-between">
+
         <Modal.Title>{config.title}</Modal.Title>
         <p className="text-light cross" onClick={handleClose}>
           <FontAwesomeIcon icon={faTimes} size="lg" className="mt-3" />
         </p>
-      </Modal.Header>
+        
+      </Modal.Header> */}
+        <div className="title-dialog">
+            <p className="text-light">{config.title}</p>
+            <p className="text-light cross" onClick={handleClose}>
+              &times;
+            </p>
+          </div>
 
       <Modal.Body className="custom-modal-body">
         {isLoading ? (

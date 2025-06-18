@@ -17,12 +17,10 @@ class MeshDisposalWorker {
             this.handleMessage(event);
         };
         
-        console.log('Mesh disposal worker: Ready for disposal operations');
     }
     
     async handleMessage(event) {
         const { type, nodeNumber, nodeNumbers, requestId, priority } = event.data;
-        console.log(event.data);
         
         try {
             switch (type) {
@@ -63,7 +61,6 @@ class MeshDisposalWorker {
         // Sort by priority (higher priority = lower number = dispose first)
         this.disposalQueue.sort((a, b) => a.priority - b.priority);
         
-        console.log(`Disposal worker: Queued mesh ${nodeNumber} for disposal (priority: ${priority})`);
         
         // Process queue if not already processing
         if (!this.processingDisposal) {
@@ -72,7 +69,6 @@ class MeshDisposalWorker {
     }
     
     async disposeBatch(nodeNumbers, requestId) {
-        console.log(`Disposal worker: Batch disposal requested for ${nodeNumbers.length} meshes`);
         
         const results = [];
         let successCount = 0;
@@ -86,7 +82,6 @@ class MeshDisposalWorker {
                 results.push({ nodeNumber, success: true });
                 successCount++;
                 
-                console.log(`Disposal worker: Disposed mesh ${nodeNumber}`);
             } catch (error) {
                 results.push({ nodeNumber, success: false, error: error.message });
                 console.error(`Disposal worker: Failed to dispose mesh ${nodeNumber}:`, error);
@@ -129,7 +124,6 @@ class MeshDisposalWorker {
                     priority: item.priority
                 });
                 
-                console.log(`Disposal worker: Disposed mesh ${item.nodeNumber}`);
                 
                 // Small break between disposals to prevent blocking
                 if (this.disposalQueue.length > 0) {
@@ -157,7 +151,6 @@ class MeshDisposalWorker {
             type: 'DISPOSAL_CACHE_CLEARED'
         });
         
-        console.log('Disposal worker: Cache cleared');
     }
     
     getDisposalStats(requestId) {

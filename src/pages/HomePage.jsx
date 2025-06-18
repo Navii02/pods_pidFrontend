@@ -1212,7 +1212,7 @@ function HomePage() {
       />
  
      }
-      <Outlet/>       
+      <Outlet leftNavVisible={leftNavVisible}/>       
           </div>
         </div>
 

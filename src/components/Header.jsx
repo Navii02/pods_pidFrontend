@@ -24,11 +24,11 @@ const Header = () => {
     <header>
       <img id="logoPD" src="/images/logo-pd.png" onClick={() => navigate("/")} />
 
-      <p class="text-light">
-        {" "}
-        Project Name: {project?.projectName || "No Project Selected"}
-      </p>
-
+     <p className="text-light">
+  {project?.projectName || ""}
+  {project?.projectName && project?.projectNumber ? "--" : ""}
+  {project?.projectNumber || ""}
+</p>
       <div
         id="logout"
         className="me-3"

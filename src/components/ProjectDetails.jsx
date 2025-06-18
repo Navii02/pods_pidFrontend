@@ -203,6 +203,7 @@ const ProjectDetails = ({
         showTagModalFor={showTagModalFor}
         setShowTagModalFor={setShowTagModalFor}
         selectedProject={selectedProject}
+        tagsMap={tagsMap}
       />
 
       <div className="project-toggle-wrapper ">
