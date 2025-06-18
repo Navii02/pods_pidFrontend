@@ -20,6 +20,7 @@ import LineList from "./pages/LineList";
 import GlobalModalOpen from "./pages/GlobalModalOpen";
 import CreateGlobalModal from "./pages/CreateGlobalModal";
 import EquipmentList from "./pages/EquipmentList";
+import UnAssignedtags from "./pages/UnAssignedtags";
 
 
 // import Login from './pages/Login';
@@ -50,6 +51,8 @@ function App() {
         <Route path="/valve-list" element={<ValveList />} />
 
         <Route path="/line-list" element={<LineList />} />
+                        <Route path="/assign-tag-models" element={<UnAssignedtags />} />
+
       </Route>
 
       {/* Fallback */}

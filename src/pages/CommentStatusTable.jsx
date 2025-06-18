@@ -3,25 +3,38 @@ import {
   faDownload,
   faPlus,
   faTimes,
-  faTrash
+  faTrash,
+  faPencil,
+  faFloppyDisk,
+  faXmark
 } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { getStatustableData, addStatus, deleteStatus } from "../services/CommentApi";
-import Modal from "react-bootstrap/Modal";
+import { Modal } from "react-bootstrap";
 import { updateProjectContext } from "../context/ContextShare";
+import * as XLSX from "xlsx";
+import Alert from "../components/Alert";
+import DeleteConfirm from "../components/DeleteConfirm";
 
 const CommentStatusTable = () => {
-   const {updateProject} = useContext(updateProjectContext)
-
+  const { updateProject } = useContext(updateProjectContext);
   const [tableData, setTableData] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
-  const [hoveredRow, setHoveredRow] = useState(null);
   const [showModal, setShowModal] = useState(false);
   const [modalStatus, setModalStatus] = useState("");
   const [modalColor, setModalColor] = useState("#ffffff");
   const [modalAlert, setModalAlert] = useState(false);
   const [modalMessage, setModalMessage] = useState("");
-  const statusInputRef = useRef(null);
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [currentDeleteNumber, setCurrentDeleteNumber] = useState(null);
+  const [editedRowIndex, setEditedRowIndex] = useState(-1);
+  const [editedStatusData, setEditedStatusData] = useState({});
+  const [importStatus, setImportStatus] = useState(false);
+  const [selectedFile, setSelectedFile] = useState(null);
+
+  const projectString = sessionStorage.getItem("selectedProject");
+  const project = projectString ? JSON.parse(projectString) : null;
+  const projectId = project?.projectId;
 
   const getStatusTable = async (projectId) => {
     try {
@@ -34,10 +47,6 @@ const CommentStatusTable = () => {
     }
   };
 
-  const projectString = sessionStorage.getItem("selectedProject");
-  const project = projectString ? JSON.parse(projectString) : null;
-  const projectId = project?.projectId;
-
   useEffect(() => {
     getStatusTable(projectId);
   }, [updateProject]);
@@ -48,50 +57,54 @@ const CommentStatusTable = () => {
       setModalColor("#ffffff");
       setModalAlert(false);
       setModalMessage("");
-      if (statusInputRef.current) {
-        statusInputRef.current.focus();
-      }
     }
   }, [showModal]);
 
-  const handleDelete = async (number) => {
-    if (window.confirm("Are you sure you want to delete this status?")) {
-      try {
-        const response = await deleteStatus(number);
-        if (response.status === 200) {
-          getStatusTable(projectId);
-        }
-      } catch (error) {
-        alert("Failed to delete status. Please try again.");
+  const handleDelete = (number) => {
+    setCurrentDeleteNumber(number);
+    setShowConfirm(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    try {
+      const response = await deleteStatus(currentDeleteNumber);
+      if (response.status === 200) {
+        getStatusTable(projectId);
       }
+    } catch (error) {
+      console.error("Failed to delete status:", error);
+    } finally {
+      setShowConfirm(false);
+      setCurrentDeleteNumber(null);
     }
   };
 
+  const handleCancelDelete = () => {
+    setShowConfirm(false);
+    setCurrentDeleteNumber(null);
+  };
+
   const handleExport = () => {
-    console.log("Exporting status data");
+    const headers = ["Number", "Status", "Color"];
+    const dataToExport = tableData.map((item, index) => ({
+      Number: index + 1,
+      Status: item.statusname,
+      Color: item.color
+    }));
+
+    const ws = XLSX.utils.json_to_sheet(dataToExport, { header: headers });
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Status List");
+    XLSX.writeFile(wb, "StatusList.xlsx");
   };
 
-  const handleAdd = () => {
-    setShowModal(true);
-  };
-
-  const handleModalClose = () => {
-    setShowModal(false);
-    setModalStatus("");
-    setModalColor("#ffffff");
-    setModalAlert(false);
-    setModalMessage("");
-  };
+  const handleAdd = () => setShowModal(true);
+  const handleCloseModal = () => setShowModal(false);
 
   const handleModalOk = async () => {
     if (!modalStatus.trim()) {
       setModalAlert(true);
       setModalMessage("Status is mandatory");
-      return;
-    }
-    if (!modalColor) {
-      setModalAlert(true);
-      setModalMessage("Color is mandatory");
       return;
     }
 
@@ -105,7 +118,7 @@ const CommentStatusTable = () => {
       const response = await addStatus(newStatus);
       if (response.status === 200 || response.status === 201) {
         getStatusTable(projectId);
-        handleModalClose();
+        handleCloseModal();
       }
     } catch (error) {
       setModalAlert(true);
@@ -113,110 +126,153 @@ const CommentStatusTable = () => {
     }
   };
 
-  const filteredData = tableData?.filter(item =>
+  const handleEditOpen = (index) => {
+    setEditedRowIndex(index);
+    setEditedStatusData(tableData[index]);
+  };
+
+  const handleCloseEdit = () => {
+    setEditedRowIndex(-1);
+    setEditedStatusData({});
+  };
+
+  const handleSave = async () => {
+    try {
+      const response = await addStatus(editedStatusData);
+      if (response.status === 200) {
+        getStatusTable(projectId);
+        handleCloseEdit();
+      }
+    } catch (error) {
+      console.error("Failed to update status:", error);
+    }
+  };
+
+  const handleChange = (field, value) => {
+    setEditedStatusData({
+      ...editedStatusData,
+      [field]: value,
+    });
+  };
+
+  const handleImportStatus = () => setImportStatus(true);
+  const handleCloseImport = () => setImportStatus(false);
+
+  const handleExcelFileChange = (e) => {
+    setSelectedFile(e.target.files[0]);
+  };
+
+  const handleImportClick = async () => {
+    if (selectedFile) {
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        const data = new Uint8Array(e.target.result);
+        const workbook = XLSX.read(data, { type: "array" });
+        const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+        const jsonData = XLSX.utils.sheet_to_json(worksheet);
+
+        const formattedData = jsonData.map(item => ({
+          statusname: item["Status"] || "",
+          color: item["Color"] || "#ffffff",
+          projectId
+        }));
+
+        try {
+          // You would need to implement a bulk import API endpoint
+          // const response = await bulkImportStatuses(formattedData);
+          // if(response.status === 200) {
+          //   getStatusTable(projectId);
+          //   handleCloseImport();
+          // }
+        } catch (error) {
+          console.error("Failed to import statuses:", error);
+        }
+      };
+      reader.readAsArrayBuffer(selectedFile);
+    }
+  };
+
+  const handleDownloadTemplate = () => {
+    const headers = ["Status", "Color"];
+    const worksheet = XLSX.utils.aoa_to_sheet([headers]);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "StatusTemplate");
+    XLSX.writeFile(workbook, "StatusTemplate.xlsx");
+  };
+
+  const filteredData = tableData.filter(item =>
     item.statusname?.toLowerCase()?.includes(searchTerm?.toLowerCase())
   );
 
-  const thStyle = {
-    backgroundColor: "#4d5dbe",
-    color: "white",
-    position: "sticky",
-    top: 0,
-    zIndex: 10,
-    textAlign: "left",
-    padding: "12px 10px",
-    fontWeight: "bold"
-  };
-
-  const iconThStyle = {
-    ...thStyle,
-    width: "120px",
-  };
-
-  const wrapperStyle = {
-    maxHeight: "500px",
-    overflowY: "auto",
-    borderRadius: "4px",
-    boxShadow: "0 2px 4px rgba(0,0,0,0.1)"
-  };
-
   return (
-    <div className="container-fluid px-0">
-      <div style={wrapperStyle} className="rounded shadow-sm">
-        <table className="table table-bordered table-hover mb-0">
+    <div style={{ width: "100%", backgroundColor: "white" }}>
+      <div className="table-container w-100">
+        <table className="linetable w-100">
           <thead>
             <tr>
-              <th style={thStyle}  className="ms-4">Number</th>
-              <th style={thStyle}>Status</th>
-              <th style={thStyle}>Color</th>
-              <th style={iconThStyle}>
-                <div className="d-flex justify-content-around">
-                  <FontAwesomeIcon 
-                    icon={faDownload} 
-                    onClick={handleExport}
-                    style={{ cursor: "pointer" }}
-                    title="Export"
-                  />
-                  <FontAwesomeIcon 
-                    icon={faPlus} 
-                    onClick={handleAdd}
-                    style={{ cursor: "pointer" }}
-                    title="Add Status"
-                  />
-                </div>
+              <th className="wideHead">Number</th>
+              <th className="wideHead">Status</th>
+              <th className="wideHead">Color</th>
+              <th className="tableActionCell">
+                <FontAwesomeIcon 
+                  icon={faDownload} 
+                  title="Export"
+                  onClick={handleExport}
+                  style={{ cursor: "pointer" }}
+                />
+                <FontAwesomeIcon 
+                  icon={faPlus} 
+                  title="Add Status"
+                  onClick={handleAdd}
+                  style={{ cursor: "pointer", marginLeft: "15px" }}
+                />
+                <FontAwesomeIcon 
+                  icon={faDownload} 
+                  title="Import"
+                  onClick={handleImportStatus}
+                  style={{ cursor: "pointer", marginLeft: "15px" }}
+                />
               </th>
             </tr>
             <tr>
-              <td colSpan="4">
+              <th colSpan="4">
                 <input
                   type="text"
-
                   placeholder="Search by status"
-                  className="form-control w-100 bg-white text-dark"
+                  className="form-control"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
+                  style={{ width: "100%", padding: "5px" }}
                 />
-              </td>
+              </th>
             </tr>
           </thead>
           <tbody>
             {filteredData.length > 0 ? (
-              filteredData?.map((item, index) => (
-                <tr 
-                  key={item.number}
-                  onMouseEnter={() => setHoveredRow(item.number)}
-                  onMouseLeave={() => setHoveredRow(null)}
-                >
-                  <td>{index + 1}</td>
-                  <td>{item.statusname}</td>
+              filteredData.map((item, index) => (
+                <tr key={item.number} style={{ color: "black" }}>
+                  <td style={{ backgroundColor: "#f0f0f0" }}>{index + 1}</td>
                   <td>
-                    {item.statusname === "open" ? (
-                      <div className="d-flex align-items-center">
-                        <span>#FF0000</span>
-                        <div
-                          style={{
-                            width: "15px",
-                            height: "15px",
-                            backgroundColor: "#FF0000",
-                            display: "inline-block",
-                            marginLeft: "10px",
-                            borderRadius: "3px",
-                          }}
+                    {editedRowIndex === index ? (
+                      <input
+                        type="text"
+                        value={editedStatusData.statusname || ""}
+                        onChange={(e) => handleChange("statusname", e.target.value)}
+                        style={{ width: "100%" }}
+                      />
+                    ) : (
+                      item.statusname
+                    )}
+                  </td>
+                  <td>
+                    {editedRowIndex === index ? (
+                      <div className="d-flex align-items-center gap-2">
+                        <input
+                          type="color"
+                          value={editedStatusData.color || "#ffffff"}
+                          onChange={(e) => handleChange("color", e.target.value)}
                         />
-                      </div>
-                    ) : item.statusname === "closed" ? (
-                      <div className="d-flex align-items-center">
-                        <span>#00FF00</span>
-                        <div
-                          style={{
-                            width: "15px",
-                            height: "15px",
-                            backgroundColor: "#00FF00",
-                            display: "inline-block",
-                            marginLeft: "10px",
-                            borderRadius: "3px",
-                          }}
-                        />
+                        <span>{editedStatusData.color}</span>
                       </div>
                     ) : (
                       <div className="d-flex align-items-center">
@@ -226,7 +282,6 @@ const CommentStatusTable = () => {
                             width: "15px",
                             height: "15px",
                             backgroundColor: item.color,
-                            display: "inline-block",
                             marginLeft: "10px",
                             borderRadius: "3px",
                           }}
@@ -234,16 +289,38 @@ const CommentStatusTable = () => {
                       </div>
                     )}
                   </td>
-                  <td>
-                    {item.statusname !== "open" && item.statusname !== "closed" && (
-                      <div className="d-flex justify-content-center">
-                        <button
-                          className="btn btn-link p-0"
-                          onClick={() => handleDelete(item.number)}
-                        >
-                          <FontAwesomeIcon icon={faTrash} />
-                        </button>
-                      </div>
+                  <td style={{ backgroundColor: "#f0f0f0" }}>
+                    {editedRowIndex === index ? (
+                      <>
+                        <FontAwesomeIcon
+                          icon={faFloppyDisk}
+                          className="text-success"
+                          onClick={handleSave}
+                          style={{ cursor: "pointer" }}
+                        />
+                        <FontAwesomeIcon
+                          icon={faXmark}
+                          className="text-danger ms-3"
+                          onClick={handleCloseEdit}
+                          style={{ cursor: "pointer" }}
+                        />
+                      </>
+                    ) : (
+                      <>
+                        <FontAwesomeIcon
+                          icon={faPencil}
+                          onClick={() => handleEditOpen(index)}
+                          style={{ cursor: "pointer" }}
+                        />
+                        {item.statusname !== "open" && item.statusname !== "closed" && (
+                          <FontAwesomeIcon
+                            icon={faTrash}
+                            className="ms-3"
+                            onClick={() => handleDelete(item.number)}
+                            style={{ cursor: "pointer" }}
+                          />
+                        )}
+                      </>
                     )}
                   </td>
                 </tr>
@@ -258,75 +335,106 @@ const CommentStatusTable = () => {
           </tbody>
         </table>
       </div>
+
+      {/* Add Status Modal */}
       <Modal
         show={showModal}
-        onHide={handleModalClose}
+        onHide={handleCloseModal}
+        backdrop="static"
         keyboard={false}
-        centered
-        dialogClassName="custom-modal-dialog"
-        contentClassName="custom-modal-content"
+        dialogClassName="custom-modal"
       >
-        <Modal.Header className="custom-modal-header d-flex justify-content-between">
-          <Modal.Title>Add Status</Modal.Title>
-          <p className="text-light cross" onClick={handleModalClose}>
-            <FontAwesomeIcon icon={faTimes} size="lg" className="mt-3" />
-          </p>
-        </Modal.Header>
-
-        <Modal.Body className="custom-modal-body">
-          <div className="form-group">
-            <label>
-              Status <span className="required">*</span>
-            </label>
+        <div className="tag-dialog">
+          <div className="title-dialog">
+            <p className="text-light">Add Status</p>
+            <p className="text-light cross" onClick={handleCloseModal}>
+              <FontAwesomeIcon icon={faTimes} />
+            </p>
+          </div>
+          <div className="dialog-input">
+            <label>Status <span className="required">*</span></label>
             <input
               type="text"
-              ref={statusInputRef}
               value={modalStatus}
               onChange={(e) => setModalStatus(e.target.value)}
-              className="form-control bg-white text-black"
-              placeholder="Enter status"
+              className="form-control"
             />
-          </div>
-
-          <div className="form-group">
-            <label>
-              Color <span className="required">*</span>
-            </label>
-            <div className="d-flex align-items-center gap-3">
+            <label className="mt-3">Color <span className="required">*</span></label>
+            <div className="d-flex align-items-center gap-2">
               <input
                 type="color"
                 value={modalColor}
                 onChange={(e) => setModalColor(e.target.value)}
-                style={{ width: "100px", height: "40px", border: "none" }}
               />
               <span>{modalColor}</span>
-              <div
-                style={{
-                  width: "20px",
-                  height: "20px",
-                  backgroundColor: modalColor,
-                  borderRadius: "4px",
-                }}
+            </div>
+            {modalAlert && (
+              <div className="alert alert-danger mt-3">
+                {modalMessage}
+              </div>
+            )}
+          </div>
+          <div className="dialog-button">
+            <button className="btn btn-secondary" onClick={handleCloseModal}>
+              Cancel
+            </button>
+            <button className="btn btn-dark" onClick={handleModalOk}>
+              Save
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Import Status Modal */}
+      {importStatus && (
+        <Modal
+          show={importStatus}
+          onHide={handleCloseImport}
+          backdrop="static"
+          keyboard={false}
+          dialogClassName="custom-modal"
+        >
+          <div className="tag-dialog">
+            <div className="title-dialog">
+              <p className="text-light">Import Status</p>
+              <p className="text-light cross" onClick={handleCloseImport}>
+                <FontAwesomeIcon icon={faTimes} />
+              </p>
+            </div>
+            <div className="dialog-input">
+              <label>File</label>
+              <input
+                type="file"
+                onChange={handleExcelFileChange}
+                accept=".xlsx, .xls"
               />
+              <a
+                onClick={handleDownloadTemplate}
+                style={{ cursor: "pointer", color: "#00BFFF" }}
+              >
+                Download template
+              </a>
+            </div>
+            <div className="dialog-button">
+              <button className="btn btn-secondary" onClick={handleCloseImport}>
+                Cancel
+              </button>
+              <button className="btn btn-dark" onClick={handleImportClick}>
+                Upload
+              </button>
             </div>
           </div>
+        </Modal>
+      )}
 
-          {modalAlert && (
-            <div className="custom-alert">
-              {modalMessage}
-            </div>
-          )}
-        </Modal.Body>
-
-        <Modal.Footer className="custom-modal-footer">
-          <button className="btn btn-secondary" onClick={handleModalClose}>
-            Cancel
-          </button>
-          <button className="btn btn-dark" onClick={handleModalOk}>
-            OK
-          </button>
-        </Modal.Footer>
-      </Modal>
+      {/* Delete Confirmation */}
+      {showConfirm && (
+        <DeleteConfirm
+          message="Are you sure you want to delete this status?"
+          onConfirm={handleConfirmDelete}
+          onCancel={handleCancelDelete}
+        />
+      )}
     </div>
   );
 };

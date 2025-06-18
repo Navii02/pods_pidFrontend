@@ -37,6 +37,8 @@ import {
   faLineChart,
   faPencil,
   faBook,
+  faBoxArchive,
+  faBoxesStacked,
 } from "@fortawesome/free-solid-svg-icons";
 
 function Sidebar({
@@ -254,6 +256,12 @@ function Sidebar({
       name: "Bulk Model Import", 
       path: "/bulk-model-import",
       activeLink: "bulk"
+    },
+          { 
+      icon: faBoxesStacked, 
+      name: "Assign Tags Model", 
+      path: "/assign-tag-models",
+      activeLink: "Model"
     },
     {
       icon: faSliders,

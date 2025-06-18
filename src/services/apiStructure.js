@@ -1,6 +1,7 @@
 import axios from "axios";
 
-export const commonApi = async (httpRequest, url, reqBody, reqHeader = {}, params) => {
+export const commonApi = async (httpRequest, url, reqBody, reqHeaderRaw, params) => {
+  const reqHeader = reqHeaderRaw || {};
   const { onUploadProgress, ...headers } = reqHeader;
 
   const reqConfig = {

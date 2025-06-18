@@ -140,7 +140,7 @@ function CommentModal({
     };
 
     console.log("Saving Comment:", data);
-    window.api.send("add-comment", data);
+
 
     setComment("");
     setStatus("");
