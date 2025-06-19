@@ -12,7 +12,6 @@ function EntityRegister({
   entityType,
   parentEntity,
   onSuccess,
-  expandedSystem
 }) {
   const [code, setCode] = useState("");
   const [name, setName] = useState("");

@@ -10,12 +10,13 @@ import {
   calculatePlanAngle,
 } from "../Utils/GeometryCalculation";
 import { getLineList } from "../services/TagApi";
-import {  getequipmentList } from '../services/TagApi';
+import { getequipmentList } from "../services/TagApi";
 
 class WebWorkerTilesetLODManager {
-  constructor(scene, camera) {
+  constructor(scene, camera, highlightRefs = null) {
     this.scene = scene;
     this.camera = camera;
+    this.highlightRefs = highlightRefs;
     this.maxDistance = 0;
     this.threshold30Percent = 0;
     this.threshold80Percent = 0;
@@ -262,9 +263,7 @@ class WebWorkerTilesetLODManager {
         worker.onerror = (error) => {
           console.error(`Worker error for depth ${depth}:`, error);
         };
-      
       });
-
     } catch (error) {
       console.error("Failed to initialize web workers:", error);
       // Fallback to main thread loading
@@ -323,7 +322,7 @@ class WebWorkerTilesetLODManager {
             Math.max(0, this.workerLoadCounts.get(depth) - 1)
           );
         }
-       
+
         this.pendingRequests.delete(requestId);
         break;
 
@@ -425,7 +424,6 @@ class WebWorkerTilesetLODManager {
         break;
 
       case "BUFFER_MULTIPLIER_SET":
-       
         break;
 
       // Distance calculation worker messages
@@ -477,7 +475,6 @@ class WebWorkerTilesetLODManager {
     );
     if (allReady && !this.allWorkersReady) {
       this.allWorkersReady = true;
-     
 
       // Initialize distance worker with node data - but don't start loading yet
       // Loading will start when we receive DISTANCE_WORKER_INITIALIZED message
@@ -734,8 +731,6 @@ class WebWorkerTilesetLODManager {
       this.distanceWorkerStats.lastCalculationTime = statistics.calculationTime;
       this.distanceWorkerStats.averageCalculationTime =
         statistics.averageCalculationTime;
-
-     
     }
   }
 
@@ -752,7 +747,6 @@ class WebWorkerTilesetLODManager {
     });
 
     if (updatedCount > 0) {
-      
     }
   }
 
@@ -872,8 +866,6 @@ class WebWorkerTilesetLODManager {
   handleFrustumCullingResults(results, stats) {
     const { visible, hidden, dispose, reload } = results;
 
-   
-
     // Update visibility states
     visible.forEach((nodeNumber) => {
       this.nodeVisibilityStates.set(nodeNumber, "visible");
@@ -902,7 +894,6 @@ class WebWorkerTilesetLODManager {
           this.disposedByFrustum.add(nodeNumber);
         });
         this.unloadMeshes(filteredDispose);
-       
       }
     }
 
@@ -922,7 +913,6 @@ class WebWorkerTilesetLODManager {
               center
             );
             this.addToLoadingQueue(nodeNumber, depth, distance * 0.5); // Higher priority for reload
-           
           }
         }
       });
@@ -931,7 +921,6 @@ class WebWorkerTilesetLODManager {
 
   // Handle mesh disposal completion
   handleMeshDisposed(requestId, nodeNumber, priority) {
-  
     this.pendingRequests.delete(requestId);
 
     // Additional cleanup if needed
@@ -941,8 +930,6 @@ class WebWorkerTilesetLODManager {
 
   // Handle batch disposal completion
   handleBatchDisposed(requestId, results, stats) {
-  
-
     results.forEach((result) => {
       if (result.success) {
       } else {
@@ -977,8 +964,6 @@ class WebWorkerTilesetLODManager {
             // Check if mesh should be visible based on current camera position
             const shouldBeVisible = this.shouldMeshBeVisible(nodeNumber, depth);
             mesh.isVisible = shouldBeVisible;
-
-            
           }
         } catch (error) {
           console.error(`Error creating mesh for node ${nodeNumber}:`, error);
@@ -1053,8 +1038,6 @@ class WebWorkerTilesetLODManager {
       queue.sort((a, b) => a.priority - b.priority);
       queue.splice(30); // Keep top 30 priority items
     }
-
-    
   }
 
   isNodeInQueue(nodeNumber, depth) {
@@ -1154,8 +1137,6 @@ class WebWorkerTilesetLODManager {
       requestId,
       priority,
     });
-
-   
   }
 
   // MODIFIED: Improved queue processor with frame budget
@@ -1296,8 +1277,6 @@ class WebWorkerTilesetLODManager {
       urgent: isUrgent,
       timestamp: performance.now(),
     });
-
-   
   }
 
   shouldLoadNode(nodeNumber, depth) {
@@ -1331,10 +1310,8 @@ class WebWorkerTilesetLODManager {
 
   // Load all depth 2 meshes immediately (no distance checking)
   async loadAllDepth2Meshes() {
-
     try {
       const depth2Nodes = this.getNodesAtDepth(2);
-    
 
       const worker = this.workers.get(2);
       if (!worker) {
@@ -1358,7 +1335,6 @@ class WebWorkerTilesetLODManager {
         timestamp: performance.now(),
       });
 
-     
       worker.postMessage({
         type: "PRELOAD_BATCH",
         nodeNumbers: depth2Nodes,
@@ -1371,9 +1347,6 @@ class WebWorkerTilesetLODManager {
 
   handleBatchLoaded(data) {
     const { requestId, results, depth, stats } = data;
-
-   
-   
 
     // Process each result using for...of to preserve this context
     const processResults = async () => {
@@ -1411,7 +1384,6 @@ class WebWorkerTilesetLODManager {
       if (depth === 2) {
         this.depth2LoadedInitially = true;
         this.loadedDepths.add(2);
-        
       }
     };
 
@@ -1465,7 +1437,6 @@ class WebWorkerTilesetLODManager {
 
     const existingMesh = this.activeMeshes.get(nodeNumber);
     if (existingMesh && this.nodeDepths.get(nodeNumber) === depth) {
-      
       return existingMesh;
     }
 
@@ -1588,11 +1559,13 @@ class WebWorkerTilesetLODManager {
     this.activeMeshes.set(nodeNumber, mesh);
     this.loadedNodeNumbers.add(nodeNumber);
 
-   
     return mesh;
   }
 
   addMeshUtilityMethods(mesh) {
+    // Store reference to the LOD manager for access in mesh methods
+    const lodManager = this;
+
     // Add click detection function
     mesh.getClickedOriginalMesh = function (faceId) {
       const mappingInfo = this.findOriginalMeshFromFace(
@@ -1638,48 +1611,122 @@ class WebWorkerTilesetLODManager {
       return null;
     };
 
-    // Enhanced highlight function
+    // UPDATED: Enhanced highlight function with proper state tracking
     mesh.highlightOriginalMesh = function (meshId) {
+      console.log("🎯 Highlighting mesh:", meshId);
+
       const mapping = this.metadata.vertexMappings.find(
         (m) => m.meshId === meshId
       );
-      if (!mapping) return;
 
+      if (!mapping) {
+        console.log("❌ No mapping found for meshId:", meshId);
+        return;
+      }
+
+      console.log("✅ Found mapping:", mapping);
+
+      // Store reference to currently highlighted mesh and meshId using LOD manager refs
+      if (lodManager.highlightRefs) {
+        lodManager.highlightRefs.currentHighlightedMeshRef.current = this;
+        lodManager.highlightRefs.currentHighlightedMeshIdRef.current = meshId;
+        console.log("📝 Stored current highlighted mesh:", meshId);
+      }
+
+      // Store original material if not already stored
+      if (!this._originalMaterial) {
+        this._originalMaterial = this.material;
+      }
+
+      // Apply highlight using vertex colors
+      this.highlightWithVertexColors(mapping);
+    };
+
+    // UPDATED: Improved vertex color highlighting that preserves originals
+    mesh.highlightWithVertexColors = function (mapping) {
+      const positionData = this.getVerticesData(
+        BABYLON.VertexBuffer.PositionKind
+      );
+      const vertexCount = positionData.length / 3;
+
+      // Store original vertex colors if they exist, or create white colors
       let colors = this.getVerticesData(BABYLON.VertexBuffer.ColorKind);
 
-      // If no colors exist, create them
       if (!colors) {
-        const vertexCount =
-          this.getVerticesData(BABYLON.VertexBuffer.PositionKind).length / 3;
+        // No existing vertex colors - create white colors to preserve material
         colors = new Float32Array(vertexCount * 4);
+        for (let i = 0; i < vertexCount; i++) {
+          colors[i * 4 + 0] = 1.0; // R
+          colors[i * 4 + 1] = 1.0; // G
+          colors[i * 4 + 2] = 1.0; // B
+          colors[i * 4 + 3] = 1.0; // A
+        }
       }
 
-      // Reset all to default color
-      for (let i = 0; i < colors.length; i += 4) {
-        colors[i] = 1; // R
-        colors[i + 1] = 0.3; // G (reddish for default)
-        colors[i + 2] = 0.3; // B
-        colors[i + 3] = 1; // A
+      // Store original colors for restoration (only once per mesh)
+      if (!this._originalVertexColors) {
+        this._originalVertexColors = colors.slice(); // Copy array
+        console.log("💾 Stored original vertex colors for restoration");
       }
 
-      // Highlight selected range in yellow
-      for (
-        let i = mapping.start * 4;
-        i < (mapping.start + mapping.count) * 4;
-        i += 4
-      ) {
-        colors[i] = 1; // R (yellow highlight)
-        colors[i + 1] = 1; // G
-        colors[i + 2] = 0; // B
-        colors[i + 3] = 1; // A
+      // Apply highlight to specific vertex range
+      for (let i = mapping.start; i < mapping.start + mapping.count; i++) {
+        if (i < vertexCount) {
+          colors[i * 4 + 0] = 1.0; // R - Yellow highlight
+          colors[i * 4 + 1] = 1.0; // G
+          colors[i * 4 + 2] = 0.0; // B
+          colors[i * 4 + 3] = 1.0; // A
+        }
       }
 
-      this.updateVerticesData(BABYLON.VertexBuffer.ColorKind, colors);
+      this.setVerticesData(BABYLON.VertexBuffer.ColorKind, colors, true);
 
-      // Enable vertex colors on material if not already enabled
-      if (this.material && !this.material.useVertexColors) {
+      if (this.material) {
         this.material.useVertexColors = true;
       }
+
+      console.log("🎨 Applied vertex color highlight");
+    };
+
+    // UPDATED: Improved remove highlight function
+    mesh.removeHighlight = function () {
+      console.log("🧹 Removing highlight from mesh:", this.name);
+
+      // Remove overlay if exists
+      if (this._highlightOverlay) {
+        this._highlightOverlay.dispose();
+        this._highlightOverlay = null;
+        console.log("🗑️ Highlight overlay removed");
+      }
+
+      // Restore original vertex colors for the ENTIRE mesh
+      if (this._originalVertexColors) {
+        console.log("🔄 Restoring original vertex colors for entire mesh");
+        this.setVerticesData(
+          BABYLON.VertexBuffer.ColorKind,
+          this._originalVertexColors,
+          true
+        );
+        console.log("🔄 Original vertex colors restored");
+
+        // Clear the stored original colors so they can be re-captured for the next highlight
+        this._originalVertexColors = null;
+      } else if (this.getVerticesData(BABYLON.VertexBuffer.ColorKind)) {
+        // Remove vertex colors entirely to restore material color
+        this.removeVerticesData(BABYLON.VertexBuffer.ColorKind);
+        if (this.material) {
+          this.material.useVertexColors = false;
+        }
+        console.log("🔄 Vertex colors removed, material color restored");
+      }
+
+      // Restore original material
+      if (this._originalMaterial) {
+        this.material = this._originalMaterial;
+        console.log("🔄 Original material restored");
+      }
+
+      console.log("✅ Highlight removal completed");
     };
 
     // Enhanced clear highlight function
@@ -2025,8 +2072,6 @@ class WebWorkerTilesetLODManager {
     this.maxDistance = maxDistance;
     this.threshold30Percent = maxDistance * 0.5;
     this.threshold80Percent = maxDistance * 0.9;
-
-  
   }
 
   async processOctreeNodes(rootBlock, depth = 0, parent = null) {
@@ -2066,7 +2111,7 @@ class WebWorkerTilesetLODManager {
   async initWithOctreeData(octreeData) {
     try {
       await this.processOctreeNodes(octreeData.data.blockHierarchy);
-     
+
       return true;
     } catch (error) {
       console.error("Error initializing progressive LOD Manager:", error);
@@ -2321,7 +2366,6 @@ class WebWorkerTilesetLODManager {
     worker.postMessage({
       type: "CLEAR_DISPOSAL_CACHE",
     });
-
   }
 
   // Frustum culling control methods
@@ -2418,13 +2462,10 @@ class WebWorkerTilesetLODManager {
       this.meshCreationBudget = Math.min(12, this.meshCreationBudget + 1);
       this.maxMeshesPerFrame = Math.min(3, this.maxMeshesPerFrame + 1);
     }
-
-   
   }
 
   // MODIFIED: Enhanced dispose method
   dispose() {
-
     // Stop frame scheduler
     this.isSchedulerRunning = false;
 
@@ -2532,7 +2573,20 @@ class SpatialOptimization {
   }
 }
 
-const BabylonLODManager = ({mode,viewMode,setViewMode,leftNavVisible,showMeasure,showWireFrame,setShowWireFrame}) => {
+const BabylonLODManager = ({
+  mode,
+  viewMode,
+  setViewMode,
+  leftNavVisible,
+  showMeasure,
+  showWireFrame,
+  setShowWireFrame,
+  selectedItem,
+  setSelectedItem,
+  setActiveButton,
+}) => {
+  const currentHighlightedMeshRef = useRef(null);
+  const currentHighlightedMeshIdRef = useRef(null);
   const canvasRef = useRef(null);
   const sceneRef = useRef(null);
   const engineRef = useRef(null);
@@ -2597,41 +2651,53 @@ const BabylonLODManager = ({mode,viewMode,setViewMode,leftNavVisible,showMeasure
     nodeCounter: 1,
   });
 
-   const [allEquipementList, setallEquipementList]= useState([])
-        const projectString = sessionStorage.getItem("selectedProject");
-        const project = projectString ? JSON.parse(projectString) : null;
-        const projectId = project?.projectId;
-        const fetchEquipmentlist =async(projectId)=>{
-          const response = await getequipmentList(projectId)
-          if(response.status===200)
-          {
-            console.log(response.data);
-            setallEquipementList(response.data)
-          }
-        }
-  
-    useEffect(() => {
-  fetchEquipmentlist(projectId)
-    }, []);
+  // Selection mode state
+  const [selectedItemName, setSelectedItemName] = useState("");
+  const [backgroundColorTag, setBackgroundColorTag] = useState({});
+  const [tagInfo, setTagInfo] = useState({});
+  const [fileInfoDetails, setFileInfoDetails] = useState(null);
+  const [commentPosition, setCommentPosition] = useState(null);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [menuPosition, setMenuPosition] = useState({
+    top: 0,
+    left: 0,
+    bottom: "auto",
+  });
+  const [rightClickCoordinates, setRightClickCoordinates] = useState({
+    x: 0,
+    y: 0,
+  });
+  const [hoveredIndex, setHoveredIndex] = useState(null);
 
+  const [allEquipementList, setallEquipementList] = useState([]);
+  const projectString = sessionStorage.getItem("selectedProject");
+  const project = projectString ? JSON.parse(projectString) : null;
+  const projectId = project?.projectId;
+  const fetchEquipmentlist = async (projectId) => {
+    const response = await getequipmentList(projectId);
+    if (response.status === 200) {
+      console.log(response.data);
+      setallEquipementList(response.data);
+    }
+  };
 
-      const [allLineList,setAllLinelist]=useState([])
-    
-       const fetchLineList  = async(projectId)=>{
-        const response = await getLineList(projectId)
-        if(response.status===200){
-        console.log(response.data);
+  useEffect(() => {
+    fetchEquipmentlist(projectId);
+  }, []);
 
-      setAllLinelist(response.data)
-    
-        }
-       }
-      useEffect(() => {
-        fetchLineList(projectId)
-     
-      }, []);
-    
-  
+  const [allLineList, setAllLinelist] = useState([]);
+
+  const fetchLineList = async (projectId) => {
+    const response = await getLineList(projectId);
+    if (response.status === 200) {
+      console.log(response.data);
+
+      setAllLinelist(response.data);
+    }
+  };
+  useEffect(() => {
+    fetchLineList(projectId);
+  }, []);
 
   const [performanceStats, setPerformanceStats] = useState({
     frameTimeTracker: { meshCreation: 0, cameraUpdate: 0, lodUpdate: 0 },
@@ -2646,31 +2712,30 @@ const BabylonLODManager = ({mode,viewMode,setViewMode,leftNavVisible,showMeasure
   const [showPerformancePanel, setShowPerformancePanel] = useState(false);
   const fpsRef = useRef({ frames: 0, lastTime: performance.now() });
   const [preVRCameraState, setPreVRCameraState] = useState(null);
- const [showMeasureDetails, setShowMeasureDetails] = useState(false);
-      const [showMeasureDetailsAbove, setshowMeasureDetailsAbove] =
-        useState(false);
-      const [allLabels, setAllLabels] = useState([]);
+  const [showMeasureDetails, setShowMeasureDetails] = useState(false);
+  const [showMeasureDetailsAbove, setshowMeasureDetailsAbove] = useState(false);
+  const [allLabels, setAllLabels] = useState([]);
 
-      const [point1, setPoint1] = useState(null);
-      const [point2, setPoint2] = useState(null);
-      const [distance, setDistance] = useState(null);
-      const [differences, setDifferences] = useState({
-        diffX: null,
-        diffY: null,
-        diffZ: null,
-      });
-      const [angles, setAngles] = useState({
-        horizontalAngle: null,
-        verticalAngle: null,
-      });
+  const [point1, setPoint1] = useState(null);
+  const [point2, setPoint2] = useState(null);
+  const [distance, setDistance] = useState(null);
+  const [differences, setDifferences] = useState({
+    diffX: null,
+    diffY: null,
+    diffZ: null,
+  });
+  const [angles, setAngles] = useState({
+    horizontalAngle: null,
+    verticalAngle: null,
+  });
 
-        const measurementRef = useRef({
-        pointA: null,
-        pointB: null,
-        line: null,
-        text: null,
-        markers: [],
-      });
+  const measurementRef = useRef({
+    pointA: null,
+    pointB: null,
+    line: null,
+    text: null,
+    markers: [],
+  });
   // Update the tracking variables to match Fbxload.js structure
   let nodesAtDepth = new Array(MAX_DEPTH + 1).fill(0);
   let nodeNumbersByDepth = Array.from({ length: MAX_DEPTH + 1 }, () => []);
@@ -2680,7 +2745,6 @@ const BabylonLODManager = ({mode,viewMode,setViewMode,leftNavVisible,showMeasure
   let nodeDepths = new Map();
   let nodeParents = new Map();
   let nodeCounter = 1;
-
 
   // Create scene function converted to React
   const createScene = useCallback(() => {
@@ -2842,222 +2906,240 @@ const BabylonLODManager = ({mode,viewMode,setViewMode,leftNavVisible,showMeasure
     }
   }, [forceVRMode]);
 
-const createWebXRCamera = useCallback(async (scene, currentCamera) => {
-  try {
-    console.log('Setting up WebXR camera...');
-    
-    // STEP 1: Store current camera state BEFORE any changes
-    const cameraState = {
-      position: currentCamera.position.clone(),
-      target: currentCamera.target ? currentCamera.target.clone() : currentCamera.getTarget().clone(),
-      rotation: currentCamera.rotation ? currentCamera.rotation.clone() : null,
-      alpha: currentCamera.alpha || 0,
-      beta: currentCamera.beta || 0,
-      radius: currentCamera.radius || 0,
-      fov: currentCamera.fov || Math.PI/4,
-      type: currentCamera.constructor.name
-    };
-    
-    setPreVRCameraState(cameraState);
-    console.log('Stored camera state:', cameraState);
-    
-    // Store current camera as fallback
-    fallbackCameraRef.current = currentCamera;
-    
-    // For testing without headset, use a mock XR experience
-    if (forceVRMode && !('xr' in navigator)) {
-      return createMockVRExperienceWithPosition(scene, cameraState);
-    }
-    
-    // STEP 2: Create XR experience
-    const xrHelper = await scene.createDefaultXRExperienceAsync({
-      floorMeshes: [],
-      disableTeleportation: false,
-      useCustomVRButton: false,
-      // Try to disable automatic position reset
-      optionalFeatures: ['local-floor', 'bounded-floor']
-    });
-    
-    xrHelperRef.current = xrHelper;
-    
-    // STEP 3: Force position IMMEDIATELY after creation
-    if (xrHelper.input.xrCamera) {
-      console.log('Setting XR camera position immediately');
-      setWebXRCameraPositionImmediate(xrHelper, cameraState);
-    }
-    
-    // STEP 4: Set up event handlers with position forcing
-    xrHelper.baseExperience.onInitialXRPoseSetObservable.add(() => {
-      console.log('XR pose set - forcing camera position again');
-      setWebXRCameraPositionImmediate(xrHelper, cameraState);
-    });
-    
-    xrHelper.baseExperience.onStateChangedObservable.add((state) => {
-      switch (state) {
-        case BABYLON.WebXRState.IN_XR:
-          console.log('Entered XR - final position set');
-          setIsInXR(true);
-          // Force position one more time when fully in XR
-          setTimeout(() => {
-            setWebXRCameraPositionImmediate(xrHelper, cameraState);
-          }, 100);
-          
-          // Update LOD manager with XR camera
-          if (lodManagerRef.current && xrHelper.input.xrCamera) {
-            lodManagerRef.current.camera = xrHelper.input.xrCamera;
-            lodManagerRef.current.lastCameraPosition = null;
-            lodManagerRef.current.update();
-          }
-          break;
-          
-        case BABYLON.WebXRState.EXITING_XR:
-          console.log('Exiting XR - restoring camera position');
-          setIsInXR(false);
-          restoreCameraState(scene, cameraState);
-          break;
-          
-        case BABYLON.WebXRState.NOT_IN_XR:
-          console.log('Not in XR');
-          setIsInXR(false);
-          break;
-      }
-    });
-    
-    return xrHelper;
-    
-  } catch (error) {
-    console.error('Failed to create WebXR camera:', error);
-    
-    // Fallback to mock VR for testing
-    if (forceVRMode && preVRCameraState) {
-      return createMockVRExperienceWithPosition(scene, preVRCameraState);
-    }
-    
-    throw error;
-  }
-}, [forceVRMode]);
+  const createWebXRCamera = useCallback(
+    async (scene, currentCamera) => {
+      try {
+        console.log("Setting up WebXR camera...");
 
-// Improved position setting function
-const setWebXRCameraPositionImmediate = useCallback((xrHelper, cameraState) => {
-  if (!xrHelper.input.xrCamera || !cameraState) {
-    console.warn('Cannot set XR camera position: missing camera or state');
-    return;
-  }
-  
-  try {
-    const xrCamera = xrHelper.input.xrCamera;
-    
-    console.log('Setting XR camera position to:', cameraState.position);
-    console.log('Setting XR camera target to:', cameraState.target);
-    
-    // Set position directly
-    xrCamera.position.copyFrom(cameraState.position);
-    
-    // Set target
-    xrCamera.setTarget(cameraState.target);
-    
-    // Copy other properties
-    xrCamera.minZ = 0.1;
-    xrCamera.maxZ = 1000000;
-    xrCamera.fov = cameraState.fov;
-    
-    // Force update
-    xrCamera.getViewMatrix(true); // Force matrix update
-    
-    console.log('XR camera positioned at:', xrCamera.position);
-    console.log('XR camera target:', xrCamera.getTarget());
-    
-  } catch (error) {
-    console.error('Error setting XR camera position:', error);
-  }
-}, []);
+        // STEP 1: Store current camera state BEFORE any changes
+        const cameraState = {
+          position: currentCamera.position.clone(),
+          target: currentCamera.target
+            ? currentCamera.target.clone()
+            : currentCamera.getTarget().clone(),
+          rotation: currentCamera.rotation
+            ? currentCamera.rotation.clone()
+            : null,
+          alpha: currentCamera.alpha || 0,
+          beta: currentCamera.beta || 0,
+          radius: currentCamera.radius || 0,
+          fov: currentCamera.fov || Math.PI / 4,
+          type: currentCamera.constructor.name,
+        };
 
-// Mock VR experience with preserved position
-const createMockVRExperienceWithPosition = useCallback((scene, cameraState) => {
-  console.log('Creating mock VR experience with preserved position');
-  
-  // Create camera with EXACT same position
-  const mockVRCamera = new BABYLON.UniversalCamera("mockVRCamera", cameraState.position.clone(), scene);
-  mockVRCamera.setTarget(cameraState.target.clone());
-  mockVRCamera.fov = cameraState.fov;
-  mockVRCamera.minZ = 0.1;
-  mockVRCamera.maxZ = 1000000;
-  
-  // Set as active camera
-  scene.activeCamera = mockVRCamera;
-  mockVRCamera.attachControl(canvasRef.current, false);
-  
-  console.log('Mock VR camera positioned at:', mockVRCamera.position);
-  console.log('Mock VR camera target:', mockVRCamera.getTarget());
-  
-  setIsInXR(true);
-  setCameraType("webxr");
-  
-  return {
-    input: { xrCamera: mockVRCamera },
-    baseExperience: {
-      onStateChangedObservable: {
-        add: (callback) => {
-          setTimeout(() => callback(BABYLON.WebXRState.ENTERING_XR), 100);
-          setTimeout(() => callback(BABYLON.WebXRState.IN_XR), 500);
+        setPreVRCameraState(cameraState);
+        console.log("Stored camera state:", cameraState);
+
+        // Store current camera as fallback
+        fallbackCameraRef.current = currentCamera;
+
+        // For testing without headset, use a mock XR experience
+        if (forceVRMode && !("xr" in navigator)) {
+          return createMockVRExperienceWithPosition(scene, cameraState);
         }
+
+        // STEP 2: Create XR experience
+        const xrHelper = await scene.createDefaultXRExperienceAsync({
+          floorMeshes: [],
+          disableTeleportation: false,
+          useCustomVRButton: false,
+          // Try to disable automatic position reset
+          optionalFeatures: ["local-floor", "bounded-floor"],
+        });
+
+        xrHelperRef.current = xrHelper;
+
+        // STEP 3: Force position IMMEDIATELY after creation
+        if (xrHelper.input.xrCamera) {
+          console.log("Setting XR camera position immediately");
+          setWebXRCameraPositionImmediate(xrHelper, cameraState);
+        }
+
+        // STEP 4: Set up event handlers with position forcing
+        xrHelper.baseExperience.onInitialXRPoseSetObservable.add(() => {
+          console.log("XR pose set - forcing camera position again");
+          setWebXRCameraPositionImmediate(xrHelper, cameraState);
+        });
+
+        xrHelper.baseExperience.onStateChangedObservable.add((state) => {
+          switch (state) {
+            case BABYLON.WebXRState.IN_XR:
+              console.log("Entered XR - final position set");
+              setIsInXR(true);
+              // Force position one more time when fully in XR
+              setTimeout(() => {
+                setWebXRCameraPositionImmediate(xrHelper, cameraState);
+              }, 100);
+
+              // Update LOD manager with XR camera
+              if (lodManagerRef.current && xrHelper.input.xrCamera) {
+                lodManagerRef.current.camera = xrHelper.input.xrCamera;
+                lodManagerRef.current.lastCameraPosition = null;
+                lodManagerRef.current.update();
+              }
+              break;
+
+            case BABYLON.WebXRState.EXITING_XR:
+              console.log("Exiting XR - restoring camera position");
+              setIsInXR(false);
+              restoreCameraState(scene, cameraState);
+              break;
+
+            case BABYLON.WebXRState.NOT_IN_XR:
+              console.log("Not in XR");
+              setIsInXR(false);
+              break;
+          }
+        });
+
+        return xrHelper;
+      } catch (error) {
+        console.error("Failed to create WebXR camera:", error);
+
+        // Fallback to mock VR for testing
+        if (forceVRMode && preVRCameraState) {
+          return createMockVRExperienceWithPosition(scene, preVRCameraState);
+        }
+
+        throw error;
       }
     },
-    dispose: () => mockVRCamera.dispose()
-  };
-}, []);
+    [forceVRMode]
+  );
 
-// Function to restore camera state when exiting VR
-const restoreCameraState = useCallback((scene, cameraState) => {
-  if (!cameraState || !fallbackCameraRef.current) {
-    console.warn('Cannot restore camera state: missing state or fallback camera');
-    return;
-  }
-  
-  try {
-    const camera = fallbackCameraRef.current;
-    
-    console.log('Restoring camera to position:', cameraState.position);
-    console.log('Restoring camera target:', cameraState.target);
-    
-    // Restore position and target
-    if (camera instanceof BABYLON.ArcRotateCamera) {
-      camera.setTarget(cameraState.target);
-      camera.alpha = cameraState.alpha;
-      camera.beta = cameraState.beta;
-      camera.radius = cameraState.radius;
-    } else if (camera instanceof BABYLON.UniversalCamera) {
-      camera.position.copyFrom(cameraState.position);
-      camera.setTarget(cameraState.target);
-    }
-    
-    // Set as active camera
-    scene.activeCamera = camera;
-    cameraRef.current = camera;
-    
-    // Ensure camera control is properly attached
-    if (canvasRef.current) {
-      camera.attachControl(canvasRef.current, false);
-    }
-    
-    // Update camera type
-    setCameraType(cameraState.type.includes('ArcRotate') ? "orbit" : "fly");
-    
-    // Update LOD manager
-    if (lodManagerRef.current) {
-      lodManagerRef.current.camera = camera;
-      lodManagerRef.current.lastCameraPosition = null;
-      lodManagerRef.current.update();
-    }
-    
-    console.log('Camera state restored successfully');
-    
-  } catch (error) {
-    console.error('Error restoring camera state:', error);
-    createEmergencyCamera(scene);
-  }
-}, [createEmergencyCamera]);
+  // Improved position setting function
+  const setWebXRCameraPositionImmediate = useCallback(
+    (xrHelper, cameraState) => {
+      if (!xrHelper.input.xrCamera || !cameraState) {
+        console.warn("Cannot set XR camera position: missing camera or state");
+        return;
+      }
 
+      try {
+        const xrCamera = xrHelper.input.xrCamera;
+
+        console.log("Setting XR camera position to:", cameraState.position);
+        console.log("Setting XR camera target to:", cameraState.target);
+
+        // Set position directly
+        xrCamera.position.copyFrom(cameraState.position);
+
+        // Set target
+        xrCamera.setTarget(cameraState.target);
+
+        // Copy other properties
+        xrCamera.minZ = 0.1;
+        xrCamera.maxZ = 1000000;
+        xrCamera.fov = cameraState.fov;
+
+        // Force update
+        xrCamera.getViewMatrix(true); // Force matrix update
+
+        console.log("XR camera positioned at:", xrCamera.position);
+        console.log("XR camera target:", xrCamera.getTarget());
+      } catch (error) {
+        console.error("Error setting XR camera position:", error);
+      }
+    },
+    []
+  );
+
+  // Mock VR experience with preserved position
+  const createMockVRExperienceWithPosition = useCallback(
+    (scene, cameraState) => {
+      console.log("Creating mock VR experience with preserved position");
+
+      // Create camera with EXACT same position
+      const mockVRCamera = new BABYLON.UniversalCamera(
+        "mockVRCamera",
+        cameraState.position.clone(),
+        scene
+      );
+      mockVRCamera.setTarget(cameraState.target.clone());
+      mockVRCamera.fov = cameraState.fov;
+      mockVRCamera.minZ = 0.1;
+      mockVRCamera.maxZ = 1000000;
+
+      // Set as active camera
+      scene.activeCamera = mockVRCamera;
+      mockVRCamera.attachControl(canvasRef.current, false);
+
+      console.log("Mock VR camera positioned at:", mockVRCamera.position);
+      console.log("Mock VR camera target:", mockVRCamera.getTarget());
+
+      setIsInXR(true);
+      setCameraType("webxr");
+
+      return {
+        input: { xrCamera: mockVRCamera },
+        baseExperience: {
+          onStateChangedObservable: {
+            add: (callback) => {
+              setTimeout(() => callback(BABYLON.WebXRState.ENTERING_XR), 100);
+              setTimeout(() => callback(BABYLON.WebXRState.IN_XR), 500);
+            },
+          },
+        },
+        dispose: () => mockVRCamera.dispose(),
+      };
+    },
+    []
+  );
+
+  // Function to restore camera state when exiting VR
+  const restoreCameraState = useCallback(
+    (scene, cameraState) => {
+      if (!cameraState || !fallbackCameraRef.current) {
+        console.warn(
+          "Cannot restore camera state: missing state or fallback camera"
+        );
+        return;
+      }
+
+      try {
+        const camera = fallbackCameraRef.current;
+
+        console.log("Restoring camera to position:", cameraState.position);
+        console.log("Restoring camera target:", cameraState.target);
+
+        // Restore position and target
+        if (camera instanceof BABYLON.ArcRotateCamera) {
+          camera.setTarget(cameraState.target);
+          camera.alpha = cameraState.alpha;
+          camera.beta = cameraState.beta;
+          camera.radius = cameraState.radius;
+        } else if (camera instanceof BABYLON.UniversalCamera) {
+          camera.position.copyFrom(cameraState.position);
+          camera.setTarget(cameraState.target);
+        }
+
+        // Set as active camera
+        scene.activeCamera = camera;
+        cameraRef.current = camera;
+
+        // Ensure camera control is properly attached
+        if (canvasRef.current) {
+          camera.attachControl(canvasRef.current, false);
+        }
+
+        // Update camera type
+        setCameraType(cameraState.type.includes("ArcRotate") ? "orbit" : "fly");
+
+        // Update LOD manager
+        if (lodManagerRef.current) {
+          lodManagerRef.current.camera = camera;
+          lodManagerRef.current.lastCameraPosition = null;
+          lodManagerRef.current.update();
+        }
+
+        console.log("Camera state restored successfully");
+      } catch (error) {
+        console.error("Error restoring camera state:", error);
+        createEmergencyCamera(scene);
+      }
+    },
+    [createEmergencyCamera]
+  );
 
   const TestingControls = () => (
     <div
@@ -3307,17 +3389,16 @@ const restoreCameraState = useCallback((scene, cameraState) => {
     [createOrbitCamera, checkXRSupport]
   );
 
-  
   // Add this useEffect in BabylonLODManager after the existing useEffects
-useEffect(() => {
-  if (mode && sceneRef.current) {
-    if (mode === 'orbit') {
-      toggleCamera('orbit');
-    } else if (mode === 'fly') {
-      toggleCamera('fly');
+  useEffect(() => {
+    if (mode && sceneRef.current) {
+      if (mode === "orbit") {
+        toggleCamera("orbit");
+      } else if (mode === "fly") {
+        toggleCamera("fly");
+      }
     }
-  }
-}, [mode, toggleCamera]);
+  }, [mode, toggleCamera]);
 
   // Cleanup function for WebXR
   const cleanupWebXR = useCallback(() => {
@@ -3330,8 +3411,6 @@ useEffect(() => {
       }
     }
   }, []);
-
-
 
   // Safe render function
   const safeRender = useCallback(
@@ -3660,8 +3739,6 @@ useEffect(() => {
     </div>
   );
 
-
-
   // Update camera speed for fly camera
   const updateCameraSpeed = useCallback(
     (speed) => {
@@ -3696,8 +3773,6 @@ useEffect(() => {
     },
     [cameraSpeed]
   );
-
-
 
   // // Function to create wireframe visualization
   const createWireframeBox = useCallback(
@@ -3894,7 +3969,6 @@ useEffect(() => {
     }
   };
 
-
   const fitCameraToOctree = useCallback((camera, maximum, minimum) => {
     const maxVector =
       maximum instanceof BABYLON.Vector3
@@ -4025,7 +4099,6 @@ useEffect(() => {
         request.onerror = () => reject(request.error);
       });
 
-
       if (!octreeData) {
         throw new Error("No octree data found");
       }
@@ -4053,230 +4126,11 @@ useEffect(() => {
       createWireframeBox(minVector, maxVector);
 
       // Initialize the enhanced web worker LOD manager
-      const lodManager = new WebWorkerTilesetLODManager(scene, camera);
+      const lodManager = new WebWorkerTilesetLODManager(scene, camera, {
+        currentHighlightedMeshRef,
+        currentHighlightedMeshIdRef,
+      });
       lodManagerRef.current = lodManager;
-
-      // Setup pointer observers with proper scope
-      // Replace the existing setupPointerObservers function with this enhanced version
-      // const setupPointerObservers = (scene, lodManager) => {
-      //   console.log(
-      //     "Setting up pointer observers for individual mesh selection and small mesh hiding"
-      //   );
-
-      //   // Remove any existing pointer observers
-      //   if (scene.onPointerObservable.hasObservers()) {
-      //     scene.onPointerObservable.clear();
-      //   }
-
-      //   // Main pointer event handler
-      //   scene.onPointerObservable.add((pointerInfo) => {
-      //     const camera = scene.activeCamera;
-      //     if (!camera || !pointerInfo || !pointerInfo.event) return;
-
-      //     try {
-      //       switch (pointerInfo.type) {
-      //         case BABYLON.PointerEventTypes.POINTERDOWN:
-      //           handleMeshSelection(pointerInfo);
-
-      //           break;
-
-      //         case BABYLON.PointerEventTypes.POINTERUP:
-      //           handleMeshSelection(pointerInfo);
-
-      //           break;
-
-      //         case BABYLON.PointerEventTypes.POINTERDOUBLETAP:
-      //           // Handle double-click to clear highlights
-      //           if (pointerInfo.pickInfo && pointerInfo.pickInfo.pickedMesh) {
-      //             const pickedMesh = pointerInfo.pickInfo.pickedMesh;
-      //             if (typeof pickedMesh.clearHighlight === "function") {
-      //               pickedMesh.clearHighlight();
-      //               console.log("Cleared mesh highlighting");
-      //             }
-      //           }
-      //           break;
-      //       }
-      //     } catch (error) {
-      //       console.error("Error in pointer event handler:", error);
-      //       // Reset state on error
-      //     }
-      //   });
-
-      //   // Helper function to handle mesh selection (existing logic)
-      //   const handleMeshSelection = (pointerInfo) => {
-      //     const pickResult = pointerInfo.pickInfo;
-
-      //     // Add null check for pickResult
-      //     if (!pickResult || !pickResult.hit || !pickResult.pickedMesh) {
-      //       console.log("No mesh picked");
-      //       return;
-      //     }
-
-      //     const pickedMesh = pickResult.pickedMesh;
-      //     console.log(`=== CLICK DETECTED ===`);
-      //     console.log(`Picked mesh: ${pickedMesh.name}`);
-      //     console.log(`Face ID: ${pickResult.faceId}`);
-      //     console.log(`Mesh metadata:`, pickedMesh.metadata);
-
-      //     // Skip wireframes and non-LOD meshes
-      //     if (
-      //       pickedMesh.name.includes("octreeVisBox_") ||
-      //       pickedMesh.name.includes("wireframe") ||
-      //       !pickedMesh.metadata
-      //     ) {
-      //       console.log("Skipping non-LOD mesh or wireframe");
-      //       return;
-      //     }
-
-      //     // Check if this is a merged mesh with vertex mappings
-      //     if (
-      //       pickedMesh.metadata.mergedVertexData?.vertexMappings &&
-      //       pickResult.faceId !== undefined
-      //     ) {
-      //       console.log(
-      //         `Attempting to identify individual mesh from face ${pickResult.faceId}`
-      //       );
-      //       console.log(
-      //         `Available vertex mappings:`,
-      //         pickedMesh.metadata.mergedVertexData.vertexMappings.length
-      //       );
-
-      //       // Check if the utility method exists
-      //       if (typeof pickedMesh.getClickedOriginalMesh === "function") {
-      //         const originalMeshInfo = pickedMesh.getClickedOriginalMesh(
-      //           pickResult.faceId
-      //         );
-
-      //         if (originalMeshInfo) {
-      //           console.log("=== INDIVIDUAL MESH DETAILS ===");
-      //           console.log("Original Mesh Info:", {
-      //             meshId: originalMeshInfo.meshId,
-      //             meshIndex: originalMeshInfo.meshIndex,
-      //             fileName: originalMeshInfo.fileName,
-      //             name: originalMeshInfo.name,
-      //             metadataId: originalMeshInfo.metadataId,
-      //             screenCoverage: originalMeshInfo.screenCoverage,
-      //             nodeNumber: originalMeshInfo.nodeNumber,
-      //             faceId: originalMeshInfo.faceId,
-      //             relativeFaceId: originalMeshInfo.relativeFaceId,
-      //             vertexRange: `${originalMeshInfo.startVertex} - ${
-      //               originalMeshInfo.startVertex + originalMeshInfo.vertexCount
-      //             }`,
-      //             indexRange: `${originalMeshInfo.startIndex} - ${
-      //               originalMeshInfo.startIndex + originalMeshInfo.indexCount
-      //             }`,
-      //           });
-
-      //           // Highlight the individual mesh
-      //           if (typeof pickedMesh.highlightOriginalMesh === "function") {
-      //             pickedMesh.highlightOriginalMesh(originalMeshInfo.meshId);
-      //           }
-
-      //           // Extract individual mesh data if the method exists
-      //           if (
-      //             typeof pickedMesh.extractIndividualMeshData === "function"
-      //           ) {
-      //             const individualMeshData =
-      //               pickedMesh.extractIndividualMeshData(
-      //                 originalMeshInfo.meshIndex
-      //               );
-      //             if (individualMeshData) {
-      //               console.log("Individual Mesh Geometry:", {
-      //                 vertexCount: individualMeshData.vertexCount,
-      //                 indexCount: individualMeshData.indexCount,
-      //                 hasNormals: !!individualMeshData.normals,
-      //                 hasColors: !!individualMeshData.colors,
-      //               });
-      //             }
-
-      //             // Update UI state with individual mesh info
-      //             if (typeof setSelectedMeshInfo === "function") {
-      //               setSelectedMeshInfo({
-      //                 type: "individual",
-      //                 meshId: originalMeshInfo.meshId,
-      //                 name: originalMeshInfo.name,
-      //                 fileName: originalMeshInfo.fileName,
-      //                 nodeNumber: originalMeshInfo.nodeNumber,
-      //                 screenCoverage: originalMeshInfo.screenCoverage,
-      //                 vertexCount: individualMeshData?.vertexCount || 0,
-      //                 faceCount: Math.floor(
-      //                   (individualMeshData?.indexCount || 0) / 3
-      //                 ),
-      //               });
-      //             }
-      //           } else {
-      //             console.warn(
-      //               "extractIndividualMeshData method not found on mesh"
-      //             );
-      //           }
-      //         } else {
-      //           console.log(
-      //             "Could not identify individual mesh from clicked face"
-      //           );
-      //           showMergedMeshInfo(pickedMesh);
-      //         }
-      //       } else {
-      //         console.warn("getClickedOriginalMesh method not found on mesh");
-      //         showMergedMeshInfo(pickedMesh);
-      //       }
-      //     } else {
-      //       console.log("No vertex mappings or face ID available");
-      //       showMergedMeshInfo(pickedMesh);
-      //     }
-      //   };
-
-      //   // Helper function for merged mesh info
-      //   const showMergedMeshInfo = (pickedMesh) => {
-      //     console.log("=== MERGED MESH DETAILS ===");
-      //     const meta = pickedMesh.metadata;
-      //     console.log("Merged Mesh Details:", {
-      //       name: pickedMesh.name,
-      //       nodeNumber: meta.nodeNumber || "N/A",
-      //       depth: meta.depth || "N/A",
-      //       originalMeshCount: meta.originalMeshCount || "N/A",
-      //       totalVertices: pickedMesh.getTotalVertices(),
-      //       totalIndices: pickedMesh.getTotalIndices(),
-      //     });
-
-      //     // Show all original meshes contained in this merged mesh
-      //     if (
-      //       meta.metadata?.vertexMappings &&
-      //       meta.metadata.vertexMappings.length > 0
-      //     ) {
-      //       console.log("Contains original meshes:");
-      //       meta.vertexMappings.forEach((mapping, index) => {
-      //         console.log(
-      //           `  ${index + 1}. ${mapping.name || mapping.meshId} (${
-      //             mapping.fileName
-      //           })`
-      //         );
-      //       });
-      //     }
-
-      //     // Update React state for merged mesh
-      //     if (typeof setSelectedMeshInfo === "function") {
-      //       setSelectedMeshInfo({
-      //         type: "merged",
-      //         name: pickedMesh.name,
-      //         nodeNumber: meta.nodeNumber,
-      //         depth: meta.depth,
-      //         originalMeshCount: meta.originalMeshCount,
-      //         totalVertices: pickedMesh.getTotalVertices(),
-      //         totalIndices: pickedMesh.getTotalIndices(),
-      //       });
-      //     }
-      //   };
-
-      //   console.log(
-      //     "Pointer observers setup complete with mouse-based small mesh hiding"
-      //   );
-      // };
-
-      // Setup pointer observers
-      // setupPointerObservers(scene, lodManager);
-
-      const enhancedSetupPointerObservers = setupPointerObservers; // Use the enhanced version
-enhancedSetupPointerObservers(scene, lodManager);
 
       // Calculate distance thresholds
       const maxDistance = fitCameraToOctree(camera, maxVector, minVector);
@@ -4358,8 +4212,6 @@ enhancedSetupPointerObservers(scene, lodManager);
       }
     }
   }, [initDB, createWireframeBox, fitCameraToOctree, isLoading]);
-
-
 
   const handleDoubleClick = (event) => {
     if (!sceneRef.current && !canvasRef.current) return;
@@ -4626,393 +4478,393 @@ enhancedSetupPointerObservers(scene, lodManager);
     }
   };
 
-         // useEffect for all views(top,front...) functionality
-        useEffect(() => {
-          applyView(viewMode);
-        }, [viewMode]);
-  
-        // useEffect for allview timeout functionality
-        useEffect(() => {
-          return () => {
-            setViewMode("");
-          };
-        }, []);
+  // useEffect for all views(top,front...) functionality
+  useEffect(() => {
+    applyView(viewMode);
+  }, [viewMode]);
 
-          useEffect(() => {
-        let observer = null;
+  // useEffect for allview timeout functionality
+  useEffect(() => {
+    return () => {
+      setViewMode("");
+    };
+  }, []);
 
-        if (showMeasure) {
-          let unit =  "m";
-          let scaleValue =  1;
-          if (!sceneRef.current) return;
-          const scene = sceneRef.current;
+  useEffect(() => {
+    let observer = null;
 
-          // Store observer reference for measurement
-          observer = scene.onPointerObservable.add((pointerInfo) => {
-            if (pointerInfo.event.button !== 0) {
-              return;
-            }
-            if (pointerInfo.type === BABYLON.PointerEventTypes.POINTERDOWN) {
-              // Only process left mouse button clicks (button 0)
-              if (pointerInfo.event.button !== 0) {
-                return;
-              }
+    if (showMeasure) {
+      let unit = "m";
+      let scaleValue = 1;
+      if (!sceneRef.current) return;
+      const scene = sceneRef.current;
 
-              if (pointerInfo.pickInfo.hit) {
-                const mesh = pointerInfo.pickInfo.pickedMesh;
-
-                // Skip environment meshes
-                if (
-                  mesh.name.includes("skyBox") ||
-                  mesh.name.includes("ground") ||
-                  mesh.name.includes("water")
-                ) {
-                  clearMeasurement();
-                  setshowMeasureDetailsAbove(false);
-                  return;
-                }
-
-                // Handle the measurement
-                handleMeasurementPick(pointerInfo.pickInfo, unit, scaleValue);
-
-                // Find the topmost pickable parent mesh with metadata
-                let targetMesh = mesh;
-                while (
-                  targetMesh &&
-                  (!targetMesh.metadata ||
-                    Object.keys(targetMesh.metadata).length === 0)
-                ) {
-                  targetMesh = targetMesh.parent;
-                }
-              } else {
-                // clearMeasurement();
-                // setshowMeasureDetailsAbove(false);
-              }
-            }
-          });
-        } else {
-          // Cleanup when showMeasure becomes false
-          clearMeasurement();
-          setshowMeasureDetailsAbove(false);
-        }
-
-        // Cleanup function to remove event listener
-        return () => {
-          if (sceneRef.current && observer) {
-            sceneRef.current.onPointerObservable.remove(observer);
-          }
-        };
-      }, [showMeasure]);
-
-            const handleMeasurementPick = (pickInfo, unit, scaleValue) => {
-        if (!showMeasure || !pickInfo.hit || !pickInfo.pickedMesh) return;
-
-        // Skip measurement markers themselves
-        const mesh = pickInfo.pickedMesh;
-        if (
-          mesh.name.startsWith("measureMarker") ||
-          mesh.name.startsWith("pointLabel") ||
-          mesh.name.startsWith("measureTextPlane") ||
-          mesh.name.startsWith("xLine") ||
-          mesh.name.startsWith("yLine") ||
-          mesh.name.startsWith("zLine") ||
-          mesh.name.startsWith("measureLine") ||
-          mesh.name === "box" ||
-          mesh.name.includes("Line")
-        ) {
+      // Store observer reference for measurement
+      observer = scene.onPointerObservable.add((pointerInfo) => {
+        if (pointerInfo.event.button !== 0) {
           return;
         }
-
-        // Get the exact position in world space
-        const pickedPoint = pickInfo.pickedPoint;
-
-        // If this is the first point
-        if (!measurementRef.current.pointA) {
-          // Clear any previous measurement first
-          clearMeasurement();
-
-          // Set first point
-          measurementRef.current.pointA = pickedPoint.clone();
-          createPointMarker(pickedPoint.clone());
-
-          // Update UI state
-          setPoint1({
-            x: pickedPoint.x.toFixed(2),
-            y: pickedPoint.y.toFixed(2),
-            z: pickedPoint.z.toFixed(2),
-          });
-        }
-        // If this is the second point
-        else if (!measurementRef.current.pointB) {
-          measurementRef.current.pointB = pickedPoint.clone();
-          createPointMarker(pickedPoint.clone());
-
-          // Create line between points
-          updateMeasurementLine();
-
-          // Update UI state with calculated values
-          setPoint2({
-            x: pickedPoint.x.toFixed(2),
-            y: pickedPoint.y.toFixed(2),
-            z: pickedPoint.z.toFixed(2),
-          });
-
-          // Calculate differences
-          const p1 = measurementRef.current.pointA;
-          const p2 = measurementRef.current.pointB;
-
-          // Raw differences (no scale)
-          const rawDiffX = Math.abs(p2.x - p1.x);
-          const rawDiffY = Math.abs(p2.y - p1.y);
-          const rawDiffZ = Math.abs(p2.z - p1.z);
-
-          // Apply scale
-          const scaledDiffX = (rawDiffX * parseFloat(scaleValue)).toFixed(2);
-          const scaledDiffY = (rawDiffY * parseFloat(scaleValue)).toFixed(2);
-          const scaledDiffZ = (rawDiffZ * parseFloat(scaleValue)).toFixed(2);
-
-          setDifferences({
-            diffX: scaledDiffX,
-            diffY: scaledDiffY,
-            diffZ: scaledDiffZ,
-          });
-
-          const distance = BABYLON.Vector3.Distance(p1, p2).toFixed(2);
-          const rawDistance = BABYLON.Vector3.Distance(p1, p2) * scaleValue;
-          setDistance(`${rawDistance.toFixed(2)} ${unit}`);
-
-          // Calculate angles similar to the provided code
-          const horizontalAngle = calculatePlanAngle(p1, p2).toFixed(2);
-          const verticalAngle = calculateElevationAngle(p1, p2).toFixed(2);
-
-          setAngles({
-            horizontalAngle: horizontalAngle + "°",
-            verticalAngle: verticalAngle + "°",
-          });
-          setshowMeasureDetailsAbove(true);
-        }
-        // If we already have two points, start a new measurement
-        else {
-          clearMeasurement();
-          setshowMeasureDetailsAbove(false);
-
-          // Set new first point
-          measurementRef.current.pointA = pickedPoint.clone();
-          createPointMarker(pickedPoint.clone());
-
-          // Update UI state
-          setPoint1({
-            x: pickedPoint.x.toFixed(2),
-            y: pickedPoint.y.toFixed(2),
-            z: pickedPoint.z.toFixed(2),
-          });
-        }
-      };
-
-      // Create a point marker for measurement
-      const createPointMarker = (position) => {
-        const scene = sceneRef.current;
-        if (!scene) return null;
-
-        // Create a container for all marker elements
-        const markerContainer = new BABYLON.TransformNode(
-          "measureMarkerContainer",
-          scene
-        );
-        markerContainer.position = position.clone();
-
-        // Create invisible box as attachment point
-        const box = BABYLON.MeshBuilder.CreateBox(
-          "measureMarkerBox",
-          { size: 0.1 },
-          scene
-        );
-        box.isVisible = false;
-        box.isPickable = false;
-        box.parent = markerContainer;
-        box.position = BABYLON.Vector3.Zero(); // Local position is zero relative to container
-
-        // Create GUI for the marker (X-shaped cross)
-        const advancedTexture = GUI.AdvancedDynamicTexture.CreateFullscreenUI(
-          "MarkerUI",
-          true,
-          scene
-        );
-
-        // Create rectangle container
-        const container = new GUI.Rectangle();
-        container.width = "9px";
-        container.height = "9px";
-        container.color = "transparent";
-        container.background = "transparent";
-        advancedTexture.addControl(container);
-        container.linkWithMesh(box);
-
-        // Create diagonal line 1 (top-left to bottom-right)
-        const line1 = new GUI.Line();
-        line1.x1 = 0;
-        line1.y1 = 0;
-        line1.x2 = 8;
-        line1.y2 = 8;
-        line1.lineWidth = 2;
-        line1.color = "#FFA500"; // Orange color
-        container.addControl(line1);
-
-        // Create diagonal line 2 (top-right to bottom-left)
-        const line2 = new GUI.Line();
-        line2.x1 = 8;
-        line2.y1 = 0;
-        line2.x2 = 0;
-        line2.y2 = 8;
-        line2.lineWidth = 2;
-        line2.color = "#FFA500"; // Orange color
-        container.addControl(line2);
-
-        // Store elements for later cleanup
-        const elem = {
-          box: box,
-          container: container,
-          markerContainer: markerContainer,
-          gui: advancedTexture,
-        };
-
-        // Add to marker array for tracking
-        measurementRef.current.markers.push(elem);
-
-        return markerContainer;
-      };
-
-      // Update measurement line
-      const updateMeasurementLine = () => {
-        const scene = sceneRef.current;
-        if (!scene) return;
-
-        const { pointA, pointB, line, text } = measurementRef.current;
-
-        if (pointA && pointB) {
-          // If a line already exists, dispose it
-          if (line) {
-            line.dispose();
+        if (pointerInfo.type === BABYLON.PointerEventTypes.POINTERDOWN) {
+          // Only process left mouse button clicks (button 0)
+          if (pointerInfo.event.button !== 0) {
+            return;
           }
 
-          // If a text mesh exists, dispose it
-          if (text) {
-            text.dispose();
+          if (pointerInfo.pickInfo.hit) {
+            const mesh = pointerInfo.pickInfo.pickedMesh;
+
+            // Skip environment meshes
+            if (
+              mesh.name.includes("skyBox") ||
+              mesh.name.includes("ground") ||
+              mesh.name.includes("water")
+            ) {
+              clearMeasurement();
+              setshowMeasureDetailsAbove(false);
+              return;
+            }
+
+            // Handle the measurement
+            handleMeasurementPick(pointerInfo.pickInfo, unit, scaleValue);
+
+            // Find the topmost pickable parent mesh with metadata
+            let targetMesh = mesh;
+            while (
+              targetMesh &&
+              (!targetMesh.metadata ||
+                Object.keys(targetMesh.metadata).length === 0)
+            ) {
+              targetMesh = targetMesh.parent;
+            }
+          } else {
+            // clearMeasurement();
+            // setshowMeasureDetailsAbove(false);
           }
-
-          // Create a new line
-          const points = [pointA.clone(), pointB.clone()];
-
-          const newLine = BABYLON.MeshBuilder.CreateLines(
-            "measureLine",
-            { points: points },
-            scene
-          );
-          newLine.color = new BABYLON.Color3(1, 0.647, 0);
-          measurementRef.current.line = newLine;
-
-          // Calculate distance
-          const distance = BABYLON.Vector3.Distance(pointA, pointB);
-
-          // Create a midpoint for the text label
-          const midPoint = BABYLON.Vector3.Center(pointA, pointB);
-
-          // Create a dynamic texture for the distance text
-          const textureWidth = 256;
-          const textureHeight = 64;
-          const dynamicTexture = new BABYLON.DynamicTexture(
-            "measureTextTexture",
-            { width: textureWidth, height: textureHeight },
-            scene,
-            false
-          );
-          dynamicTexture.hasAlpha = true;
         }
-      };
+      });
+    } else {
+      // Cleanup when showMeasure becomes false
+      clearMeasurement();
+      setshowMeasureDetailsAbove(false);
+    }
 
-      // Clear measurement function
-      const clearMeasurement = () => {
-        // Reset state variables
-        setPoint1(null);
-        setPoint2(null);
-        setDistance(null);
-        setDifferences({
-          diffX: null,
-          diffY: null,
-          diffZ: null,
-        });
-        setAngles({
-          horizontalAngle: null,
-          verticalAngle: null,
-        });
+    // Cleanup function to remove event listener
+    return () => {
+      if (sceneRef.current && observer) {
+        sceneRef.current.onPointerObservable.remove(observer);
+      }
+    };
+  }, [showMeasure]);
 
-        // Remove line if it exists
-        if (measurementRef.current.line) {
-          measurementRef.current.line.dispose();
-          measurementRef.current.line = null;
+  const handleMeasurementPick = (pickInfo, unit, scaleValue) => {
+    if (!showMeasure || !pickInfo.hit || !pickInfo.pickedMesh) return;
+
+    // Skip measurement markers themselves
+    const mesh = pickInfo.pickedMesh;
+    if (
+      mesh.name.startsWith("measureMarker") ||
+      mesh.name.startsWith("pointLabel") ||
+      mesh.name.startsWith("measureTextPlane") ||
+      mesh.name.startsWith("xLine") ||
+      mesh.name.startsWith("yLine") ||
+      mesh.name.startsWith("zLine") ||
+      mesh.name.startsWith("measureLine") ||
+      mesh.name === "box" ||
+      mesh.name.includes("Line")
+    ) {
+      return;
+    }
+
+    // Get the exact position in world space
+    const pickedPoint = pickInfo.pickedPoint;
+
+    // If this is the first point
+    if (!measurementRef.current.pointA) {
+      // Clear any previous measurement first
+      clearMeasurement();
+
+      // Set first point
+      measurementRef.current.pointA = pickedPoint.clone();
+      createPointMarker(pickedPoint.clone());
+
+      // Update UI state
+      setPoint1({
+        x: pickedPoint.x.toFixed(2),
+        y: pickedPoint.y.toFixed(2),
+        z: pickedPoint.z.toFixed(2),
+      });
+    }
+    // If this is the second point
+    else if (!measurementRef.current.pointB) {
+      measurementRef.current.pointB = pickedPoint.clone();
+      createPointMarker(pickedPoint.clone());
+
+      // Create line between points
+      updateMeasurementLine();
+
+      // Update UI state with calculated values
+      setPoint2({
+        x: pickedPoint.x.toFixed(2),
+        y: pickedPoint.y.toFixed(2),
+        z: pickedPoint.z.toFixed(2),
+      });
+
+      // Calculate differences
+      const p1 = measurementRef.current.pointA;
+      const p2 = measurementRef.current.pointB;
+
+      // Raw differences (no scale)
+      const rawDiffX = Math.abs(p2.x - p1.x);
+      const rawDiffY = Math.abs(p2.y - p1.y);
+      const rawDiffZ = Math.abs(p2.z - p1.z);
+
+      // Apply scale
+      const scaledDiffX = (rawDiffX * parseFloat(scaleValue)).toFixed(2);
+      const scaledDiffY = (rawDiffY * parseFloat(scaleValue)).toFixed(2);
+      const scaledDiffZ = (rawDiffZ * parseFloat(scaleValue)).toFixed(2);
+
+      setDifferences({
+        diffX: scaledDiffX,
+        diffY: scaledDiffY,
+        diffZ: scaledDiffZ,
+      });
+
+      const distance = BABYLON.Vector3.Distance(p1, p2).toFixed(2);
+      const rawDistance = BABYLON.Vector3.Distance(p1, p2) * scaleValue;
+      setDistance(`${rawDistance.toFixed(2)} ${unit}`);
+
+      // Calculate angles similar to the provided code
+      const horizontalAngle = calculatePlanAngle(p1, p2).toFixed(2);
+      const verticalAngle = calculateElevationAngle(p1, p2).toFixed(2);
+
+      setAngles({
+        horizontalAngle: horizontalAngle + "°",
+        verticalAngle: verticalAngle + "°",
+      });
+      setshowMeasureDetailsAbove(true);
+    }
+    // If we already have two points, start a new measurement
+    else {
+      clearMeasurement();
+      setshowMeasureDetailsAbove(false);
+
+      // Set new first point
+      measurementRef.current.pointA = pickedPoint.clone();
+      createPointMarker(pickedPoint.clone());
+
+      // Update UI state
+      setPoint1({
+        x: pickedPoint.x.toFixed(2),
+        y: pickedPoint.y.toFixed(2),
+        z: pickedPoint.z.toFixed(2),
+      });
+    }
+  };
+
+  // Create a point marker for measurement
+  const createPointMarker = (position) => {
+    const scene = sceneRef.current;
+    if (!scene) return null;
+
+    // Create a container for all marker elements
+    const markerContainer = new BABYLON.TransformNode(
+      "measureMarkerContainer",
+      scene
+    );
+    markerContainer.position = position.clone();
+
+    // Create invisible box as attachment point
+    const box = BABYLON.MeshBuilder.CreateBox(
+      "measureMarkerBox",
+      { size: 0.1 },
+      scene
+    );
+    box.isVisible = false;
+    box.isPickable = false;
+    box.parent = markerContainer;
+    box.position = BABYLON.Vector3.Zero(); // Local position is zero relative to container
+
+    // Create GUI for the marker (X-shaped cross)
+    const advancedTexture = GUI.AdvancedDynamicTexture.CreateFullscreenUI(
+      "MarkerUI",
+      true,
+      scene
+    );
+
+    // Create rectangle container
+    const container = new GUI.Rectangle();
+    container.width = "9px";
+    container.height = "9px";
+    container.color = "transparent";
+    container.background = "transparent";
+    advancedTexture.addControl(container);
+    container.linkWithMesh(box);
+
+    // Create diagonal line 1 (top-left to bottom-right)
+    const line1 = new GUI.Line();
+    line1.x1 = 0;
+    line1.y1 = 0;
+    line1.x2 = 8;
+    line1.y2 = 8;
+    line1.lineWidth = 2;
+    line1.color = "#FFA500"; // Orange color
+    container.addControl(line1);
+
+    // Create diagonal line 2 (top-right to bottom-left)
+    const line2 = new GUI.Line();
+    line2.x1 = 8;
+    line2.y1 = 0;
+    line2.x2 = 0;
+    line2.y2 = 8;
+    line2.lineWidth = 2;
+    line2.color = "#FFA500"; // Orange color
+    container.addControl(line2);
+
+    // Store elements for later cleanup
+    const elem = {
+      box: box,
+      container: container,
+      markerContainer: markerContainer,
+      gui: advancedTexture,
+    };
+
+    // Add to marker array for tracking
+    measurementRef.current.markers.push(elem);
+
+    return markerContainer;
+  };
+
+  // Update measurement line
+  const updateMeasurementLine = () => {
+    const scene = sceneRef.current;
+    if (!scene) return;
+
+    const { pointA, pointB, line, text } = measurementRef.current;
+
+    if (pointA && pointB) {
+      // If a line already exists, dispose it
+      if (line) {
+        line.dispose();
+      }
+
+      // If a text mesh exists, dispose it
+      if (text) {
+        text.dispose();
+      }
+
+      // Create a new line
+      const points = [pointA.clone(), pointB.clone()];
+
+      const newLine = BABYLON.MeshBuilder.CreateLines(
+        "measureLine",
+        { points: points },
+        scene
+      );
+      newLine.color = new BABYLON.Color3(1, 0.647, 0);
+      measurementRef.current.line = newLine;
+
+      // Calculate distance
+      const distance = BABYLON.Vector3.Distance(pointA, pointB);
+
+      // Create a midpoint for the text label
+      const midPoint = BABYLON.Vector3.Center(pointA, pointB);
+
+      // Create a dynamic texture for the distance text
+      const textureWidth = 256;
+      const textureHeight = 64;
+      const dynamicTexture = new BABYLON.DynamicTexture(
+        "measureTextTexture",
+        { width: textureWidth, height: textureHeight },
+        scene,
+        false
+      );
+      dynamicTexture.hasAlpha = true;
+    }
+  };
+
+  // Clear measurement function
+  const clearMeasurement = () => {
+    // Reset state variables
+    setPoint1(null);
+    setPoint2(null);
+    setDistance(null);
+    setDifferences({
+      diffX: null,
+      diffY: null,
+      diffZ: null,
+    });
+    setAngles({
+      horizontalAngle: null,
+      verticalAngle: null,
+    });
+
+    // Remove line if it exists
+    if (measurementRef.current.line) {
+      measurementRef.current.line.dispose();
+      measurementRef.current.line = null;
+    }
+
+    // Remove text if it exists
+    if (measurementRef.current.text) {
+      measurementRef.current.text.dispose();
+      measurementRef.current.text = null;
+    }
+
+    // Remove all markers and their children
+    measurementRef.current.markers.forEach((marker) => {
+      if (marker) {
+        // Clean up GUI elements first
+        if (marker.container) {
+          marker.container.dispose();
         }
-
-        // Remove text if it exists
-        if (measurementRef.current.text) {
-          measurementRef.current.text.dispose();
-          measurementRef.current.text = null;
+        if (marker.gui) {
+          marker.gui.dispose();
         }
-
-        // Remove all markers and their children
-        measurementRef.current.markers.forEach((marker) => {
-          if (marker) {
-            // Clean up GUI elements first
-            if (marker.container) {
-              marker.container.dispose();
-            }
-            if (marker.gui) {
-              marker.gui.dispose();
-            }
-            // Then dispose the mesh objects
-            if (marker.box) {
-              marker.box.dispose();
-            }
-            if (marker.markerContainer) {
-              marker.markerContainer.dispose();
-            }
-          }
-        });
-
-        // Reset measurement state
-        measurementRef.current = {
-          pointA: null,
-          pointB: null,
-          line: null,
-          text: null,
-          markers: [],
-        };
-      };
-     const handleShowMeasureDetails = () => {
-        setShowMeasureDetails(!showMeasureDetails);
-      };
-
-       const handleWireFrame = () => {
-        if (!sceneRef.current) return;
-        const scene = sceneRef.current;
-        // scene.meshes.forEach((mesh) => {
-        //   if (
-        //     mesh.material &&
-        //     mesh.name !== "skyBox" &&
-        //     mesh.name !== "waterMesh" &&
-        //     mesh.name !== "ground"
-        //   ) {
-        //     mesh.material.wireframe = !mesh.material.wireframe;
-        //   }
-        // });
-        scene.forceWireframe = !scene.forceWireframe;
-        setShowWireFrame((prev) => !prev);
-      };
-
-           useEffect(() => {
-        if (showWireFrame) {
-          handleWireFrame();
+        // Then dispose the mesh objects
+        if (marker.box) {
+          marker.box.dispose();
         }
-      }, [showWireFrame]);
+        if (marker.markerContainer) {
+          marker.markerContainer.dispose();
+        }
+      }
+    });
+
+    // Reset measurement state
+    measurementRef.current = {
+      pointA: null,
+      pointB: null,
+      line: null,
+      text: null,
+      markers: [],
+    };
+  };
+  const handleShowMeasureDetails = () => {
+    setShowMeasureDetails(!showMeasureDetails);
+  };
+
+  const handleWireFrame = () => {
+    if (!sceneRef.current) return;
+    const scene = sceneRef.current;
+    // scene.meshes.forEach((mesh) => {
+    //   if (
+    //     mesh.material &&
+    //     mesh.name !== "skyBox" &&
+    //     mesh.name !== "waterMesh" &&
+    //     mesh.name !== "ground"
+    //   ) {
+    //     mesh.material.wireframe = !mesh.material.wireframe;
+    //   }
+    // });
+    scene.forceWireframe = !scene.forceWireframe;
+    setShowWireFrame((prev) => !prev);
+  };
+
+  useEffect(() => {
+    if (showWireFrame) {
+      handleWireFrame();
+    }
+  }, [showWireFrame]);
 
   function clearAllPipingStores() {
     const confirmClear = window.confirm(
@@ -5052,196 +4904,320 @@ enhancedSetupPointerObservers(scene, lodManager);
     };
   }
 
+  // Add these refs
+  const selectedMeshRef = useRef(null);
+  const highlightedMeshRef = useRef(null);
+  const highlightMaterialRef = useRef(null);
 
-// Selection mode state
-const [isSelectionMode, setIsSelectionMode] = useState(false);
-const [selectedItem, setSelectedItem] = useState(false);
-const [selectedItemName, setSelectedItemName] = useState("");
-const [backgroundColorTag, setBackgroundColorTag] = useState({});
-const [tagInfo, setTagInfo] = useState({});
-const [fileInfoDetails, setFileInfoDetails] = useState(null);
-const [commentPosition, setCommentPosition] = useState(null);
+  // Enhanced mesh selection functions (replace the existing ones)
+  const highlightMesh = useCallback((mesh) => {
+    if (!mesh || !sceneRef.current) return;
 
-// Add these refs
-const selectedMeshRef = useRef(null);
-const highlightedMeshRef = useRef(null);
-const highlightMaterialRef = useRef(null);
+    // Create highlight material if it doesn't exist
+    if (!highlightMaterialRef.current) {
+      highlightMaterialRef.current = new BABYLON.StandardMaterial(
+        "highlightMaterial",
+        sceneRef.current
+      );
+      highlightMaterialRef.current.diffuseColor = new BABYLON.Color3(1, 1, 0); // Yellow
+      highlightMaterialRef.current.specularColor = new BABYLON.Color3(
+        0.5,
+        0.5,
+        0.5
+      );
+      highlightMaterialRef.current.emissiveColor = new BABYLON.Color3(
+        0.3,
+        0.3,
+        0
+      );
+      highlightMaterialRef.current.backFaceCulling = false;
+      highlightMaterialRef.current.twoSidedLighting = true;
+    }
 
-// Enhanced mesh selection functions (replace the existing ones)
-const highlightMesh = useCallback((mesh) => {
-  if (!mesh || !sceneRef.current) return;
+    // Store original material if not already stored
+    if (mesh.originalMaterial) {
+      mesh.material = highlightMaterialRef.current;
+      highlightedMeshRef.current = mesh;
+    } else if (mesh.material) {
+      // Store original material
+      mesh.originalMaterial = mesh.material;
+      mesh.material = highlightMaterialRef.current;
+      highlightedMeshRef.current = mesh;
+    }
+  }, []);
 
-  // Create highlight material if it doesn't exist
-  if (!highlightMaterialRef.current) {
-    highlightMaterialRef.current = new BABYLON.StandardMaterial(
-      "highlightMaterial",
-      sceneRef.current
+  const dehighlightMesh = useCallback(() => {
+    console.log("🚫 === DEHIGHLIGHTING CURRENT MESH ===");
+    console.log(
+      "🔍 Current highlighted mesh:",
+      currentHighlightedMeshRef.current
     );
-    highlightMaterialRef.current.diffuseColor = new BABYLON.Color3(1, 1, 0); // Yellow
-    highlightMaterialRef.current.specularColor = new BABYLON.Color3(0.5, 0.5, 0.5);
-    highlightMaterialRef.current.emissiveColor = new BABYLON.Color3(0.3, 0.3, 0);
-    highlightMaterialRef.current.backFaceCulling = false;
-    highlightMaterialRef.current.twoSidedLighting = true;
-  }
+    console.log(
+      "🔍 Current highlighted mesh ID:",
+      currentHighlightedMeshIdRef.current
+    );
 
-  // Store original material if not already stored
-  if (mesh.originalMaterial) {
-    mesh.material = highlightMaterialRef.current;
-    highlightedMeshRef.current = mesh;
-  } else if (mesh.material) {
-    // Store original material
-    mesh.originalMaterial = mesh.material;
-    mesh.material = highlightMaterialRef.current;
-    highlightedMeshRef.current = mesh;
-  }
-}, []);
+    if (
+      currentHighlightedMeshRef.current &&
+      currentHighlightedMeshIdRef.current
+    ) {
+      // For merged meshes, we need to remove the specific individual mesh highlight
+      if (
+        typeof currentHighlightedMeshRef.current.removeHighlight === "function"
+      ) {
+        console.log(
+          "🧹 Removing highlight from individual mesh:",
+          currentHighlightedMeshIdRef.current
+        );
 
-const dehighlightMesh = useCallback(() => {
-  if (highlightedMeshRef.current && highlightedMeshRef.current.originalMaterial) {
-    highlightedMeshRef.current.material = highlightedMeshRef.current.originalMaterial;
-    
-    // Clear individual mesh highlighting if it exists
-    if (typeof highlightedMeshRef.current.clearHighlight === 'function') {
-      highlightedMeshRef.current.clearHighlight();
-    }
-    
-    highlightedMeshRef.current = null;
-  }
-}, []);
-
-// Function to toggle selection mode
-const toggleSelectionMode = useCallback(() => {
-  setIsSelectionMode(prev => {
-    const newMode = !prev;
-    
-    if (!newMode) {
-      // Exiting selection mode - clear all selections
-      clearSelection();
-    }
-    
-    console.log(`Selection mode: ${newMode ? 'ON' : 'OFF'}`);
-    return newMode;
-  });
-}, []);
-
-// Helper function to clear selection
-const clearSelection = useCallback(() => {
-  dehighlightMesh();
-  selectedMeshRef.current = null;
-  
-  setSelectedItem(false);
-  setSelectedItemName("");
-  setSelectedMeshInfo(null);
-  setBackgroundColorTag({});
-  setTagInfo({});
-  setFileInfoDetails(null);
-  setCommentPosition(null);
-  
-  // Clear any clip planes or other scene modifications
-  if (sceneRef.current && sceneRef.current.clipPlane) {
-    sceneRef.current.clipPlane = null;
-  }
-}, [dehighlightMesh]);
-
-// Enhanced pointer observers with selection mode control (replace the existing setupPointerObservers)
-const setupPointerObservers = useCallback((scene, lodManager) => {
-  console.log("Setting up enhanced pointer observers with selection mode control");
-
-  // Remove any existing pointer observers
-  if (scene.onPointerObservable.hasObservers()) {
-    scene.onPointerObservable.clear();
-  }
-
-  // Main pointer event handler
-  scene.onPointerObservable.add((pointerInfo) => {
-    const camera = scene.activeCamera;
-    if (!camera || !pointerInfo || !pointerInfo.event) return;
-
-    try {
-      switch (pointerInfo.type) {
-        case BABYLON.PointerEventTypes.POINTERDOWN:
-          handlePointerDown(pointerInfo);
-          break;
-
-        case BABYLON.PointerEventTypes.POINTERDOUBLETAP:
-          // Handle double-click to clear highlights (only in selection mode)
-          if (isSelectionMode && pointerInfo.pickInfo && pointerInfo.pickInfo.pickedMesh) {
-            const pickedMesh = pointerInfo.pickInfo.pickedMesh;
-            if (typeof pickedMesh.clearHighlight === "function") {
-              pickedMesh.clearHighlight();
-              console.log("Cleared mesh highlighting");
-            }
-          }
-          break;
+        // Call removeHighlight which will restore the original vertex colors for the whole merged mesh
+        currentHighlightedMeshRef.current.removeHighlight();
+      } else {
+        console.log("⚠️ removeHighlight method not available");
       }
-    } catch (error) {
-      console.error("Error in pointer event handler:", error);
+    } else {
+      console.log("⚠️ No currently highlighted mesh to dehighlight");
     }
-  });
 
-  // Enhanced pointer down handler
-  const handlePointerDown = (pointerInfo) => {
+    // Clear refs
+    currentHighlightedMeshRef.current = null;
+    currentHighlightedMeshIdRef.current = null;
+
+    // Clear React state
+    setSelectedItemName({ name: "" });
+    setSelectedMeshInfo(null);
+    setTagInfo(null);
+    setBackgroundColorTag({});
+    setCommentPosition({
+      intersectionPointX: 0,
+      intersectionPointY: 0,
+      intersectionPointZ: 0,
+    });
+
+    console.log("✅ Mesh dehighlighted and selection cleared");
+  }, []);
+
+  // 4. UPDATE THE clearSelection FUNCTION
+  const clearSelection = useCallback(() => {
+    console.log("🧽 Clearing selection...");
+
+    // Remove highlighting from currently selected mesh
+    if (
+      currentHighlightedMeshRef.current &&
+      typeof currentHighlightedMeshRef.current.removeHighlight === "function"
+    ) {
+      currentHighlightedMeshRef.current.removeHighlight();
+    }
+
+    // Clear refs
+    currentHighlightedMeshRef.current = null;
+    currentHighlightedMeshIdRef.current = null;
+
+    // Clear all selection-related states
+    setSelectedItemName({ name: "" });
+    setSelectedMeshInfo(null);
+    setTagInfo(null);
+    setBackgroundColorTag({});
+    setCommentPosition({
+      intersectionPointX: 0,
+      intersectionPointY: 0,
+      intersectionPointZ: 0,
+    });
+
+    // Exit selection mode
+    setSelectedItem(false);
+
+    console.log("✅ Selection cleared and selection mode exited");
+  }, []);
+
+  // Function to toggle selection mode
+  const toggleSelectionMode = () => {
+    selectedItem((prev) => {
+      const newMode = !prev;
+
+      if (!newMode) {
+        // Exiting selection mode - clear all selections
+        clearSelection();
+      }
+
+      console.log(`Selection mode: ${newMode ? "ON" : "OFF"}`);
+      return newMode;
+    });
+  };
+
+  const pointerObserverRef = useRef(null);
+  useEffect(() => {
+    const scene = sceneRef.current;
+    if (!scene) return;
+    const canvas = scene.getEngine().getRenderingCanvas();
+
+    // preventing to the inbuilt context menu of web
+    const preventContextMenu = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      e.stopImmediatePropagation();
+      return false;
+    };
+
+    // Add to canvas
+    canvas.addEventListener("contextmenu", preventContextMenu, true); // Use capture phase
+    canvas.oncontextmenu = preventContextMenu;
+
+    // Add to canvas parent if it exists
+    const canvasParent = canvas.parentElement;
+    if (canvasParent) {
+      canvasParent.addEventListener("contextmenu", preventContextMenu, true);
+    }
+
+    // Add to document as fallback
+    document.addEventListener("contextmenu", preventContextMenu, true);
+    // Remove old observer if it exists
+    if (pointerObserverRef.current) {
+      scene.onPointerObservable.remove(pointerObserverRef.current);
+      pointerObserverRef.current = null;
+    }
+
+    // Add observer only if selection mode is ON
+    if (selectedItem) {
+      pointerObserverRef.current = scene.onPointerObservable.add(
+        (pointerInfo) => {
+          const camera = scene.activeCamera;
+          if (!camera || !pointerInfo || !pointerInfo.event) return;
+
+          switch (pointerInfo.type) {
+            case BABYLON.PointerEventTypes.POINTERDOWN:
+              handleUnifiedPointerDown(pointerInfo);
+              break;
+
+            case BABYLON.PointerEventTypes.POINTERDOUBLETAP:
+              if (selectedItem && pointerInfo.pickInfo?.pickedMesh) {
+                const pickedMesh = pointerInfo.pickInfo.pickedMesh;
+                if (typeof pickedMesh.clearHighlight === "function") {
+                  pickedMesh.clearHighlight();
+                  console.log("Cleared mesh highlighting");
+                }
+              }
+              break;
+          }
+        }
+      );
+    } else {
+      setIsMenuOpen(false);
+      setActiveButton(null);
+    }
+
+    // Cleanup on unmount
+    return () => {
+      canvas.removeEventListener("contextmenu", preventContextMenu, true);
+      if (canvasParent) {
+        canvasParent.removeEventListener(
+          "contextmenu",
+          preventContextMenu,
+          true
+        );
+      }
+      document.removeEventListener("contextmenu", preventContextMenu, true);
+      if (pointerObserverRef.current) {
+        scene.onPointerObservable.remove(pointerObserverRef.current);
+        pointerObserverRef.current = null;
+      }
+    };
+  }, [selectedItem]);
+
+  // Unified pointer down handler that doesn't interfere with camera controls
+  const handleUnifiedPointerDown = (pointerInfo) => {
     const { event, pickInfo } = pointerInfo;
+
     const isLeftClick = event.button === 0;
     const isRightClick = event.button === 2;
 
-    // Handle left click
-    if (isLeftClick) {
-      if (isSelectionMode) {
-        // Selection mode is active
-        if (pickInfo?.hit && pickInfo?.pickedMesh) {
-          handleMeshSelection(pickInfo);
-        } else {
-          // Clicked on empty space - exit selection mode
-          console.log("Clicked on empty space, exiting selection mode");
-          setIsSelectionMode(false);
-          clearSelection();
-        }
-      }
-      // If not in selection mode, do nothing (or handle other interactions)
+    // ✅ Always prevent default right-click menu
+    if (isRightClick) {
+      event.preventDefault();
+      event.stopPropagation();
     }
 
-    // Handle right-click (only in selection mode)
-    if (isRightClick && isSelectionMode) {
-      event.preventDefault();
-      
+    if (!selectedItem) {
+      return; // Do nothing when not in selection mode
+    }
+    // Handle left click
+    if (isLeftClick && selectedItem) {
+      // Only handle selection when selection mode is active
       if (pickInfo?.hit && pickInfo?.pickedMesh) {
-        console.log("Right-click on mesh in selection mode:", pickInfo.pickedMesh.name);
-        
-        // You can implement context menu functionality here
+        // Check if it's a selectable mesh
+        const pickedMesh = pickInfo.pickedMesh;
+
+        if (isSelectableMesh(pickedMesh)) {
+          handleMeshSelection(pickInfo);
+          return; // Don't allow camera control
+        }
+      } else {
+        // Clicked on empty space in selection mode - exit selection mode
+        console.log("Clicked on empty space, exiting selection mode");
+        setSelectedItem(false);
+        clearSelection();
+        return;
+      }
+    } else if (isRightClick && selectedItem) {
+      if (pickInfo?.hit && pickInfo?.pickedMesh) {
         showContextMenu(event.clientX, event.clientY, pickInfo.pickedMesh);
       } else {
-        // Right-click on empty space
         showContextMenu(event.clientX, event.clientY, null);
       }
     }
   };
 
+  const showContextMenu = (x, y, mesh) => {
+    const windowHeight = window.innerHeight;
+    const windowWidth = window.innerWidth;
+
+    const isSpaceBelow = y + 200 <= windowHeight;
+    const isSpaceRight = x + 180 <= windowWidth;
+    const top = isSpaceBelow ? y : y - 200;
+    const left = isSpaceRight ? x : x - 180;
+
+    setMenuPosition({ top, left });
+
+    // if (selectedItem) {
+    setRightClickCoordinates({ x: top, y: left });
+    setIsMenuOpen(true);
+    // } else {
+    //   console.log("No mesh selected for context menu");
+    // }
+  };
+
+  // Helper function to determine if a mesh is selectable
+  const isSelectableMesh = (mesh) => {
+    if (!mesh || !mesh.metadata) return false;
+
+    // Skip wireframes, environment meshes, and UI elements
+    const nonSelectableNames = [
+      "octreeVisBox_",
+      "wireframe",
+      "skyBox",
+      "ground",
+      "water",
+      "measureMarker",
+      "measureLine",
+      "pointLabel",
+      "measureTextPlane",
+      "xLine",
+      "yLine",
+      "zLine",
+      "Line",
+    ];
+
+    return !nonSelectableNames.some((name) => mesh.name.includes(name));
+  };
+
   // Mesh selection handler (only called when in selection mode)
+  // ENHANCED: Better mesh selection handler that properly manages individual mesh states
   const handleMeshSelection = (pickInfo) => {
     const pickedMesh = pickInfo.pickedMesh;
-
-    console.log("=== MESH SELECTION ===");
-    console.log("Picked mesh:", pickedMesh.name);
-    console.log("Mesh metadata:", pickedMesh.metadata);
-
-    // Skip wireframes and environment meshes
-    if (
-      pickedMesh.name.includes("octreeVisBox_") ||
-      pickedMesh.name.includes("wireframe") ||
-      pickedMesh.name.includes("skyBox") ||
-      pickedMesh.name.includes("ground") ||
-      pickedMesh.name.includes("water") ||
-      pickedMesh.name.includes("measureMarker") ||
-      pickedMesh.name.includes("measureLine") ||
-      !pickedMesh.metadata
-    ) {
-      console.log("Skipping environment mesh or wireframe");
-      return;
-    }
-
-    // Clear previous selection
-    dehighlightMesh();
+    console.log("🎯 === MESH SELECTION ===");
+    console.log("🎯 Picked mesh:", pickedMesh.name);
+    console.log("🎯 Selection mode active:", selectedItem);
+    console.log("🎯 PickingInfo:", pickInfo);
 
     // Check if this is a merged mesh with vertex mappings
     if (
@@ -5249,27 +5225,45 @@ const setupPointerObservers = useCallback((scene, lodManager) => {
       pickedMesh.metadata.vertexMappings &&
       pickInfo.faceId !== undefined
     ) {
-      console.log("Processing merged mesh selection...");
-      
+      console.log("🔍 Processing merged mesh selection...");
+
       // Get the clicked original mesh info
       if (typeof pickedMesh.getClickedOriginalMesh === "function") {
-        const originalMeshInfo = pickedMesh.getClickedOriginalMesh(pickInfo.faceId);
+        const originalMeshInfo = pickedMesh.getClickedOriginalMesh(
+          pickInfo.faceId
+        );
 
         if (originalMeshInfo) {
-          console.log("=== INDIVIDUAL MESH SELECTED ===");
-          console.log("Selected mesh info:", originalMeshInfo);
+          console.log("🎯 === INDIVIDUAL MESH SELECTED ===");
+          console.log("📊 Selected mesh info:", originalMeshInfo);
+
+          // CHECK: Are we clicking on the same individual mesh that's already highlighted?
+          const isSameMesh =
+            currentHighlightedMeshRef.current === pickedMesh &&
+            currentHighlightedMeshIdRef.current === originalMeshInfo.meshId;
+
+          if (isSameMesh) {
+            console.log("🔄 Same individual mesh clicked - no change needed");
+            return; // Don't do anything if it's the same individual mesh
+          }
+
+          // ALWAYS dehighlight first (whether it's a different mesh or different individual mesh)
+          console.log("🚫 About to dehighlight previous selection...");
+          dehighlightMesh();
 
           // Store selected mesh reference
           selectedMeshRef.current = pickedMesh;
 
           // Highlight the individual mesh within the merged mesh
           if (typeof pickedMesh.highlightOriginalMesh === "function") {
+            console.log("🎨 About to highlight mesh:", originalMeshInfo.meshId);
             pickedMesh.highlightOriginalMesh(originalMeshInfo.meshId);
           }
 
-          // Set selection state
-          setSelectedItem(true);
-          setSelectedItemName({ name: originalMeshInfo.name || originalMeshInfo.meshId });
+          setSelectedItemName({
+            name: originalMeshInfo.name || originalMeshInfo.meshId,
+            parentFileName:originalMeshInfo.parentFileName || ""
+          });
 
           // Store intersection point for potential comment/annotation placement
           const intersectionPoint = pickInfo.pickedPoint;
@@ -5280,7 +5274,8 @@ const setupPointerObservers = useCallback((scene, lodManager) => {
           });
 
           // Process tag information
-          const meshFileName = originalMeshInfo.fileName || originalMeshInfo.meshId;
+          const meshFileName =
+            originalMeshInfo.fileName || originalMeshInfo.meshId;
           const tagKey = meshFileName;
 
           if (tagKey) {
@@ -5309,18 +5304,22 @@ const setupPointerObservers = useCallback((scene, lodManager) => {
             nodeNumber: originalMeshInfo.nodeNumber,
           });
 
+          console.log("✅ Mesh selection completed successfully");
         } else {
-          console.log("Could not identify individual mesh, selecting entire merged mesh");
+          console.log(
+            "⚠️ Could not identify individual mesh, selecting entire merged mesh"
+          );
           handleMergedMeshSelection(pickedMesh, pickInfo);
         }
       } else {
-        console.log("getClickedOriginalMesh method not available, selecting entire merged mesh");
+        console.log(
+          "⚠️ getClickedOriginalMesh method not available, selecting entire merged mesh"
+        );
         handleMergedMeshSelection(pickedMesh, pickInfo);
       }
     } else {
       // Handle non-merged mesh or mesh without vertex mappings
-      console.log("Processing non-merged mesh selection");
-      handleStandardMeshSelection(pickedMesh, pickInfo);
+      console.log("🔍 Processing non-merged mesh selection");
     }
   };
 
@@ -5329,7 +5328,6 @@ const setupPointerObservers = useCallback((scene, lodManager) => {
     selectedMeshRef.current = pickedMesh;
     highlightMesh(pickedMesh);
 
-    setSelectedItem(true);
     setSelectedItemName({ name: pickedMesh.name });
 
     const intersectionPoint = pickInfo.pickedPoint;
@@ -5360,7 +5358,6 @@ const setupPointerObservers = useCallback((scene, lodManager) => {
     selectedMeshRef.current = pickedMesh;
     highlightMesh(pickedMesh);
 
-    setSelectedItem(true);
     setSelectedItemName({ name: pickedMesh.name });
 
     const intersectionPoint = pickInfo.pickedPoint;
@@ -5388,36 +5385,284 @@ const setupPointerObservers = useCallback((scene, lodManager) => {
     });
   };
 
-  // Context menu function (implement as needed)
-  const showContextMenu = (x, y, mesh) => {
-    console.log(`Context menu at (${x}, ${y}) for mesh:`, mesh?.name || "empty space");
+const getMeshBoundingBoxFromDB = useCallback(async (meshId) => {
+  try {
+    const db = await initDB();
+    const transaction = db.transaction(['originalMeshes'], 'readonly');
+    const store = transaction.objectStore('originalMeshes');
     
-    // You can implement a context menu here
-    // For example, create a div with menu options and position it at (x, y)
-    
-    // Simple example (you can enhance this):
-    if (mesh) {
-      console.log("Available actions for mesh:", mesh.name);
-      // Show mesh-specific context menu
-    } else {
-      console.log("Available general actions");
-      // Show general context menu
+    return new Promise((resolve, reject) => {
+      const request = store.get(meshId);
+      request.onsuccess = () => {
+        const result = request.result;
+        
+        // Handle your specific data structure
+        if (result && result.data && result.data.boundingBox) {
+          const bbox = result.data.boundingBox;
+          
+          // Extract bounding box data from your format
+          let min, max;
+          
+          // Use world coordinates if available, otherwise use local coordinates
+          if (bbox.minimumWorld && bbox.maximumWorld) {
+            min = {
+              x: bbox.minimumWorld._x,
+              y: bbox.minimumWorld._y,
+              z: bbox.minimumWorld._z
+            };
+            max = {
+              x: bbox.maximumWorld._x,
+              y: bbox.maximumWorld._y,
+              z: bbox.maximumWorld._z
+            };
+          } else if (bbox.minimum && bbox.maximum) {
+            min = {
+              x: bbox.minimum._x,
+              y: bbox.minimum._y,
+              z: bbox.minimum._z
+            };
+            max = {
+              x: bbox.maximum._x,
+              y: bbox.maximum._y,
+              z: bbox.maximum._z
+            };
+          } else {
+            console.warn(`Invalid bounding box structure for mesh ID: ${meshId}`);
+            resolve(null);
+            return;
+          }
+          
+          // Return in the format expected by our calculation functions
+          resolve({ min, max });
+          
+        } else {
+          console.warn(`No bounding box found for mesh ID: ${meshId}`);
+          resolve(null);
+        }
+      };
+      request.onerror = () => reject(request.error);
+    });
+  } catch (error) {
+    console.error('Error getting mesh bounding box from DB:', error);
+    return null;
+  }
+}, [initDB]);
+
+// 2. Function to calculate camera position for bounding box
+const calculateCameraPositionForBounds = useCallback((boundingBox, camera, padding = 1.5) => {
+  if (!boundingBox || !boundingBox.min || !boundingBox.max) {
+    console.warn('Invalid bounding box provided');
+    return null;
+  }
+
+  const min = new BABYLON.Vector3(
+    boundingBox.min.x,
+    boundingBox.min.y,
+    boundingBox.min.z
+  );
+  const max = new BABYLON.Vector3(
+    boundingBox.max.x,
+    boundingBox.max.y,
+    boundingBox.max.z
+  );
+
+  const center = BABYLON.Vector3.Center(min, max);
+  const size = max.subtract(min);
+  const maxDimension = Math.max(size.x, size.y, size.z);
+
+  // Calculate distance needed to fit bounding box in view
+  const fov = camera.fov || Math.PI / 4;
+  const distance = (maxDimension * padding) / (2 * Math.tan(fov / 2));
+
+  return { center, distance, size, min, max };
+}, []);
+
+// 3. Function to set camera position directly (no animation)
+const setCameraPosition = useCallback((targetPosition, targetCenter) => {
+  if (!sceneRef.current || !cameraRef.current) return;
+
+  const camera = cameraRef.current;
+
+  if (camera instanceof BABYLON.ArcRotateCamera) {
+    // Set orbit camera position directly
+    const direction = targetPosition.subtract(targetCenter).normalize();
+    const newRadius = BABYLON.Vector3.Distance(targetPosition, targetCenter);
+    const newAlpha = Math.atan2(direction.x, direction.z);
+    const newBeta = Math.acos(Math.max(-1, Math.min(1, direction.y)));
+
+    camera.target = targetCenter;
+    camera.alpha = newAlpha;
+    camera.beta = newBeta;
+    camera.radius = newRadius;
+
+  } else if (camera instanceof BABYLON.UniversalCamera) {
+    // Set fly camera position directly
+    camera.position = targetPosition;
+    camera.setTarget(targetCenter);
+  }
+}, []);
+
+// 4. Zoom to selected mesh function
+const zoomToSelected = useCallback(async () => {
+  if (!selectedMeshInfo || !cameraRef.current) {
+    console.warn('No mesh selected or camera not available');
+    return;
+  }
+
+  try {
+    let boundingBox = null;
+
+    // Get bounding box based on mesh type
+    if (selectedMeshInfo.type === 'individual' && selectedMeshInfo.meshId) {
+      boundingBox = await getMeshBoundingBoxFromDB(selectedMeshInfo.meshId);
+    } else if (selectedMeshInfo.type === 'merged' && selectedMeshRef.current) {
+      const mesh = selectedMeshRef.current;
+      if (mesh.getBoundingInfo) {
+        const bb = mesh.getBoundingInfo().boundingBox;
+        boundingBox = {
+          min: { x: bb.minimumWorld.x, y: bb.minimumWorld.y, z: bb.minimumWorld.z },
+          max: { x: bb.maximumWorld.x, y: bb.maximumWorld.y, z: bb.maximumWorld.z }
+        };
+      }
     }
-  };
 
-  console.log("Enhanced pointer observers setup complete with selection mode control");
-}, [isSelectionMode, highlightMesh, dehighlightMesh, clearSelection]);
+    if (!boundingBox) {
+      console.warn('Could not get bounding box for selected mesh');
+      return;
+    }
+
+    const camera = cameraRef.current;
+    const cameraData = calculateCameraPositionForBounds(boundingBox, camera, 2.0); // 2.0 padding for zoom
+
+    if (!cameraData) return;
+
+    // Calculate camera position maintaining current viewing direction
+    let cameraPosition;
+    if (camera instanceof BABYLON.ArcRotateCamera) {
+      const currentDirection = camera.position.subtract(camera.target).normalize();
+      cameraPosition = cameraData.center.add(currentDirection.scale(cameraData.distance));
+    } else {
+      const currentDirection = camera.getTarget().subtract(camera.position).normalize();
+      cameraPosition = cameraData.center.subtract(currentDirection.scale(cameraData.distance));
+    }
+
+    setCameraPosition(cameraPosition, cameraData.center);
+    console.log('Zoomed to selected mesh:', selectedMeshInfo);
+
+  } catch (error) {
+    console.error('Error zooming to selected mesh:', error);
+  }
+}, [selectedMeshInfo, getMeshBoundingBoxFromDB, calculateCameraPositionForBounds, setCameraPosition]);
+
+// 5. Focus on selected mesh function
+const focusOnSelected = useCallback(async () => {
+  if (!selectedMeshInfo || !cameraRef.current) {
+    console.warn('No mesh selected or camera not available');
+    return;
+  }
+
+  try {
+    let boundingBox = null;
+
+    // Get bounding box based on mesh type
+    if (selectedMeshInfo.type === 'individual' && selectedMeshInfo.meshId) {
+      boundingBox = await getMeshBoundingBoxFromDB(selectedMeshInfo.meshId);
+    } else if (selectedMeshInfo.type === 'merged' && selectedMeshRef.current) {
+      const mesh = selectedMeshRef.current;
+      if (mesh.getBoundingInfo) {
+        const bb = mesh.getBoundingInfo().boundingBox;
+        boundingBox = {
+          min: { x: bb.minimumWorld.x, y: bb.minimumWorld.y, z: bb.minimumWorld.z },
+          max: { x: bb.maximumWorld.x, y: bb.maximumWorld.y, z: bb.maximumWorld.z }
+        };
+      }
+    }
+
+    if (!boundingBox) {
+      console.warn('Could not get bounding box for selected mesh');
+      return;
+    }
+
+    const camera = cameraRef.current;
+    const cameraData = calculateCameraPositionForBounds(boundingBox, camera, 1.2); // 1.2 padding for closer focus
+
+    if (!cameraData) return;
+
+    // Position camera for optimal viewing (front view)
+    const cameraPosition = new BABYLON.Vector3(
+      cameraData.center.x,
+      cameraData.center.y,
+      cameraData.center.z - cameraData.distance
+    );
+
+    setCameraPosition(cameraPosition, cameraData.center);
+    console.log('Focused on selected mesh:', selectedMeshInfo);
+
+  } catch (error) {
+    console.error('Error focusing on selected mesh:', error);
+  }
+}, [selectedMeshInfo, getMeshBoundingBoxFromDB, calculateCameraPositionForBounds, setCameraPosition]);
+
+// 6. Handle menu option clicks
+const handleMenuOptionClick = useCallback((option) => {
+  switch (option.label) {
+    case 'Zoom selected':
+      zoomToSelected();
+      setIsMenuOpen(false);
+      break;
+    case 'Focus Selected':
+      focusOnSelected();
+      setIsMenuOpen(false);
+      break;
+    case 'Deselect':
+      clearSelection();
+      setIsMenuOpen(false);
+      break;
+    case 'Add Comment':
+      console.log('Add comment clicked');
+      setIsMenuOpen(false);
+      break;
+    default:
+      console.log('Menu option clicked:', option.label);
+      setIsMenuOpen(false);
+  }
+}, [zoomToSelected, focusOnSelected, clearSelection]);
 
 
+  const menuOptions = [
+    { label: selectedItemName ? `${selectedItemName.parentFileName}` : "" },
+    { label: selectedItemName ? `${selectedItemName.name}` : "" },
+    { label: "Add Comment",action: () => handleMenuOptionClick({ label: "Add Comment" }) },
+    {
+      label: "Info",
+      children: [
+        { label: "Tag info" },
+        { label: "Tag GenInfo" },
+        { label: "File Info" },
+      ],
+    },
+    { label: "Change Color" },
+    { label: "Deselect", action: () => handleMenuOptionClick({ label: "Deselect" })  },
+    { label: "Select tag" },
+    {
+      label: "Visibility",
+      children: [
+        { label: "Hide all" },
+        { label: "Unhide all" },
+        { label: "Hide selected" },
+        { label: "Hide unselected" },
+      ],
+    },
+    { label: "Zoom selected",action: () => handleMenuOptionClick({ label: "Zoom selected" }) },
+    { label: "Focus Selected",action: () => handleMenuOptionClick({ label: "Focus Selected" }) },
+  ];
   return (
-    <div >
+    <div>
       {/* Canvas */}
       <canvas
         ref={canvasRef}
         style={{ position: "absolute", width: "100%", height: "100vh" }}
       />
-
-   
 
       {/* File Panel */}
       <div
@@ -5430,8 +5675,6 @@ const setupPointerObservers = useCallback((scene, lodManager) => {
           gap: "1px",
         }}
       >
-  
-
         <button
           style={{ zIndex: "1000" }}
           onClick={loadMergedPolyMeshesWithWorkers}
@@ -5444,11 +5687,9 @@ const setupPointerObservers = useCallback((scene, lodManager) => {
           Clear DB
         </button>
 
-         <button onClick={toggleSelectionMode} className="btn btn-dark">
-         select
+        <button onClick={toggleSelectionMode} className="btn btn-dark">
+          select
         </button>
-
-      
 
         {/* WebXR Camera Button - only show if supported */}
         {isXRSupported && (
@@ -5477,175 +5718,236 @@ const setupPointerObservers = useCallback((scene, lodManager) => {
             {isInXR ? "🥽 In VR Mode" : "⏳ Starting VR..."}
           </div>
         )}
-       
       </div>
 
-      {showMeasure && (
-              <>
-                <div
-                  style={{
-                    position: "absolute",
-                    top: "33%",
-                    left: 0,
-                    display: "flex",
-                    flexDirection: "row",
-                    zIndex: 9999,
-                    fontSize: "13px",
-                  }}
-                >
-                  {showMeasureDetails ? (
-                    <>
-                      <div
-                        className="measureInfo"
-                        style={{ left: 0, zIndex: 1 }}
-                      >
-                        <table class="measureInfoTable">
-                          <tbody>
-                            <tr class="bottomBordered">
-                              <th class="measureCornerCell left"></th>
-                              <th>X</th>
-                              <th>Y</th>
-                              <th>Z</th>
-                            </tr>
-                            <tr>
-                              <th class="left">
-                                P<sub>1</sub>
-                              </th>
-                              <td>{point1 ? point1.x : ""}</td>
-                              <td>{point1 ? point1.z : ""}</td>
-                              <td>{point1 ? point1.y : ""}</td>
-                            </tr>
+      {/* Right click menu */}
+      {isMenuOpen && (
+        <div
+          className="menu"
+          style={{
+            position: "absolute",
+            maxWidth: "250px",
+            top: `${menuPosition.top - 200}px`,
+            left: `${menuPosition.left - 300}px`,
+            fontSize: "14px",
+          }}
+        >
+          {menuOptions.map((option, index) => (
+            <div
+              key={index}
+              className="menu-option"
+              onClick={option.action}
+              onMouseEnter={() => setHoveredIndex(index)}
+              onMouseLeave={() => setHoveredIndex(null)}
+              style={{
+                position: "relative",
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                cursor: option.action ? "pointer" : "default",
+                paddingLeft: "10px",
+                paddingRight: "10px",
+                fontWeight:
+                  selectedItemName && option.label === selectedItemName.name
+                    ? "bold"
+                    : "normal",
+              }}
+            >
+              <span>{option.label}</span>
+              {option.children && <span style={{ marginLeft: "auto" }}>▶</span>}
 
-                            <tr>
-                              <th class="left">
-                                P<sub>2</sub>
-                              </th>
-                              <td>{point1 ? point1.x : ""}</td>
-                              <td>{point1 ? point1.z : ""}</td>
-                              <td>{point1 ? point1.y : ""}</td>
-                            </tr>
-                            <tr>
-                              <th class="left">Difference</th>
-                              <td>{differences ? differences.diffX : ""}</td>
-                              <td>{differences ? differences.diffZ : ""}</td>
-                              <td>{differences ? differences.diffY : ""}</td>
-                            </tr>
-                            <tr class="topBordered">
-                              <th class="left">Distance</th>
-                              <td colspan="3">{distance ? distance : ""}</td>
-                            </tr>
-                            <tr class="topBordered">
-                              <th class="left">Angle</th>
-                              <td colspan="3">
-                                hor:{angles ? angles.horizontalAngle : ""}{" "}
-                                &emsp; ver:{angles ? angles.verticalAngle : ""}
-                              </td>
-                            </tr>
-                          </tbody>
-                        </table>
-                      </div>
-                    </>
-                  ) : (
-                    ""
-                  )}
-                  <button
-                    onClick={handleShowMeasureDetails}
-                    className="vertical-button"
-                  >
-                    Measurements
-                  </button>
+              {option.children && hoveredIndex === index && (
+                <div
+                  className="submenu"
+                  style={{ position: "absolute", left: "100%", top: 0 }}
+                >
+                  {option.children.map((subOption, subIndex) => (
+                    <div
+                      key={subIndex}
+                      className="menu-option"
+                      onClick={subOption.action}
+                      style={{
+                        cursor: "pointer",
+                        whiteSpace: "nowrap",
+                        paddingLeft: "10px",
+                        paddingRight: "10px",
+                      }}
+                    >
+                      {subOption.label}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Measure details */}
+
+      {showMeasure && (
+        <>
+          <div
+            style={{
+              position: "absolute",
+              top: "33%",
+              left: 0,
+              display: "flex",
+              flexDirection: "row",
+              zIndex: 9999,
+              fontSize: "13px",
+            }}
+          >
+            {showMeasureDetails ? (
+              <>
+                <div className="measureInfo" style={{ left: 0, zIndex: 1 }}>
+                  <table class="measureInfoTable">
+                    <tbody>
+                      <tr class="bottomBordered">
+                        <th class="measureCornerCell left"></th>
+                        <th>X</th>
+                        <th>Y</th>
+                        <th>Z</th>
+                      </tr>
+                      <tr>
+                        <th class="left">
+                          P<sub>1</sub>
+                        </th>
+                        <td>{point1 ? point1.x : ""}</td>
+                        <td>{point1 ? point1.z : ""}</td>
+                        <td>{point1 ? point1.y : ""}</td>
+                      </tr>
+
+                      <tr>
+                        <th class="left">
+                          P<sub>2</sub>
+                        </th>
+                        <td>{point1 ? point1.x : ""}</td>
+                        <td>{point1 ? point1.z : ""}</td>
+                        <td>{point1 ? point1.y : ""}</td>
+                      </tr>
+                      <tr>
+                        <th class="left">Difference</th>
+                        <td>{differences ? differences.diffX : ""}</td>
+                        <td>{differences ? differences.diffZ : ""}</td>
+                        <td>{differences ? differences.diffY : ""}</td>
+                      </tr>
+                      <tr class="topBordered">
+                        <th class="left">Distance</th>
+                        <td colspan="3">{distance ? distance : ""}</td>
+                      </tr>
+                      <tr class="topBordered">
+                        <th class="left">Angle</th>
+                        <td colspan="3">
+                          hor:{angles ? angles.horizontalAngle : ""} &emsp; ver:
+                          {angles ? angles.verticalAngle : ""}
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
                 </div>
               </>
+            ) : (
+              ""
             )}
+            <button
+              onClick={handleShowMeasureDetails}
+              className="vertical-button"
+            >
+              Measurements
+            </button>
+          </div>
+        </>
+      )}
 
-            {/*showMeasureDetailsAbove */}
+      {/*showMeasureDetailsAbove */}
 
-            {showMeasureDetailsAbove && (
+      {showMeasureDetailsAbove && (
+        <div
+          style={{
+            position: "absolute",
+            left: "20px",
+            top: "50px",
+            zIndex: 1,
+            fontFamily: "sans-serif",
+            fontSize: "12px",
+            color: "white",
+            width: "80px",
+          }}
+        >
+          {/* Top bar: total distance */}
+          <div
+            style={{
+              backgroundColor: "orange",
+              padding: "4px",
+              textAlign: "center",
+              fontWeight: "bold",
+            }}
+          >
+            {distance ? distance : ""}
+          </div>
+
+          {/* X, Y, Z labels and values */}
+          <div style={{ display: "flex", flexDirection: "row" }}>
+            {/* Axis labels */}
+            <div style={{ display: "flex", flexDirection: "column" }}>
               <div
                 style={{
-                  position: "absolute",
-                  left: "20px",
-                  top: "50px",
-                  zIndex: 1,
-                  fontFamily: "sans-serif",
-                  fontSize: "12px",
+                  backgroundColor: "red",
+                  padding: "4px",
+                  textAlign: "center",
                   color: "white",
-                  width: "80px",
                 }}
               >
-                {/* Top bar: total distance */}
-                <div
-                  style={{
-                    backgroundColor: "orange",
-                    padding: "4px",
-                    textAlign: "center",
-                    fontWeight: "bold",
-                  }}
-                >
-                  {distance ? distance : ""}
-                </div>
-
-                {/* X, Y, Z labels and values */}
-                <div style={{ display: "flex", flexDirection: "row" }}>
-                  {/* Axis labels */}
-                  <div style={{ display: "flex", flexDirection: "column" }}>
-                    <div
-                      style={{
-                        backgroundColor: "red",
-                        padding: "4px",
-                        textAlign: "center",
-                        color: "white",
-                      }}
-                    >
-                      X
-                    </div>
-                    <div
-                      style={{
-                        backgroundColor: "green",
-                        padding: "4px",
-                        textAlign: "center",
-                        color: "white",
-                      }}
-                    >
-                      Y
-                    </div>
-                    <div
-                      style={{
-                        backgroundColor: "blue",
-                        padding: "4px",
-                        textAlign: "center",
-                        color: "white",
-                      }}
-                    >
-                      Z
-                    </div>
-                  </div>
-
-                  {/* Axis values */}
-                  <div style={{ backgroundColor: "#222", flexGrow: 1 }}>
-                    <div
-                      style={{
-                        padding: "4px 6px",
-                        borderBottom: "1px solid #333",
-                      }}
-                    >
-                      {differences ? differences.diffX : ""}
-                    </div>
-                    <div
-                      style={{
-                        padding: "4px 6px",
-                        borderBottom: "1px solid #333",
-                      }}
-                    >
-                      {differences ? differences.diffY : ""}
-                    </div>
-                    <div style={{ padding: "4px 6px" }}>
-                      {differences ? differences.diffZ : ""}
-                    </div>
-                  </div>
-                </div>
+                X
               </div>
-            )}
+              <div
+                style={{
+                  backgroundColor: "green",
+                  padding: "4px",
+                  textAlign: "center",
+                  color: "white",
+                }}
+              >
+                Y
+              </div>
+              <div
+                style={{
+                  backgroundColor: "blue",
+                  padding: "4px",
+                  textAlign: "center",
+                  color: "white",
+                }}
+              >
+                Z
+              </div>
+            </div>
+
+            {/* Axis values */}
+            <div style={{ backgroundColor: "#222", flexGrow: 1 }}>
+              <div
+                style={{
+                  padding: "4px 6px",
+                  borderBottom: "1px solid #333",
+                }}
+              >
+                {differences ? differences.diffX : ""}
+              </div>
+              <div
+                style={{
+                  padding: "4px 6px",
+                  borderBottom: "1px solid #333",
+                }}
+              >
+                {differences ? differences.diffY : ""}
+              </div>
+              <div style={{ padding: "4px 6px" }}>
+                {differences ? differences.diffZ : ""}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
       {speedBar}
     </div>
   );

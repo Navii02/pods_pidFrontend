@@ -30,7 +30,7 @@ function GlobalModalOpen({leftNavVisible}) {
   const [mode, setMode] = useState("");
   const [orthoviewmode, setOrthoviewmode] = useState("perspective");
   const [showComment, setShowComment] = useState(false);
-  const [selectedItem, setselectedItem] = useState(false);
+  const [selectedItem, setSelectedItem] = useState(false);
   const [activeButton, setActiveButton] = useState(null);
 
   const [settingbox, setsettingbox] = useState(false);
@@ -117,7 +117,7 @@ function GlobalModalOpen({leftNavVisible}) {
 
   // handle object selected
   const handleObjectselected = (buttonName) => {
-    setselectedItem(true);
+    setSelectedItem(true);
     setActiveButton(buttonName);
     setShowMeasure(false);
   };
@@ -160,6 +160,9 @@ function GlobalModalOpen({leftNavVisible}) {
             showMeasure={showMeasure}
             setShowWireFrame={setShowWireFrame}
             showWireFrame={showWireFrame}
+            selectedItem={selectedItem}
+            setSelectedItem={setSelectedItem}
+            setActiveButton={setActiveButton}
           />
         </div>
 
