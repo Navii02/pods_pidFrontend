@@ -1,18 +1,20 @@
 import React, { useState, useEffect } from "react";
 import Alert from "../components/AlertModal";
+import { GetStatusComment, SaveComment } from "../services/CommentApi";
 
 function CommentModal({
   isOpen,
   onClose,
   content,
-  allCommentStatus,
-  docdetnum,
+  docdetnum
+
 }) {
   const [comment, setComment] = useState("");
   const [status, setStatus] = useState("");
   const [priority, setPriority] = useState("");
    const [customAlert, setCustomAlert] = useState(false);
     const [modalMessage, setModalMessage] = useState("");
+     const [allCommentStatus,setallCommentStatus]= useState([])
 
    // --------------------------------------------------------------------//
     const [floatingPosition, setFloatingPosition] = useState({ x: 100, y: 100 });
@@ -24,7 +26,11 @@ function CommentModal({
     const [isMinimized, setIsMinimized] = useState(false);
     const [startSize, setStartSize] = useState({ width: 0, height: 0 });
     const [startPosition, setStartPosition] = useState({ x: 0, y: 0 });
-  
+
+
+    const projectString = sessionStorage.getItem("selectedProject");
+  const project = projectString ? JSON.parse(projectString) : null;
+  const projectId = project?.projectId;
     // Start dragging
     const startDrag = (e) => {
       if (!isMaximized) {
@@ -50,7 +56,17 @@ function CommentModal({
       setDragging(false);
       setResizing(false);
     };
-  
+
+      const FetchStatus = async(projectId)=>{
+        const response = await GetStatusComment(projectId)
+        if(response.status===200){
+setallCommentStatus(response.data.data)
+
+        }
+      }
+  useEffect(()=>{
+    FetchStatus(projectId)
+  },[])
     // Handle Resizing & Dragging
     useEffect(() => {
       const onMouseMove = (e) => {
@@ -118,7 +134,7 @@ function CommentModal({
     };
     // --------------------------------------------------------//
 
-  const handleCommentClick = () => {
+  const handleCommentClick = async() => {
     if (!comment) {
       setCustomAlert(true);
       setModalMessage("Please enter a comment.");
@@ -134,14 +150,15 @@ function CommentModal({
       comment,
       status,
       priority,
+      projectId,
       coordinateX: content.intersectionPointX,
       coordinateY: content.intersectionPointY,
       coordinateZ: content.intersectionPointZ,
     };
 
     console.log("Saving Comment:", data);
-
-
+ const response = await SaveComment(data)
+ if(response.status===200){
     setComment("");
     setStatus("");
     setPriority("");
@@ -152,6 +169,10 @@ function CommentModal({
        setIsMinimized(false);  
        onClose();
   };
+ }
+ 
+
+
 
   useEffect(() => {
     if (!isOpen) {

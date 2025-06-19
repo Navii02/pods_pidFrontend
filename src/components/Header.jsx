@@ -12,17 +12,18 @@ const Header = () => {
   const project = projectString ? JSON.parse(projectString) : null;
 
   const handleLogout = async () => {
+ 
     sessionStorage.clear();
-    //window.location.reload()
+
     setUpdateProject("No data");
-    navigate("/");
+    navigate("/iroamer");
   };
 
   //console.log(project?.projectName);
 
   return (
     <header>
-      <img id="logoPD" src="/images/logo-pd.png" onClick={() => navigate("/")} />
+      <img id="logoPD" src="/images/logo-pd.png" alt="" onClick={() => navigate("/")} />
 
      <p className="text-light">
   {project?.projectName || ""}

@@ -3,7 +3,7 @@ import { Modal, Button, Form, InputGroup, FormControl, Spinner } from "react-boo
 import { GetEntities, RegisterTagsforsystem } from "../../services/TreeManagementApi";
 import { RegisterTag } from "../../services/TagApi";
 
-const TagEntityModal = ({ showTagModalFor, setShowTagModalFor, selectedProject,tagsMap }) => {
+const TagEntityModal = ({ showTagModalFor, setShowTagModalFor, selectedProject,tagsMap,onSuccess  }) => {
   const [showRegisterTagModal, setShowRegisterTagModal] = useState(false);
   const [tags, setTags] = useState([]);
   const [selectedTags, setSelectedTags] = useState([]);
@@ -69,37 +69,51 @@ const TagEntityModal = ({ showTagModalFor, setShowTagModalFor, selectedProject,t
     setSelectedTags([]);
   };
 
-  const handleAssignTags = async () => {
-    if (!showTagModalFor || selectedTags.length === 0) return;
+ const handleAssignTags = async () => {
+  if (!showTagModalFor || selectedTags.length === 0) return;
 
-    try {
-      for (const tagId of selectedTags) {
-        const tag = tags.find(t => t.tagId === tagId);
-        if (!tag) continue;
+  try {
+    setIsLoading(true); // Add loading state to prevent premature modal close
+    for (const tagId of selectedTags) {
+      const tag = tags.find(t => t.tagId === tagId);
+      if (!tag) continue;
 
-        const payload = {
-          project_id: selectedProject.projectId,
-          area: showTagModalFor.area,
-          disc: showTagModalFor.disc,
-          sys: showTagModalFor.sys,
-          code: tag.number,
-          name: tag.name
-        };
+      const payload = {
+        project_id: selectedProject.projectId,
+        area: showTagModalFor.area,
+        disc: showTagModalFor.disc,
+        sys: showTagModalFor.sys,
+        code: tag.number,
+        name: tag.name
+      };
 
-        const response = await RegisterTagsforsystem(payload);
-        if (response.status !== 200) {
-          throw new Error(`Failed to assign tag: ${tag.name}`);
-        }
+      const response = await RegisterTagsforsystem(payload);
+      if (response.status !== 200) {
+        throw new Error(`Failed to assign tag: ${tag.name}`);
       }
-
-      alert("Tags assigned successfully!");
-      setShowTagModalFor(null);
-      setSelectedTags([]);
-    } catch (error) {
-      console.error("Failed to assign tags", error);
-      alert(`Failed to assign tags: ${error.message}`);
     }
-  };
+
+    // Wait for the onSuccess callback to complete (which triggers fetchTags)
+    await onSuccess({
+      refetch: true,
+      entityType: "Tag",
+      parentInfo: {
+        area: showTagModalFor.area,
+        disc: showTagModalFor.disc,
+        sys: showTagModalFor.sys,
+      }
+    });
+
+    alert("Tags assigned successfully!");
+    setSelectedTags([]);
+    setShowTagModalFor(null); // Close modal after onSuccess completes
+  } catch (error) {
+    console.error("Failed to assign tags", error);
+    alert(`Failed to assign tags: ${error.message}`);
+  } finally {
+    setIsLoading(false); // Reset loading state
+  }
+};
 
   const handleChange = (e) => {
     const { name, value } = e.target;

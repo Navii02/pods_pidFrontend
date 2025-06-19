@@ -18,7 +18,7 @@ import {
   getProjectArea,
   getprojectDisipline,
   getprojectsystem,
-  getProjectTags, // Assuming this API function exists
+  getProjectTags,
 } from "../services/TreeManagementApi";
 import "../styles/ProjectDetails.css";
 import { TreeresponseContext, updateProjectContext } from "../context/ContextShare";
@@ -28,9 +28,8 @@ const ProjectDetails = ({
   setShowProjectDetails,
   activeTab,
 }) => {
-
   const { updateTree } = useContext(TreeresponseContext);
-   const {updateProject} = useContext(updateProjectContext)
+  const { updateProject } = useContext(updateProjectContext);
   const selectedProject = JSON.parse(sessionStorage.getItem("selectedProject"));
   const [showEntityModal, setShowEntityModal] = useState(false);
   const [showDisciplineModalFor, setShowDisciplineModalFor] = useState(null);
@@ -40,9 +39,9 @@ const ProjectDetails = ({
   const [expandedArea, setExpandedArea] = useState(null);
   const [disciplinesMap, setDisciplinesMap] = useState({});
   const [systemsMap, setSystemsMap] = useState({});
-  const [tagsMap, setTagsMap] = useState({}); // New state for tags
+  const [tagsMap, setTagsMap] = useState({});
   const [expandedDiscipline, setExpandedDiscipline] = useState(null);
-  const [expandedSystem, setExpandedSystem] = useState(null); // New state for expanded systems
+  const [expandedSystem, setExpandedSystem] = useState(null);
   const [hasProjectData, setHasProjectData] = useState(!!selectedProject);
   const entityTypes = {
     areas: "Area",
@@ -52,11 +51,27 @@ const ProjectDetails = ({
   const currentEntityType = entityTypes[activeTab] || "Area";
 
   useEffect(() => {
-       setHasProjectData(!!selectedProject);
-    if (selectedProject?.projectId) {
-      fetchAreas();
+  if (selectedProject?.projectId) {
+    fetchAreas();
+
+    // If an area was expanded, fetch its disciplines
+    if (expandedArea) {
+      fetchDisciplines(expandedArea);
     }
-  }, [sessionStorage.getItem("selectedProject"),updateProject,updateTree]);
+
+    // If a discipline was expanded, fetch its systems
+    if (expandedDiscipline) {
+      const [areaCode, discCode] = expandedDiscipline.split("_");
+      fetchSystems(areaCode, discCode);
+    }
+
+    // If a system was expanded, fetch its tags
+    if (expandedSystem) {
+      const [area, disc, sys] = expandedSystem.split("_");
+      fetchTags(area, disc, sys);
+    }
+  }
+}, [updateTree, updateProject]);
 
   const fetchAreas = async () => {
     try {
@@ -106,13 +121,10 @@ const ProjectDetails = ({
     }
   };
 
-  // New function to fetch tags
   const fetchTags = async (area, disc, sys) => {
     try {
       const projectid = selectedProject.projectId;
       const response = await getProjectTags(projectid, area, disc, sys);
-      console.log(response.data);
-
       if (response.status === 200) {
         const key = `${area}_${disc}_${sys}`;
         setTagsMap((prev) => ({
@@ -153,7 +165,7 @@ const ProjectDetails = ({
           fetchSystems(id.split("_")[0], id.split("_")[1]);
         else if (type === "Tag") {
           const [area, disc, sys] = id.split("_");
-          fetchTags(area, disc, sys); // Refresh tags after deletion
+          fetchTags(area, disc, sys);
         }
       }
     } catch (error) {
@@ -169,24 +181,74 @@ const ProjectDetails = ({
     setShowTagModalFor(null);
   };
 
-  const handleEntityRegisterSuccess = () => {
-    handleEntityRegisterClose();
-    fetchAreas();
-  };
+const handleEntityRegisterSuccess = async (newEntity, entityType, parentInfo) => {
+  handleEntityRegisterClose();
 
+  if (newEntity.refetch) {
+    if (entityType === "Area") {
+      await fetchAreas();
+    } else if (entityType === "Discipline" && parentInfo) {
+      await fetchDisciplines(parentInfo.area);
+      setExpandedArea(parentInfo.area);
+    } else if (entityType === "System" && parentInfo) {
+      await fetchSystems(parentInfo.area, parentInfo.disc);
+      setExpandedDiscipline(`${parentInfo.area}_${parentInfo.disc}`);
+    } else if (entityType === "Tag" && parentInfo) {
+      await fetchTags(parentInfo.area, parentInfo.disc, parentInfo.sys);
+      setExpandedSystem(`${parentInfo.area}_${parentInfo.disc}_${parentInfo.sys}`);
+    }
+  } else {
+    // Existing logic for when entity data is provided
+    if (entityType === "Area") {
+      setAreas(prev => [...prev, newEntity]);
+    } else if (entityType === "Discipline" && parentInfo) {
+      setDisciplinesMap(prev => ({
+        ...prev,
+        [parentInfo.area]: [...(prev[parentInfo.area] || []), newEntity]
+      }));
+      setExpandedArea(parentInfo.area);
+    } else if (entityType === "System" && parentInfo) {
+      const systemKey = `${parentInfo.area}_${parentInfo.disc}`;
+      setSystemsMap(prev => ({
+        ...prev,
+        [systemKey]: [...(prev[systemKey] || []), newEntity]
+      }));
+      setExpandedDiscipline(systemKey);
+    } else if (entityType === "Tag" && parentInfo) {
+      const tagKey = `${parentInfo.area}_${parentInfo.disc}_${parentInfo.sys}`;
+      setTagsMap(prev => ({
+        ...prev,
+        [tagKey]: [...(prev[tagKey] || []), newEntity]
+      }));
+      setExpandedSystem(tagKey);
+    }
+  }
+};
   const openDisciplineModal = (area) => setShowDisciplineModalFor(area);
   const openSystemModal = (discipline) => setShowSystemModalFor(discipline);
   const openTagModal = (system) => setShowTagModalFor(system);
 
   return (
     <div>
-      
       <EntityRegister
         isOpen={
           showEntityModal || !!showDisciplineModalFor || !!showSystemModalFor
         }
         onClose={handleEntityRegisterClose}
-        onSuccess={handleEntityRegisterSuccess}
+        onSuccess={(newEntity) => {
+          if (showSystemModalFor) {
+            handleEntityRegisterSuccess(newEntity, "System", {
+              area: showSystemModalFor.area,
+              disc: showSystemModalFor.disc
+            });
+          } else if (showDisciplineModalFor) {
+            handleEntityRegisterSuccess(newEntity, "Discipline", {
+              area: showDisciplineModalFor.area
+            });
+          } else {
+            handleEntityRegisterSuccess(newEntity, "Area");
+          }
+        }}
         entityType={
           showSystemModalFor
             ? "System"
@@ -199,12 +261,15 @@ const ProjectDetails = ({
         }
       />
 
-      <TagEntityModal
-        showTagModalFor={showTagModalFor}
-        setShowTagModalFor={setShowTagModalFor}
-        selectedProject={selectedProject}
-        tagsMap={tagsMap}
-      />
+  <TagEntityModal
+  showTagModalFor={showTagModalFor}
+  setShowTagModalFor={setShowTagModalFor}
+  selectedProject={selectedProject}
+  tagsMap={tagsMap}
+  onSuccess={async ({ refetch, entityType, parentInfo }) => {
+    await handleEntityRegisterSuccess({ refetch }, entityType, parentInfo);
+  }}
+/>
 
       <div className="project-toggle-wrapper ">
         {showProjectDetails && (
@@ -252,7 +317,7 @@ const ProjectDetails = ({
                       <button
                         onClick={() => handleDelete("Area", null, area.area)}
                       >
-                        <FontAwesomeIcon icon={faTrash}className="me-2" />
+                        <FontAwesomeIcon icon={faTrash} className="me-2" />
                       </button>
                     </div>
                   </div>
@@ -348,8 +413,7 @@ const ProjectDetails = ({
                                             ...sys,
                                             area: area.area,
                                             disc: disc.disc,
-                                            projectId:
-                                              selectedProject.projectId,
+                                            projectId: selectedProject.projectId,
                                           })
                                         }
                                       >
@@ -413,9 +477,7 @@ const ProjectDetails = ({
             })}
           </>
         )}
-       
       </div>
-    
     </div>
   );
 };

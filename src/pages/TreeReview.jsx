@@ -24,8 +24,8 @@ import {
 import DeleteConfirm from "../components/DeleteConfirm";
 import Alert from "../components/Alert";
 
-function TreeReview(updatetree) {
-  const { updateTree } = useContext(TreeresponseContext);
+function TreeReview() {
+  const { updateTree, setUpdatetree } = useContext(TreeresponseContext);
   const { updateProject } = useContext(updateProjectContext);
 
   const [areaData, setAreaData] = useState([]);
@@ -52,25 +52,29 @@ function TreeReview(updatetree) {
   };
 
   const handleConfirmDelete = async () => {
-    if (currentDeleteType === "area") {
-      console.log(currentDeleteTag);
-      await deleteArea(currentDeleteTag);
-    } else if (currentDeleteType === "disc") {
-      await deleteDiscipline(currentDeleteTag);
-    } else if (currentDeleteType === "sys") {
-      await deleteSystem(currentDeleteTag);
-    } else if (currentDeleteType === "all-area") {
-      await deleteAllAreas();
-    } else if (currentDeleteType === "all-discipline") {
-      await deleteAllDisciplines();
-    } else if (currentDeleteType === "all-system") {
-      await deleteAllSystems();
+    try {
+      if (currentDeleteType === "area") {
+        await deleteArea(currentDeleteTag);
+      } else if (currentDeleteType === "disc") {
+        await deleteDiscipline(currentDeleteTag);
+      } else if (currentDeleteType === "sys") {
+        await deleteSystem(currentDeleteTag);
+      } else if (currentDeleteType === "all-area") {
+        await deleteAllAreas();
+      } else if (currentDeleteType === "all-discipline") {
+        await deleteAllDisciplines();
+      } else if (currentDeleteType === "all-system") {
+        await deleteAllSystems();
+      }
+      setUpdatetree(Date.now()); // Trigger update in ProjectDetails
+      fetchData();
+    } catch (error) {
+      console.error("Delete failed:", error);
+    } finally {
+      setShowConfirm(false);
+      setCurrentDeleteTag("");
+      setCurrentDeleteType("");
     }
-    fetchData();
-
-    setShowConfirm(false);
-    setCurrentDeleteTag("");
-    setCurrentDeleteType("");
   };
 
   const handleCancelDelete = () => {
@@ -131,20 +135,22 @@ function TreeReview(updatetree) {
 
   const handleSave = async (type) => {
     try {
+      let response;
       switch (type) {
         case "area":
-          await updateArea(editedLineData);
+          response = await updateArea(editedLineData);
           break;
         case "discipline":
-          await updateDiscipline(editedLineData);
+          response = await updateDiscipline(editedLineData);
           break;
         case "system":
-          await updateSystem(editedLineData);
+          response = await updateSystem(editedLineData);
           break;
         default:
           return;
       }
       handleCloseEdit();
+      setUpdatetree(Date.now()); // Trigger update in ProjectDetails
       fetchData();
     } catch (error) {
       console.error("Save failed:", error);
@@ -153,7 +159,6 @@ function TreeReview(updatetree) {
 
   return (
     <div>
-      {/* style={{ width: '100%', height: '100vh', backgroundColor: 'white', zIndex: '1', position: 'absolute' }} */}
       <form>
         <div className="table-container">
           <h4 className="text-center">Area table</h4>

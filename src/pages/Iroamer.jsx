@@ -19,11 +19,6 @@ function Iroamer() {
     intersectionPointZ: 300,
   };
 
-  const mockStatusList = [
-    { statusname: "Open" },
-    { statusname: "Resolved" },
-    { statusname: "Pending" },
-  ];
 
   const [viewMode, setViewMode] = useState("Top View");
 
@@ -151,7 +146,7 @@ function Iroamer() {
           isOpen={isModalOpen}
           onClose={() => setIsModalOpen(false)}
           content={mockContent}
-          allCommentStatus={mockStatusList}
+          
           docdetnum="DOC123"
         />
       </div>

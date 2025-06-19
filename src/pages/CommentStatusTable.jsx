@@ -127,6 +127,11 @@ const CommentStatusTable = () => {
   };
 
   const handleEditOpen = (index) => {
+    // Prevent editing if status is "open" or "closed"
+    const status = tableData[index].statusname.toLowerCase();
+    if (status === "open" || status === "closed") {
+      return;
+    }
     setEditedRowIndex(index);
     setEditedStatusData(tableData[index]);
   };
@@ -239,7 +244,7 @@ const CommentStatusTable = () => {
                 <input
                   type="text"
                   placeholder="Search by status"
-                  className="form-control"
+                  className="form-control bg-light"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   style={{ width: "100%", padding: "5px" }}
@@ -307,12 +312,18 @@ const CommentStatusTable = () => {
                       </>
                     ) : (
                       <>
-                        <FontAwesomeIcon
-                          icon={faPencil}
-                          onClick={() => handleEditOpen(index)}
-                          style={{ cursor: "pointer" }}
-                        />
-                        {item.statusname !== "open" && item.statusname !== "closed" && (
+                        {/* Only show edit icon if status is not "open" or "closed" */}
+                        {item.statusname.toLowerCase() !== "open" && 
+                         item.statusname.toLowerCase() !== "closed" && (
+                          <FontAwesomeIcon
+                            icon={faPencil}
+                            onClick={() => handleEditOpen(index)}
+                            style={{ cursor: "pointer" }}
+                          />
+                        )}
+                        {/* Only show delete icon if status is not "open" or "closed" */}
+                        {item.statusname.toLowerCase() !== "open" && 
+                         item.statusname.toLowerCase() !== "closed" && (
                           <FontAwesomeIcon
                             icon={faTrash}
                             className="ms-3"

@@ -11,13 +11,15 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import React, { useContext, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { deleteTag, getdocumentsbyTags, GetTagDetails, updateTags } from "../services/TagApi";
-import { updateProjectContext } from "../context/ContextShare";
+import { TreeresponseContext, updateProjectContext } from "../context/ContextShare";
 import { Modal } from "react-bootstrap";
 import Alert from "../components/Alert";
 import DeleteConfirm from "../components/DeleteConfirm";
 
 const Tagreview = () => {
   const {updateProject} = useContext(updateProjectContext);
+    const {  setUpdatetree } = useContext(TreeresponseContext);
+  
   const [tags, setTags] = useState([]);
   const [editingId, setEditingId] = useState(null);
   const [editData, setEditData] = useState({});
@@ -77,6 +79,7 @@ const Tagreview = () => {
       if (response.status === 200) {
         setModalMessage("The Tag is updated Successfully");
         setCustomAlert(true);
+         setUpdatetree(Date.now()); 
         GetTags();
       }
       setEditingId(null);
@@ -97,6 +100,7 @@ const Tagreview = () => {
       const response = await deleteTag(tagToDelete);
       if (response.status === 200) {
         GetTags();
+         setUpdatetree(Date.now()); 
         setModalMessage("Tag deleted successfully");
         setCustomAlert(true);
       } else {

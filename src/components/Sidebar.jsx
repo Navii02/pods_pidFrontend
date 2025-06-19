@@ -1,8 +1,7 @@
-// Sidebar.js - Updated to notify parent of active link changes
 import React, { useState, useEffect, useRef, useContext } from "react";
 import { useNavigate } from "react-router-dom";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import Alert from '../components/Alert'
+import Alert from "../components/Alert";
 // import "../styles/Sidebar.css";
 import treeIcon from "../assets/images/tree.png";
 import Arearegister from "../components/Tree/Arearegister";
@@ -46,11 +45,13 @@ function Sidebar({
   projectName,
   setProjectname,
   onOpenProjectModal,
-  onActiveLinkChange, // New prop to notify parent of active link changes
+  onActiveLinkChange,
 }) {
   const { updateProject } = useContext(updateProjectContext);
   const navigate = useNavigate();
-  const [activeItem, setActiveItem] = useState("iRoamer");
+  const [activeItem, setActiveItem] = useState(() => {
+    return sessionStorage.getItem("activeItem") || "iRoamer";
+  });
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [showProjectName, setShowProjectName] = useState(false);
   const [showProjectDetails, setShowProjectDetails] = useState(true);
@@ -62,31 +63,44 @@ function Sidebar({
   });
 
   const [showContents, setShowCOntents] = useState(false);
-  const [activeLink, setActiveLink] = useState("three");
+  const [activeLink, setActiveLink] = useState(() => {
+    return sessionStorage.getItem("activeLink") || "three";
+  });
   const [activeTab, setActiveTab] = useState("");
-  
+
+  // Reset to iRoamer when no project is selected (post-logout)
+  useEffect(() => {
+    const storedProject = sessionStorage.getItem("selectedProject");
+    if (!storedProject) {
+      setActiveItem("iRoamer");
+      setActiveLink("three");
+      sessionStorage.setItem("activeItem", "iRoamer");
+      sessionStorage.setItem("activeLink", "three");
+      setShowProjectName(false);
+    } else {
+      try {
+        const project = JSON.parse(storedProject);
+        if (project?.projectName) {
+          setShowProjectName(true);
+        } else {
+          console.warn("Stored project data is invalid");
+        }
+      } catch (error) {
+        console.error("Error parsing stored project:", error);
+      }
+    }
+  }, [updateProject]);
 
   // Notify parent component when activeLink changes
   useEffect(() => {
     if (onActiveLinkChange) {
       onActiveLinkChange(activeLink);
     }
-  }, [activeLink, onActiveLinkChange]);
-
-  useEffect(() => {
-    const storedProject = sessionStorage.getItem("selectedProject");
-    if (storedProject) {
-      const project = JSON.parse(storedProject);
-      if (project && project?.projectName) {
-        setShowProjectName(true);
-      } else {
-        console.warn("Stored project data is invalid");
-      }
-    }
-  }, [sessionStorage.getItem("selectedProject"), updateProject]);
+    sessionStorage.setItem("activeLink", activeLink);
+    sessionStorage.setItem("activeItem", activeItem);
+  }, [activeLink, activeItem, onActiveLinkChange]);
 
   const handleOpenModal = (modalName) => {
-    console.log(modalName);
     setOpenModal((prev) => ({
       ...prev,
       [modalName]: true,
@@ -110,13 +124,6 @@ function Sidebar({
     }
   };
 
-  const toggleMenu = (menu) => {
-    setOpenMenus((prev) => ({
-      ...prev,
-      [menu]: !prev[menu],
-    }));
-  };
-
   const [openMenus, setOpenMenus] = useState({
     documents: false,
     tags: false,
@@ -127,95 +134,47 @@ function Sidebar({
     mto: false,
   });
 
-  // Toggled options
-
-  // const handleItemClick = (item) => {
-  //   setActiveItem(item.name);
-  //   setActiveLink(item.activeLink || item.name.toLowerCase().replace(/\s+/g, ''));
-    
-  //   if (item.toggleMenu) {
-  //     const isOpening = !openMenus[item.toggleMenu];
-  //     const newOpenMenus = Object.keys(openMenus).reduce((acc, key) => {
-  //       acc[key] = false;
-  //       return acc;
-  //     }, {});
-
-  //     if (isOpening) {
-  //       newOpenMenus[item.toggleMenu] = true;
-  //       if (item.subItems && item.subItems.length > 0) {
-  //         const firstSubItem = item.subItems[0];
-  //         setActiveItem(firstSubItem.name);
-  //         setActiveTab(firstSubItem.name);
-  //         if (firstSubItem.path) {
-  //           navigate(firstSubItem.path);
-  //         }
-  //       }
-  //     } else if (item.path) {
-  //       navigate(item.path);
-  //     }
-
-  //     setOpenMenus(newOpenMenus);
-  //   } else if (item.path) {
-  //     setOpenMenus({
-  //       documents: false,
-  //       tags: false,
-  //       treeManagement: false,
-  //       globalModel: false,
-  //       tagInfo: false,
-  //       specManagement: false,
-  //       mto: false,
-  //       commentManagement: false,
-  //     });
-  //     navigate(item.path);
-  //   }
-  // };
-
-// Non toggle options
   const handleItemClick = (item) => {
-  setActiveItem(item.name);
-  setActiveLink(item.activeLink || item.name.toLowerCase().replace(/\s+/g, ''));
-  
-  if (item.toggleMenu) {
-    const newOpenMenus = { ...openMenus };
-    
-    // Always keep the clicked menu open
-    newOpenMenus[item.toggleMenu] = true;
-    
-    // Close other menus (optional - remove this if you want multiple menus open)
-    Object.keys(newOpenMenus).forEach(key => {
-      if (key !== item.toggleMenu) {
-        newOpenMenus[key] = false;
-      }
-    });
+    setActiveItem(item.name);
+    setActiveLink(item.activeLink || item.name.toLowerCase().replace(/\s+/g, ""));
 
-    // If menu wasn't open before, navigate to first sub-item
-    if (!openMenus[item.toggleMenu] && item.subItems && item.subItems.length > 0) {
-      const firstSubItem = item.subItems[0];
-      setActiveItem(firstSubItem.name);
-      setActiveTab(firstSubItem.name);
-      if (firstSubItem.path) {
-        navigate(firstSubItem.path);
+    if (item.toggleMenu) {
+      const newOpenMenus = { ...openMenus };
+      newOpenMenus[item.toggleMenu] = true;
+
+      Object.keys(newOpenMenus).forEach((key) => {
+        if (key !== item.toggleMenu) {
+          newOpenMenus[key] = false;
+        }
+      });
+
+      if (!openMenus[item.toggleMenu] && item.subItems && item.subItems.length > 0) {
+        const firstSubItem = item.subItems[0];
+        setActiveItem(firstSubItem.name);
+        setActiveTab(firstSubItem.name);
+        if (firstSubItem.path) {
+          navigate(firstSubItem.path);
+        }
+      } else if (openMenus[item.toggleMenu] && item.path) {
+        navigate(item.path);
       }
-    } else if (openMenus[item.toggleMenu] && item.path) {
-      // If menu was already open, navigate to main path
+
+      setOpenMenus(newOpenMenus);
+    } else if (item.path) {
+      setOpenMenus({
+        documents: false,
+        tags: false,
+        treeManagement: false,
+        globalModel: false,
+        tagInfo: false,
+        specManagement: false,
+        mto: false,
+        commentManagement: false,
+      });
       navigate(item.path);
     }
+  };
 
-    setOpenMenus(newOpenMenus);
-  } else if (item.path) {
-    setOpenMenus({
-      documents: false,
-      tags: false,
-      treeManagement: false,
-      globalModel: false,
-      tagInfo: false,
-      specManagement: false,
-      mto: false,
-      commentManagement: false,
-    });
-    navigate(item.path);
-  }
-};
   useEffect(() => {
     const preventScrollChaining = (e) => {
       const target = e.currentTarget;
@@ -257,7 +216,7 @@ function Sidebar({
       path: "/bulk-model-import",
       activeLink: "bulk"
     },
-          { 
+    { 
       icon: faBoxesStacked, 
       name: "Assign Tags Model", 
       path: "/assign-tag-models",
@@ -427,8 +386,8 @@ function Sidebar({
             <i class="fa fa-folder-open"></i>Open Project
             <div class="dropdown-content"></div>
           </div>
-          { showProjectName && 
-            (showContents ?  (
+          {showProjectName && (
+            showContents ? (
               <div
                 style={{
                   width: "100%",
@@ -446,17 +405,15 @@ function Sidebar({
               <>
                 <div>
                   <div className="project-folder">
-                   
-                            {showProjectName && (
-               <ProjectDetails 
-    showProjectDetails={showProjectDetails}
-    setShowProjectDetails={setShowProjectDetails}
-    onAddArea={() => console.log("Add area clicked")} // Add your actual handler
-  />
-            )}
-                    </div>
+                    {showProjectName && (
+                      <ProjectDetails
+                        showProjectDetails={showProjectDetails}
+                        setShowProjectDetails={setShowProjectDetails}
+                        onAddArea={() => console.log("Add area clicked")}
+                      />
+                    )}
                   </div>
-                
+                </div>
                 <div
                   style={{
                     width: "100%",
@@ -471,7 +428,8 @@ function Sidebar({
                   ></i>
                 </div>
               </>
-            ))}
+            )
+          )}
         </li>
         {menuItems.map((item, index) => (
           <li key={index}>
@@ -485,7 +443,6 @@ function Sidebar({
               <FontAwesomeIcon icon={item.icon} className="sideLnkIcon" />
               <a className="sideLnk">{item.name}</a>
             </div>
-            
             {item.subItems && openMenus[item.toggleMenu] && (
               <ul className="sub-menu">
                 {item.subItems.map((subItem, subIndex) => (
@@ -494,11 +451,11 @@ function Sidebar({
                       className={
                         activeTab === subItem.name ? "tabActive" : "tabInactive"
                       }
-                      onClick={() => 
+                      onClick={() =>
                         handleSubItemClick(
-                          subItem.name, 
-                          subItem.path, 
-                          subItem.isModal, 
+                          subItem.name,
+                          subItem.path,
+                          subItem.isModal,
                           subItem.modalName
                         )
                       }
@@ -510,19 +467,27 @@ function Sidebar({
                 ))}
               </ul>
             )}
-          </li> 
+          </li>
         ))}
       </ul>
 
-      {/* Modals */}
       {openModal.areaRegister && (
-        <Arearegister isOpen={openModal.areaRegister} onClose={() => handleCloseModal("areaRegister")} />
+        <Arearegister
+          isOpen={openModal.areaRegister}
+          onClose={() => handleCloseModal("areaRegister")}
+        />
       )}
       {openModal.disciplineRegister && (
-        <DisciplineRegister isOpen={openModal.disciplineRegister} onClose={() => handleCloseModal("disciplineRegister")} />
+        <DisciplineRegister
+          isOpen={openModal.disciplineRegister}
+          onClose={() => handleCloseModal("disciplineRegister")}
+        />
       )}
       {openModal.systemRegister && (
-        <SystemRegister isOpen={openModal.systemRegister} onClose={() => handleCloseModal("systemRegister")} />
+        <SystemRegister
+          isOpen={openModal.systemRegister}
+          onClose={() => handleCloseModal("systemRegister")}
+        />
       )}
 
       {showProjectDetails && <ProjectDetails />}

@@ -1,3 +1,8 @@
+import React, { useState, useEffect, useContext } from "react";
+import DeleteConfirm from "../components/DeleteConfirm";
+import Alert from "../components/Alert";
+import { Modal } from "react-bootstrap";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faDownload,
   faTrash,
@@ -5,165 +10,246 @@ import {
   faEdit,
   faSave,
   faTimes,
-  faXmark,
-  faPencil,
-  faFloppyDisk
+  faPencil
 } from "@fortawesome/free-solid-svg-icons";
-import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import React, { useContext, useState } from "react";
 import { updateProjectContext } from "../context/ContextShare";
+import { getAllcomments, deleteComment, updateComment, deleteAllComment,  } from "../services/CommentApi";
+import * as XLSX from "xlsx";
 
 function CommentReview() {
-   const {updateProject} = useContext(updateProjectContext)
+  const { updateProject } = useContext(updateProjectContext);
+  const [comments, setComments] = useState([]);
+  const [editedRowIndex, setEditedRowIndex] = useState(-1);
+  const [editedCommentData, setEditedCommentData] = useState({});
+  const [currentDeleteNumber, setCurrentDeleteNumber] = useState(null);
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [showDeleteAllConfirm, setShowDeleteAllConfirm] = useState(false);
+  const [customAlert, setCustomAlert] = useState(false);
+  const [modalMessage, setModalMessage] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [importComments, setImportComments] = useState(false);
+  const [selectedFile, setSelectedFile] = useState(null);
 
-  const [searchQuery, setSearchQuery] = useState('');
-  const [editedRowIndex, setEditedRowIndex] = useState(null);
-  const [editedLineData, setEditedLineData] = useState({});
-  const [hoveredRow, setHoveredRow] = useState(null);
-  const filteredComments = []; // replace with your actual filtered data
+  const projectString = sessionStorage.getItem("selectedProject");
+  const project = projectString ? JSON.parse(projectString) : null;
+  const projectId = project?.projectId;
 
-  const handleSearch = (e) => setSearchQuery(e.target.value);
-  const handleChange = (field, value) =>
-    setEditedLineData({ ...editedLineData, [field]: value });
-  const handlePriorityChange = (priority) =>
-    setEditedLineData({ ...editedLineData, priority });
-
-  const handleEdit = (comment, index) => {
-    setEditedRowIndex(index);
-    setEditedLineData({ ...comment });
-  };
-
-  const handleCancel = () => {
-    setEditedRowIndex(null);
-    setEditedLineData({});
-  };
-
-  const handleSave = (index) => {
-    // Save logic here
-    console.log("Saving:", editedLineData);
-    setEditedRowIndex(null);
-    setEditedLineData({});
-  };
-
-  const handleDelete = (commentId) => {
-    if (window.confirm("Are you sure you want to delete this comment?")) {
-      // Delete logic here
-      console.log("Deleting comment:", commentId);
+  const fetchComments = async (projectId) => {
+    try {
+      const response = await getAllcomments(projectId);
+      if (response.status === 200) {
+        setComments(response.data.data);
+      }
+    } catch (error) {
+      console.error("Failed to fetch comments:", error);
+      setCustomAlert(true);
+      setModalMessage("Failed to fetch comments");
     }
+  };
+
+  useEffect(() => {
+    if (projectId) {
+      fetchComments(projectId);
+    }
+  }, [projectId, updateProject]);
+
+  const handleDeleteComment = (commentId) => {
+    setCurrentDeleteNumber(commentId);
+    setShowConfirm(true);
+  };
+
+  const handleDeleteAllClick = () => {
+    setShowDeleteAllConfirm(true);
+  };
+
+  const handleConfirmDeleteAll = async () => {
+    try {
+      const response = await deleteAllComment(projectId);
+      if (response.status === 200) {
+        setComments([]);
+        setShowDeleteAllConfirm(false);
+        setCustomAlert(true);
+     
+      }
+    } catch (error) {
+      console.error("Error deleting all comments:", error);
+      setCustomAlert(true);
+      setModalMessage("Failed to delete all comments");
+    }
+  };
+
+  const handleCancelDeleteAll = () => {
+    setShowDeleteAllConfirm(false);
+  };
+
+  const handleEditOpen = (index) => {
+    setEditedRowIndex(index);
+    setEditedCommentData(comments[index]);
+  };
+
+  const handleCloseEdit = () => {
+    setEditedRowIndex(-1);
+    setEditedCommentData({});
+  };
+
+  const handleSave = async () => {
+    try {
+      const response = await updateComment(editedCommentData);
+      if (response.status === 200) {
+        const updatedComments = [...comments];
+        updatedComments[editedRowIndex] = editedCommentData;
+        setComments(updatedComments);
+        handleCloseEdit();
+      }
+    } catch (error) {
+      console.error("Error updating comment:", error);
+      setCustomAlert(true);
+      setModalMessage("Failed to update comment");
+    }
+  };
+
+  const handleChange = (field, value) => {
+    setEditedCommentData({
+      ...editedCommentData,
+      [field]: value,
+    });
+  };
+
+  const handlePriorityChange = (priority) => {
+    setEditedCommentData({ ...editedCommentData, priority });
+  };
+
+  const handleConfirmDelete = async () => {
+    try {
+      const response = await deleteComment(currentDeleteNumber);
+      if (response.status === 200) {
+        setComments(comments.filter(comment => comment.number !== currentDeleteNumber));
+        setShowConfirm(false);
+        setCurrentDeleteNumber(null);
+      }
+    } catch (error) {
+      console.error("Error deleting comment:", error);
+      setCustomAlert(true);
+      setModalMessage("Failed to delete comment");
+    }
+  };
+
+  const handleCancelDelete = () => {
+    setShowConfirm(false);
+    setCurrentDeleteNumber(null);
   };
 
   const handleExport = () => {
-    // Export logic
-    console.log("Exporting comments");
+    const headers = [
+      "Comment number",
+      "Comment",
+      "Status",
+      "Priority",
+      "Comment Date",
+      "Closed Date"
+    ];
+
+    const dataToExport = comments.map((comment, index) => ({
+      "Comment number": index + 1,
+      "Comment": comment.comment,
+      "Status": comment.status,
+      "Priority": comment.priority,
+      "Comment Date": new Date(comment.createddate).toLocaleString(),
+      "Closed Date": comment.closedDate ? new Date(comment.closedDate).toLocaleString() : "Not closed"
+    }));
+
+    const ws = XLSX.utils.json_to_sheet(dataToExport, { header: headers });
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Comments List");
+    XLSX.writeFile(wb, "CommentsList.xlsx");
   };
 
-  const handleDeleteAllComments = () => {
-    if (window.confirm("Are you sure you want to delete ALL comments?")) {
-      // Delete all logic
-      console.log("Deleting all comments");
-    }
+  const handleSearch = (e) => {
+    setSearchQuery(e.target.value);
   };
 
-  const thStyle = {
-    backgroundColor: "#4d5dbe",
-    color: "white",
-    position: "sticky",
-    top: 0,
-    zIndex: 10,
-    textAlign: "left",
-    padding: "12px 10px",
-    fontSize: "15px",
-    fontWeight: "bold"
-  };
+  const filteredComments = comments.filter(comment =>
+    comment.comment?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    comment.status?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    comment.priority?.toString().includes(searchQuery.toLowerCase())
+  );
 
-  const iconThStyle = {
-    ...thStyle,
-    width: "120px",
-  };
-
-  const wrapperStyle = {
-    maxHeight: "500px",
-    overflowY: "auto",
-    backgroundColor: "white",
-    borderRadius: "4px",
-    boxShadow: "0 2px 4px rgba(0,0,0,0.1)"
+  const formatDate = (dateString) => {
+    if (!dateString) return "";
+    const date = new Date(dateString);
+    return date.toLocaleDateString() + " " + date.toLocaleTimeString();
   };
 
   return (
-    <div className="container-fluid px-0">
-      <div style={wrapperStyle} className="rounded shadow-sm">
-        <table className="table table-bordered table-hover mb-0">
+    <div
+      style={{
+        width: "100%",
+        height: "100vh",
+        backgroundColor: "white",
+        zIndex: "1",
+        position: "absolute",
+      }}
+    >
+      <div className="table-container">
+        <table className="linetable w-100">
           <thead>
             <tr>
-              {[
-                'Comment number',
-                'Comment',
-                'Status',
-                'Priority',
-                'Comment Date',
-                'Closed Date',
-              ].map((header, i) => (
-                <th key={i} style={thStyle}>
-                  {header}
-                </th>
-              ))}
-              <th style={iconThStyle}>
-                <div className="d-flex justify-content-around">
-                  <FontAwesomeIcon 
-                    icon={faUpload} 
-                    title="Export"
-                    onClick={handleExport}
-                    style={{ cursor: 'pointer' }}
-                  />
-                  <FontAwesomeIcon 
-                    icon={faTrash} 
-                    title="Delete all"
-                    onClick={handleDeleteAllComments}
-                    style={{ cursor: 'pointer' }}
-                  />
-                </div>
+              <th className="wideHead">Comment number</th>
+              <th className="wideHead">Comment</th>
+              <th className="wideHead">Status</th>
+              <th>Priority</th>
+              <th>Comment Date</th>
+              <th>Closed Date</th>
+              <th className="tableActionCell">
+                <FontAwesomeIcon 
+                  icon={faDownload} 
+                  title="Export"
+                  onClick={handleExport}
+                  style={{ cursor: 'pointer' }}
+                />
+                <FontAwesomeIcon 
+                  icon={faTrash} 
+                  title="DeleteAll"
+                  onClick={handleDeleteAllClick}
+                  style={{ cursor: 'pointer', marginLeft: '15px' }}
+                />
               </th>
             </tr>
             <tr>
-              <td colSpan="7">
+              <th colSpan="7">
                 <input
                   type="text"
-                  placeholder="Search by status or date"
-                  className="form-control w-100 bg-white"
+                  placeholder="Search comments..."
                   value={searchQuery}
                   onChange={handleSearch}
+                  style={{ width: "100%", padding: "5px" }}
                 />
-              </td>
+              </th>
             </tr>
           </thead>
-          <tbody style={{ backgroundColor: '#f4f4f4' }}>
+          <tbody>
             {filteredComments.length > 0 ? (
               filteredComments.map((comment, index) => (
-                <tr 
-                  key={index} 
-                  style={{ color: 'black' }}
-                  onMouseEnter={() => setHoveredRow(index)}
-                  onMouseLeave={() => setHoveredRow(null)}
-                >
-                  <td style={{ padding: '10px' }}>{comment.number}</td>
-                  <td style={{ padding: '10px' }}>
+                <tr key={comment.number} style={{ color: "black" }}>
+                  <td style={{ backgroundColor: "#f0f0f0" }}>{index + 1}</td>
+                  <td>
                     {editedRowIndex === index ? (
                       <input
                         type="text"
-                        value={editedLineData.comment || ''}
-                        onChange={(e) => handleChange('comment', e.target.value)}
-                        className="form-control bg-white text-black"
+                        value={editedCommentData.comment || ""}
+                        onChange={(e) => handleChange("comment", e.target.value)}
+                        style={{ width: "100%" }}
                       />
                     ) : (
                       comment.comment
                     )}
                   </td>
-                  <td style={{ padding: '10px' }}>
+                  <td>
                     {editedRowIndex === index ? (
                       <select
-                        value={editedLineData.status || ''}
-                        onChange={(e) => handleChange('status', e.target.value)}
-                        className="form-control bg-white text-black"
+                        value={editedCommentData.status || ""}
+                        onChange={(e) => handleChange("status", e.target.value)}
+                        style={{ width: "100%" }}
                       >
                         <option value="open">Open</option>
                         <option value="closed">Closed</option>
@@ -174,24 +260,20 @@ function CommentReview() {
                       comment.status
                     )}
                   </td>
-                  <td style={{ padding: '10px' }}>
+                  <td>
                     {editedRowIndex === index ? (
-                      <div className="d-flex">
+                      <div style={{ display: "flex" }}>
                         {[1, 2, 3].map((priority) => (
-                          <div key={priority} className="form-check me-3">
+                          <div key={priority} style={{ marginRight: "15px" }}>
                             <input
-                              className="form-check-input"
                               type="radio"
                               name={`priority-${index}`}
                               id={`priority-${index}-${priority}`}
                               value={priority.toString()}
-                              checked={editedLineData.priority === priority.toString()}
+                              checked={editedCommentData.priority === priority.toString()}
                               onChange={() => handlePriorityChange(priority.toString())}
                             />
-                            <label 
-                              className="form-check-label" 
-                              htmlFor={`priority-${index}-${priority}`}
-                            >
+                            <label htmlFor={`priority-${index}-${priority}`}>
                               {priority}
                             </label>
                           </div>
@@ -201,51 +283,40 @@ function CommentReview() {
                       comment.priority
                     )}
                   </td>
-                  <td style={{ padding: '10px' }}>{comment.createddate}</td>
-                  <td style={{ padding: '10px' }}>{comment.closedDate}</td>
-                  <td style={{ padding: '10px' }}>
-                    <div className="d-flex justify-content-center">
-                      {comment.status !== 'closed' ? (
-                        editedRowIndex === index ? (
-                          <>
-                            <button
-                              className="btn btn-link p-0 me-2"
-                              onClick={() => handleSave(index)}
-                            >
-                              <FontAwesomeIcon icon={faSave} className="text-success" />
-                            </button>
-                            <button
-                              className="btn btn-link p-0"
-                              onClick={handleCancel}
-                            >
-                              <FontAwesomeIcon icon={faTimes} className="text-danger" />
-                            </button>
-                          </>
-                        ) : (
-                          <>
-                            <button
-                              className="btn btn-link p-0 me-2"
-                              onClick={() => handleEdit(comment, index)}
-                            >
-                              <FontAwesomeIcon icon={faPencil} />
-                            </button>
-                            <button
-                              className="btn btn-link p-0"
-                              onClick={() => handleDelete(comment.id)}
-                            >
-                              <FontAwesomeIcon icon={faTrash} />
-                            </button>
-                          </>
-                        )
-                      ) : (
-                        <button
-                          className="btn btn-link p-0"
-                          onClick={() => handleDelete(comment.id)}
-                        >
-                          <FontAwesomeIcon icon={faTrash} />
-                        </button>
-                      )}
-                    </div>
+                  <td>{formatDate(comment.createddate)}</td>
+                  <td>{formatDate(comment.closedDate) || ""}</td>
+                  <td style={{ backgroundColor: "#f0f0f0" }}>
+                    {editedRowIndex === index ? (
+                      <>
+                        <FontAwesomeIcon
+                          icon={faSave}
+                          className="text-success"
+                          onClick={handleSave}
+                          style={{ cursor: "pointer" }}
+                        />
+                        <FontAwesomeIcon
+                          icon={faTimes}
+                          className="text-danger"
+                          onClick={handleCloseEdit}
+                          style={{ cursor: "pointer", marginLeft: "15px" }}
+                        />
+                      </>
+                    ) : (
+                      <>
+                        {comment.status !== "closed" && (
+                          <FontAwesomeIcon
+                            icon={faPencil}
+                            onClick={() => handleEditOpen(index)}
+                            style={{ cursor: "pointer" }}
+                          />
+                        )}
+                        <FontAwesomeIcon
+                          icon={faTrash}
+                          onClick={() => handleDeleteComment(comment.number)}
+                          style={{ cursor: "pointer", marginLeft: "15px" }}
+                        />
+                      </>
+                    )}
                   </td>
                 </tr>
               ))
@@ -259,6 +330,29 @@ function CommentReview() {
           </tbody>
         </table>
       </div>
+
+      {customAlert && (
+        <Alert
+          message={modalMessage}
+          onAlertClose={() => setCustomAlert(false)}
+        />
+      )}
+
+      {showConfirm && (
+        <DeleteConfirm
+          message="Are you sure you want to delete this comment?"
+          onConfirm={handleConfirmDelete}
+          onCancel={handleCancelDelete}
+        />
+      )}
+
+      {showDeleteAllConfirm && (
+        <DeleteConfirm
+          message="Are you sure you want to delete ALL comments for this project? This action cannot be undone."
+          onConfirm={handleConfirmDeleteAll}
+          onCancel={handleCancelDeleteAll}
+        />
+      )}
     </div>
   );
 }

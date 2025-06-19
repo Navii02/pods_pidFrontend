@@ -141,47 +141,45 @@ function EntityRegister({
     onClose();
   };
 
-  const handleOk = async () => {
-    let payload = {
-      code,
-      name,
-    };
-
-    if (entityType === "Area") {
-      payload.id = parentEntity?.projectId;
-    } else {
-      // For System and Discipline
-      payload.id = parentEntity?.project_id;
-
-      // Add parent entity code depending on entity type
-      if (entityType === "System") {
-        payload.area = parentEntity?.area;
-        payload.disiplne = parentEntity?.disc;
-      } else if (entityType === "Discipline") {
-        payload.area = parentEntity?.area;
-      }
-    }
-
-    try {
-      const response = await RegisterEnitity(entityType, payload);
-
-      if (response.status === 200) {
-        alert("Created successfully");
-        onSuccess(); // notify parent
-        handleClose(); // close modal
-      } else if (response.status === 406) {
-        setCustomAlert(true);
-        setModalMessage("This combination already exists.");
-      } else {
-        setCustomAlert(true);
-        setModalMessage(response.message || "Failed to save entity");
-      }
-    } catch (error) {
-      console.error(error);
-      setCustomAlert(true);
-      setModalMessage("Error occurred while saving entity");
-    }
+const handleOk = async () => {
+  let payload = {
+    code,
+    name,
   };
+
+  if (entityType === "Area") {
+    payload.id = parentEntity?.projectId;
+  } else {
+    payload.id = parentEntity?.project_id;
+    if (entityType === "System") {
+      payload.area = parentEntity?.area;
+      payload.disiplne = parentEntity?.disc;
+    } else if (entityType === "Discipline") {
+      payload.area = parentEntity?.area;
+    }
+  }
+
+  try {
+    const response = await RegisterEnitity(entityType, payload);
+    if (response.status === 200) {
+      setCustomAlert(true);
+      setModalMessage("Created successfully");
+      // Trigger parent to refetch data
+      onSuccess({ refetch: true, entityType, parentInfo: payload });
+      handleClose();
+    } else if (response.status === 406) {
+      setCustomAlert(true);
+      setModalMessage("This combination already exists.");
+    } else {
+      setCustomAlert(true);
+      setModalMessage(response.message || "Failed to save entity");
+    }
+  } catch (error) {
+    console.error(error);
+    setCustomAlert(true);
+    setModalMessage("Error occurred while saving entity");
+  }
+};
 
   return (
 
