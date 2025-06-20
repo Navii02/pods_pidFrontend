@@ -69,6 +69,7 @@ function CommentReview() {
         setComments([]);
         setShowDeleteAllConfirm(false);
         setCustomAlert(true);
+        setModalMessage("All comments deleted")
      
       }
     } catch (error) {

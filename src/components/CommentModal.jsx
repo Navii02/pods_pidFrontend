@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from "react";
-import Alert from "../components/AlertModal";
-import { GetStatusComment, SaveComment } from "../services/CommentApi";
+import Alert from "../components/Alert";
+import { GetStatusComment, SaveComment ,getAllcomments} from "../services/CommentApi";
 
 function CommentModal({
   isOpen,
   onClose,
+  setIsMenuOpen,
   content,
-  docdetnum
+  docdetnum,
 
 }) {
   const [comment, setComment] = useState("");
@@ -60,6 +61,7 @@ function CommentModal({
       const FetchStatus = async(projectId)=>{
         const response = await GetStatusComment(projectId)
         if(response.status===200){
+          console.log(response.data.data);
 setallCommentStatus(response.data.data)
 
         }
@@ -134,6 +136,7 @@ setallCommentStatus(response.data.data)
     };
     // --------------------------------------------------------//
 
+  
   const handleCommentClick = async() => {
     if (!comment) {
       setCustomAlert(true);
@@ -168,12 +171,12 @@ setallCommentStatus(response.data.data)
        setIsMaximized(false);
        setIsMinimized(false);  
        onClose();
+       setIsMenuOpen(false);
+       setCustomAlert(true);
+       setModalMessage("Comment added successfully..")
   };
  }
  
-
-
-
   useEffect(() => {
     if (!isOpen) {
       setComment("");

@@ -9,8 +9,26 @@ import {
   calculateElevationAngle,
   calculatePlanAngle,
 } from "../Utils/GeometryCalculation";
-import { getLineList } from "../services/TagApi";
+import {
+  fetchFromGentagInfo,
+  getEquipmentDetails,
+  getLineDetails,
+  getLineList,
+  getTagDetailsFromFileName,
+  getValveDetails,
+} from "../services/TagApi";
 import { getequipmentList } from "../services/TagApi";
+import CommentModal from "./CommentModal";
+import {
+  getAllcomments,
+  deleteComment,
+  updateComment,
+} from "../services/CommentApi";
+import { updateProjectContext } from "../context/ContextShare";
+import { useContext } from "react";
+import { getStatustableData } from "../services/CommentApi";
+import DeleteConfirm from "../components/DeleteConfirm";
+import Alert from "./Alert";
 
 class WebWorkerTilesetLODManager {
   constructor(scene, camera, highlightRefs = null) {
@@ -220,10 +238,6 @@ class WebWorkerTilesetLODManager {
   }
 
   initializeWorkers() {
-    console.log(
-      "Initializing web workers for mesh loading, disposal, frustum culling, and distance calculation..."
-    );
-
     try {
       // Initialize workers for each depth
       this.workers.set(
@@ -2584,6 +2598,7 @@ const BabylonLODManager = ({
   selectedItem,
   setSelectedItem,
   setActiveButton,
+  showComment,
 }) => {
   const currentHighlightedMeshRef = useRef(null);
   const currentHighlightedMeshIdRef = useRef(null);
@@ -2597,6 +2612,22 @@ const BabylonLODManager = ({
   const distanceThresholdRef = useRef(null);
 
   const modelInfoRef = useRef({ modelRadius: 1000 }); // For camera sensitivity
+  const [isModalOpen, setIsModalOpen] = useState(false);
+
+  const [hiddenMeshes, setHiddenMeshes] = useState(new Set());
+  const [hiddenIndividualMeshes, setHiddenIndividualMeshes] = useState(
+    new Set()
+  );
+  const { updateProject } = useContext(updateProjectContext);
+  const [commentinfo, setcommentinfo] = useState("");
+  const [commentinfotable, setcommentinfotable] = useState(false);
+  const [allComments, SetAllComments] = useState([]);
+  const [allCommentStatus, setAllCommentStatus] = useState([]);
+  const [isEditing, setIsEditing] = useState(false);
+  const [status, setStatus] = useState("");
+  const [priority, setPriority] = useState("");
+  const [commentEdit, setCommentEdit] = useState("");
+  const [editedCommentData, setEditedCommentData] = useState({});
 
   // Camera and LOD state
   const [cameraType, setCameraType] = useState("orbit");
@@ -2616,22 +2647,9 @@ const BabylonLODManager = ({
     hiddenMeshes: 0,
   });
 
-  // State tracking exactly as in original code
-  const [loadedMeshes, setLoadedMeshes] = useState([]);
-  const [fileCounter, setFileCounter] = useState(0);
 
-  // Constants exactly as in original
-  const maxDepth = 4;
-  const capacity = 1;
   const MAX_DEPTH = 4;
-  const MIN_SIZE = 0;
-  const meshIdCounter = useRef({ current: 1 });
-  const processedMeshesRef = useRef(new Map());
   const dbConnectionRef = useRef(null);
-  const TARGET_DEPTH = 4;
-  const CHUNK_SIZE = 3;
-  const STORE_CHUNK_SIZE = 25;
-
   // Screen coverage thresholds for mesh categorization
   const COVERAGE_THRESHOLDS = {
     LARGE: 0.3, // Screen coverage >= 1
@@ -2656,7 +2674,7 @@ const BabylonLODManager = ({
   const [backgroundColorTag, setBackgroundColorTag] = useState({});
   const [tagInfo, setTagInfo] = useState({});
   const [fileInfoDetails, setFileInfoDetails] = useState(null);
-  const [commentPosition, setCommentPosition] = useState(null);
+  const commentPositionRef = useRef({ x: 0, y: 0, z: 0 });
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [menuPosition, setMenuPosition] = useState({
     top: 0,
@@ -2668,36 +2686,51 @@ const BabylonLODManager = ({
     y: 0,
   });
   const [hoveredIndex, setHoveredIndex] = useState(null);
-
+  const [currentDeleteNumber, setCurrentDeleteNumber] = useState(null);
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [showDeleteAllConfirm, setShowDeleteAllConfirm] = useState(false);
+  const [customAlert, setCustomAlert] = useState(false);
+  const [modalMessage, setModalMessage] = useState("");
   const [allEquipementList, setallEquipementList] = useState([]);
+  const [lineEqpInfo, setLineEqpInfo] = useState(false);
+  const [showFileInfo, setShowFileInfo] = useState(false);
+  const [tagInfoVisible, setTagInfoVisible] = useState(false);
   const projectString = sessionStorage.getItem("selectedProject");
   const project = projectString ? JSON.parse(projectString) : null;
   const projectId = project?.projectId;
-  const fetchEquipmentlist = async (projectId) => {
-    const response = await getequipmentList(projectId);
-    if (response.status === 200) {
-      console.log(response.data);
-      setallEquipementList(response.data);
+
+  const fetchComments = async (projectId) => {
+    try {
+      const response = await getAllcomments(projectId);
+      if (response.status === 200) {
+        SetAllComments(response.data.data);
+      }
+    } catch (error) {
+      console.error("Failed to fetch comments:", error);
+      setCustomAlert(true);
+      setModalMessage("Failed to fetch comments");
     }
   };
 
   useEffect(() => {
-    fetchEquipmentlist(projectId);
-  }, []);
-
-  const [allLineList, setAllLinelist] = useState([]);
-
-  const fetchLineList = async (projectId) => {
-    const response = await getLineList(projectId);
-    if (response.status === 200) {
-      console.log(response.data);
-
-      setAllLinelist(response.data);
+    if (projectId) {
+      fetchComments(projectId);
+    }
+  }, [projectId, updateProject, isModalOpen]);
+  const getStatusTable = async (projectId) => {
+    try {
+      const response = await getStatustableData(projectId);
+      if (response.status === 200) {
+        setAllCommentStatus(response.data.data);
+      }
+    } catch (error) {
+      console.error("Failed to fetch status table data:", error);
     }
   };
+
   useEffect(() => {
-    fetchLineList(projectId);
-  }, []);
+    getStatusTable(projectId);
+  }, [updateProject]);
 
   const [performanceStats, setPerformanceStats] = useState({
     frameTimeTracker: { meshCreation: 0, cameraUpdate: 0, lodUpdate: 0 },
@@ -4883,16 +4916,13 @@ const BabylonLODManager = ({
 
       storeNames.forEach((storeName) => {
         const store = transaction.objectStore(storeName);
-        store.clear().onsuccess = () => {
-          console.log(`Cleared store: ${storeName}`);
-        };
+        store.clear().onsuccess = () => {};
         store.clear().onerror = (e) => {
           console.error(`Error clearing store ${storeName}:`, e);
         };
       });
 
       transaction.oncomplete = () => {
-        console.log("✅ All stores cleared successfully.");
         alert("All data cleared from the 'piping' database.");
         db.close();
       };
@@ -4910,7 +4940,7 @@ const BabylonLODManager = ({
   const highlightMaterialRef = useRef(null);
 
   // Enhanced mesh selection functions (replace the existing ones)
-  const highlightMesh = useCallback((mesh) => {
+  const highlightMesh = (mesh) => {
     if (!mesh || !sceneRef.current) return;
 
     // Create highlight material if it doesn't exist
@@ -4944,19 +4974,9 @@ const BabylonLODManager = ({
       mesh.material = highlightMaterialRef.current;
       highlightedMeshRef.current = mesh;
     }
-  }, []);
+  };
 
-  const dehighlightMesh = useCallback(() => {
-    console.log("🚫 === DEHIGHLIGHTING CURRENT MESH ===");
-    console.log(
-      "🔍 Current highlighted mesh:",
-      currentHighlightedMeshRef.current
-    );
-    console.log(
-      "🔍 Current highlighted mesh ID:",
-      currentHighlightedMeshIdRef.current
-    );
-
+  const dehighlightMesh = () => {
     if (
       currentHighlightedMeshRef.current &&
       currentHighlightedMeshIdRef.current
@@ -4965,18 +4985,10 @@ const BabylonLODManager = ({
       if (
         typeof currentHighlightedMeshRef.current.removeHighlight === "function"
       ) {
-        console.log(
-          "🧹 Removing highlight from individual mesh:",
-          currentHighlightedMeshIdRef.current
-        );
-
         // Call removeHighlight which will restore the original vertex colors for the whole merged mesh
         currentHighlightedMeshRef.current.removeHighlight();
       } else {
-        console.log("⚠️ removeHighlight method not available");
       }
-    } else {
-      console.log("⚠️ No currently highlighted mesh to dehighlight");
     }
 
     // Clear refs
@@ -4988,19 +5000,10 @@ const BabylonLODManager = ({
     setSelectedMeshInfo(null);
     setTagInfo(null);
     setBackgroundColorTag({});
-    setCommentPosition({
-      intersectionPointX: 0,
-      intersectionPointY: 0,
-      intersectionPointZ: 0,
-    });
-
-    console.log("✅ Mesh dehighlighted and selection cleared");
-  }, []);
+  };
 
   // 4. UPDATE THE clearSelection FUNCTION
-  const clearSelection = useCallback(() => {
-    console.log("🧽 Clearing selection...");
-
+  const clearSelection = () => {
     // Remove highlighting from currently selected mesh
     if (
       currentHighlightedMeshRef.current &&
@@ -5018,31 +5021,8 @@ const BabylonLODManager = ({
     setSelectedMeshInfo(null);
     setTagInfo(null);
     setBackgroundColorTag({});
-    setCommentPosition({
-      intersectionPointX: 0,
-      intersectionPointY: 0,
-      intersectionPointZ: 0,
-    });
-
     // Exit selection mode
     setSelectedItem(false);
-
-    console.log("✅ Selection cleared and selection mode exited");
-  }, []);
-
-  // Function to toggle selection mode
-  const toggleSelectionMode = () => {
-    selectedItem((prev) => {
-      const newMode = !prev;
-
-      if (!newMode) {
-        // Exiting selection mode - clear all selections
-        clearSelection();
-      }
-
-      console.log(`Selection mode: ${newMode ? "ON" : "OFF"}`);
-      return newMode;
-    });
   };
 
   const pointerObserverRef = useRef(null);
@@ -5094,7 +5074,6 @@ const BabylonLODManager = ({
                 const pickedMesh = pointerInfo.pickInfo.pickedMesh;
                 if (typeof pickedMesh.clearHighlight === "function") {
                   pickedMesh.clearHighlight();
-                  console.log("Cleared mesh highlighting");
                 }
               }
               break;
@@ -5153,7 +5132,6 @@ const BabylonLODManager = ({
         }
       } else {
         // Clicked on empty space in selection mode - exit selection mode
-        console.log("Clicked on empty space, exiting selection mode");
         setSelectedItem(false);
         clearSelection();
         return;
@@ -5210,14 +5188,16 @@ const BabylonLODManager = ({
     return !nonSelectableNames.some((name) => mesh.name.includes(name));
   };
 
-  // Mesh selection handler (only called when in selection mode)
-  // ENHANCED: Better mesh selection handler that properly manages individual mesh states
-  const handleMeshSelection = (pickInfo) => {
+  const handleMeshSelection = async (pickInfo) => {
     const pickedMesh = pickInfo.pickedMesh;
-    console.log("🎯 === MESH SELECTION ===");
-    console.log("🎯 Picked mesh:", pickedMesh.name);
-    console.log("🎯 Selection mode active:", selectedItem);
-    console.log("🎯 PickingInfo:", pickInfo);
+    const intersectionPoint = pickInfo.pickedPoint;
+
+    // Store intersection point for potential comment/annotation placement
+    commentPositionRef.current = {
+      intersectionPointX: intersectionPoint._x,
+      intersectionPointY: intersectionPoint._y,
+      intersectionPointZ: intersectionPoint._z,
+    };
 
     // Check if this is a merged mesh with vertex mappings
     if (
@@ -5225,8 +5205,6 @@ const BabylonLODManager = ({
       pickedMesh.metadata.vertexMappings &&
       pickInfo.faceId !== undefined
     ) {
-      console.log("🔍 Processing merged mesh selection...");
-
       // Get the clicked original mesh info
       if (typeof pickedMesh.getClickedOriginalMesh === "function") {
         const originalMeshInfo = pickedMesh.getClickedOriginalMesh(
@@ -5243,12 +5221,10 @@ const BabylonLODManager = ({
             currentHighlightedMeshIdRef.current === originalMeshInfo.meshId;
 
           if (isSameMesh) {
-            console.log("🔄 Same individual mesh clicked - no change needed");
             return; // Don't do anything if it's the same individual mesh
           }
 
           // ALWAYS dehighlight first (whether it's a different mesh or different individual mesh)
-          console.log("🚫 About to dehighlight previous selection...");
           dehighlightMesh();
 
           // Store selected mesh reference
@@ -5256,21 +5232,12 @@ const BabylonLODManager = ({
 
           // Highlight the individual mesh within the merged mesh
           if (typeof pickedMesh.highlightOriginalMesh === "function") {
-            console.log("🎨 About to highlight mesh:", originalMeshInfo.meshId);
             pickedMesh.highlightOriginalMesh(originalMeshInfo.meshId);
           }
 
           setSelectedItemName({
             name: originalMeshInfo.name || originalMeshInfo.meshId,
-            parentFileName:originalMeshInfo.parentFileName || ""
-          });
-
-          // Store intersection point for potential comment/annotation placement
-          const intersectionPoint = pickInfo.pickedPoint;
-          setCommentPosition({
-            intersectionPointX: intersectionPoint.x,
-            intersectionPointY: intersectionPoint.y,
-            intersectionPointZ: intersectionPoint.z,
+            parentFileName: originalMeshInfo.parentFileName || "",
           });
 
           // Process tag information
@@ -5295,6 +5262,9 @@ const BabylonLODManager = ({
             relativeFaceId: originalMeshInfo.relativeFaceId,
           });
 
+          // NEW: Fetch additional details based on parentFileName
+          await fetchAdditionalMeshDetails(originalMeshInfo.parentFileName);
+
           // Set tag info
           setTagInfo({
             filename: tagKey,
@@ -5303,23 +5273,134 @@ const BabylonLODManager = ({
             parentFileName: originalMeshInfo.parentFileName,
             nodeNumber: originalMeshInfo.nodeNumber,
           });
-
-          console.log("✅ Mesh selection completed successfully");
         } else {
-          console.log(
-            "⚠️ Could not identify individual mesh, selecting entire merged mesh"
-          );
           handleMergedMeshSelection(pickedMesh, pickInfo);
         }
       } else {
-        console.log(
-          "⚠️ getClickedOriginalMesh method not available, selecting entire merged mesh"
-        );
         handleMergedMeshSelection(pickedMesh, pickInfo);
       }
     } else {
       // Handle non-merged mesh or mesh without vertex mappings
-      console.log("🔍 Processing non-merged mesh selection");
+    }
+  };
+
+  // NEW: Function to fetch additional details based on parentFileName
+  const fetchAdditionalMeshDetails = async (parentFileName) => {
+    if (!parentFileName) {
+      console.log("No parentFileName provided");
+      return;
+    }
+
+    const parentFile = `${parentFileName}.glb`;
+    try {
+      const response = await getTagDetailsFromFileName(projectId, parentFile);
+      if (response.status === 200) {
+        const matchingTag = response.data;
+        const fileMetadata = matchingTag.fileMetadata;
+        // Based on tag type, fetch corresponding details
+        let additionalDetails = null;
+        let extraTableData = null;
+
+        switch (matchingTag.type?.toLowerCase()) {
+          case "line":
+            additionalDetails = await fetchLineDetails(matchingTag.tagId);
+            break;
+          case "equipment":
+            additionalDetails = await fetchEquipmentDetails(matchingTag.tagId);
+            break;
+          case "valve":
+            additionalDetails = await fetchValveDetails(matchingTag.tagId);
+            break;
+    
+          default:
+            console.log("❓ Unknown tag type:", matchingTag.type);
+            return;
+        }
+         try {
+        extraTableData = await fetchFromGentagInfo(matchingTag.tagId, projectId);
+        if(response.status===200){
+        console.log("🗂️ Additional table data fetched:", extraTableData);
+
+        }
+      } catch (extraError) {
+        console.error("⚠️ Failed to fetch additional table data:", extraError);
+        // Continue execution even if additional table fetch fails
+      }
+        if (additionalDetails) {
+          // Update the selected mesh info with additional details
+          setSelectedMeshInfo((prev) => ({
+            ...prev,
+            tagDetails: matchingTag,
+            additionalDetails: additionalDetails,
+            detailsType: matchingTag.type,
+            fileMetadata: fileMetadata,
+            extraTableData:extraTableData
+          }));
+        }
+      }
+    } catch (error) {
+      console.error("Error deleting comment:", error);
+      setCustomAlert(true);
+      setModalMessage("Failed to delete comment");
+    }
+  };
+
+  const fetchLineDetails = async (tagId) => {
+    try {
+      const response = await getLineDetails(projectId, tagId);
+      if (response.status === 200) {
+        console.log(response.data);
+        const lineDetail = response.data;
+        if (lineDetail) {
+          return lineDetail;
+        }
+      }
+
+      // If not found in existing list, you might want to fetch from API
+      console.log("Line not found in existing list for tagId:", tagId);
+      return null;
+    } catch (error) {
+      console.error("Error fetching line details:", error);
+      return null;
+    }
+  };
+
+  const fetchEquipmentDetails = async (tagId) => {
+    try {
+      const response = await getEquipmentDetails(projectId, tagId);
+      if (response.status === 200) {
+        console.log(response.data);
+        const lineDetail = response.data;
+        if (lineDetail) {
+          return lineDetail;
+        }
+      }
+
+      // If not found in existing list, you might want to fetch from API
+      console.log("Equipment not found in existing list for tagId:", tagId);
+      return null;
+    } catch (error) {
+      console.error("Error fetching equipment details:", error);
+      return null;
+    }
+  };
+
+  const fetchValveDetails = async (tagId) => {
+    try {
+      const response = await getValveDetails(projectId, tagId);
+      if (response.status === 200) {
+        const lineDetail = response.data;
+        if (lineDetail) {
+          return lineDetail;
+        }
+      }
+
+      // If not found in existing list, you might want to fetch from API
+      console.log("Valve not found in existing list for tagId:", tagId);
+      return null;
+    } catch (error) {
+      console.error("Error fetching valve details:", error);
+      return null;
     }
   };
 
@@ -5331,11 +5412,11 @@ const BabylonLODManager = ({
     setSelectedItemName({ name: pickedMesh.name });
 
     const intersectionPoint = pickInfo.pickedPoint;
-    setCommentPosition({
-      intersectionPointX: intersectionPoint.x,
-      intersectionPointY: intersectionPoint.y,
-      intersectionPointZ: intersectionPoint.z,
-    });
+    commentPositionRef.current = {
+      intersectionPointX: intersectionPoint._x,
+      intersectionPointY: intersectionPoint._y,
+      intersectionPointZ: intersectionPoint._z,
+    };
 
     setSelectedMeshInfo({
       type: "merged",
@@ -5360,13 +5441,6 @@ const BabylonLODManager = ({
 
     setSelectedItemName({ name: pickedMesh.name });
 
-    const intersectionPoint = pickInfo.pickedPoint;
-    setCommentPosition({
-      intersectionPointX: intersectionPoint.x,
-      intersectionPointY: intersectionPoint.y,
-      intersectionPointZ: intersectionPoint.z,
-    });
-
     // Process tag information for standard mesh
     const tagData = pickedMesh.metadata.tagNo || pickedMesh.metadata;
     const tagKey = tagData.tag || pickedMesh.name;
@@ -5385,277 +5459,1060 @@ const BabylonLODManager = ({
     });
   };
 
-const getMeshBoundingBoxFromDB = useCallback(async (meshId) => {
-  try {
-    const db = await initDB();
-    const transaction = db.transaction(['originalMeshes'], 'readonly');
-    const store = transaction.objectStore('originalMeshes');
-    
-    return new Promise((resolve, reject) => {
-      const request = store.get(meshId);
-      request.onsuccess = () => {
-        const result = request.result;
-        
-        // Handle your specific data structure
-        if (result && result.data && result.data.boundingBox) {
-          const bbox = result.data.boundingBox;
-          
-          // Extract bounding box data from your format
-          let min, max;
-          
-          // Use world coordinates if available, otherwise use local coordinates
-          if (bbox.minimumWorld && bbox.maximumWorld) {
-            min = {
-              x: bbox.minimumWorld._x,
-              y: bbox.minimumWorld._y,
-              z: bbox.minimumWorld._z
-            };
-            max = {
-              x: bbox.maximumWorld._x,
-              y: bbox.maximumWorld._y,
-              z: bbox.maximumWorld._z
-            };
-          } else if (bbox.minimum && bbox.maximum) {
-            min = {
-              x: bbox.minimum._x,
-              y: bbox.minimum._y,
-              z: bbox.minimum._z
-            };
-            max = {
-              x: bbox.maximum._x,
-              y: bbox.maximum._y,
-              z: bbox.maximum._z
-            };
-          } else {
-            console.warn(`Invalid bounding box structure for mesh ID: ${meshId}`);
-            resolve(null);
-            return;
-          }
-          
-          // Return in the format expected by our calculation functions
-          resolve({ min, max });
-          
+  const getMeshBoundingBoxFromDB = useCallback(
+    async (meshId) => {
+      try {
+        const db = await initDB();
+        const transaction = db.transaction(["originalMeshes"], "readonly");
+        const store = transaction.objectStore("originalMeshes");
+
+        return new Promise((resolve, reject) => {
+          const request = store.get(meshId);
+          request.onsuccess = () => {
+            const result = request.result;
+
+            // Handle your specific data structure
+            if (result && result.data && result.data.boundingBox) {
+              const bbox = result.data.boundingBox;
+
+              // Extract bounding box data from your format
+              let min, max;
+
+              // Use world coordinates if available, otherwise use local coordinates
+              if (bbox.minimumWorld && bbox.maximumWorld) {
+                min = {
+                  x: bbox.minimumWorld._x,
+                  y: bbox.minimumWorld._y,
+                  z: bbox.minimumWorld._z,
+                };
+                max = {
+                  x: bbox.maximumWorld._x,
+                  y: bbox.maximumWorld._y,
+                  z: bbox.maximumWorld._z,
+                };
+              } else if (bbox.minimum && bbox.maximum) {
+                min = {
+                  x: bbox.minimum._x,
+                  y: bbox.minimum._y,
+                  z: bbox.minimum._z,
+                };
+                max = {
+                  x: bbox.maximum._x,
+                  y: bbox.maximum._y,
+                  z: bbox.maximum._z,
+                };
+              } else {
+                console.warn(
+                  `Invalid bounding box structure for mesh ID: ${meshId}`
+                );
+                resolve(null);
+                return;
+              }
+
+              // Return in the format expected by our calculation functions
+              resolve({ min, max });
+            } else {
+              console.warn(`No bounding box found for mesh ID: ${meshId}`);
+              resolve(null);
+            }
+          };
+          request.onerror = () => reject(request.error);
+        });
+      } catch (error) {
+        console.error("Error getting mesh bounding box from DB:", error);
+        return null;
+      }
+    },
+    [initDB]
+  );
+
+  const getMeshParentFileName = useCallback(
+    async (meshId) => {
+      try {
+        const db = await initDB();
+        const transaction = db.transaction(["originalMeshes"], "readonly");
+        const store = transaction.objectStore("originalMeshes");
+
+        return new Promise((resolve, reject) => {
+          const request = store.get(meshId);
+          request.onsuccess = () => {
+            const result = request.result;
+
+            // Handle your specific data structure
+            if (result && result.data && result.data.ParentFile) {
+              const parentFile = result.data.ParentFile;
+              resolve({ parentFile });
+            } else {
+              console.warn(`No bounding box found for mesh ID: ${meshId}`);
+              resolve(null);
+            }
+          };
+          request.onerror = () => reject(request.error);
+        });
+      } catch (error) {
+        console.error("Error getting mesh bounding box from DB:", error);
+        return null;
+      }
+    },
+    [initDB]
+  );
+
+  // 2. Function to calculate camera position for bounding box
+  const calculateCameraPositionForBounds = useCallback(
+    (boundingBox, camera, padding = 1.5) => {
+      if (!boundingBox || !boundingBox.min || !boundingBox.max) {
+        console.warn("Invalid bounding box provided");
+        return null;
+      }
+
+      const min = new BABYLON.Vector3(
+        boundingBox.min.x,
+        boundingBox.min.y,
+        boundingBox.min.z
+      );
+      const max = new BABYLON.Vector3(
+        boundingBox.max.x,
+        boundingBox.max.y,
+        boundingBox.max.z
+      );
+
+      const center = BABYLON.Vector3.Center(min, max);
+      const size = max.subtract(min);
+      const maxDimension = Math.max(size.x, size.y, size.z);
+
+      // Calculate distance needed to fit bounding box in view
+      const fov = camera.fov || Math.PI / 4;
+      const distance = (maxDimension * padding) / (2 * Math.tan(fov / 2));
+
+      return { center, distance, size, min, max };
+    },
+    []
+  );
+
+  // 3. Function to set camera position directly (no animation)
+  const setCameraPosition = useCallback((targetPosition, targetCenter) => {
+    if (!sceneRef.current || !cameraRef.current) return;
+
+    const camera = cameraRef.current;
+
+    if (camera instanceof BABYLON.ArcRotateCamera) {
+      // Set orbit camera position directly
+      const direction = targetPosition.subtract(targetCenter).normalize();
+      const newRadius = BABYLON.Vector3.Distance(targetPosition, targetCenter);
+      const newAlpha = Math.atan2(direction.x, direction.z);
+      const newBeta = Math.acos(Math.max(-1, Math.min(1, direction.y)));
+
+      camera.target = targetCenter;
+      camera.alpha = newAlpha;
+      camera.beta = newBeta;
+      camera.radius = newRadius;
+    } else if (camera instanceof BABYLON.UniversalCamera) {
+      // Set fly camera position directly
+      camera.position = targetPosition;
+      camera.setTarget(targetCenter);
+    }
+  }, []);
+
+  // 4. Zoom to selected mesh function
+  const zoomToSelected = useCallback(async () => {
+    if (!selectedMeshInfo || !cameraRef.current) {
+      console.warn("No mesh selected or camera not available");
+      return;
+    }
+
+    try {
+      let boundingBox = null;
+
+      // Get bounding box based on mesh type
+      if (selectedMeshInfo.type === "individual" && selectedMeshInfo.meshId) {
+        boundingBox = await getMeshBoundingBoxFromDB(selectedMeshInfo.meshId);
+      } else if (
+        selectedMeshInfo.type === "merged" &&
+        selectedMeshRef.current
+      ) {
+        const mesh = selectedMeshRef.current;
+        if (mesh.getBoundingInfo) {
+          const bb = mesh.getBoundingInfo().boundingBox;
+          boundingBox = {
+            min: {
+              x: bb.minimumWorld.x,
+              y: bb.minimumWorld.y,
+              z: bb.minimumWorld.z,
+            },
+            max: {
+              x: bb.maximumWorld.x,
+              y: bb.maximumWorld.y,
+              z: bb.maximumWorld.z,
+            },
+          };
+        }
+      }
+
+      if (!boundingBox) {
+        console.warn("Could not get bounding box for selected mesh");
+        return;
+      }
+
+      const camera = cameraRef.current;
+      const cameraData = calculateCameraPositionForBounds(
+        boundingBox,
+        camera,
+        2.0
+      ); // 2.0 padding for zoom
+
+      if (!cameraData) return;
+
+      // Calculate camera position maintaining current viewing direction
+      let cameraPosition;
+      if (camera instanceof BABYLON.ArcRotateCamera) {
+        const currentDirection = camera.position
+          .subtract(camera.target)
+          .normalize();
+        cameraPosition = cameraData.center.add(
+          currentDirection.scale(cameraData.distance)
+        );
+      } else {
+        const currentDirection = camera
+          .getTarget()
+          .subtract(camera.position)
+          .normalize();
+        cameraPosition = cameraData.center.subtract(
+          currentDirection.scale(cameraData.distance)
+        );
+      }
+
+      setCameraPosition(cameraPosition, cameraData.center);
+    } catch (error) {
+      console.error("Error zooming to selected mesh:", error);
+    }
+  }, [
+    selectedMeshInfo,
+    getMeshBoundingBoxFromDB,
+    calculateCameraPositionForBounds,
+    setCameraPosition,
+  ]);
+
+  // 5. Focus on selected mesh function
+  const focusOnSelected = useCallback(async () => {
+    if (!selectedMeshInfo || !cameraRef.current) {
+      console.warn("No mesh selected or camera not available");
+      return;
+    }
+
+    try {
+      let boundingBox = null;
+
+      // Get bounding box based on mesh type
+      if (selectedMeshInfo.type === "individual" && selectedMeshInfo.meshId) {
+        boundingBox = await getMeshBoundingBoxFromDB(selectedMeshInfo.meshId);
+      } else if (
+        selectedMeshInfo.type === "merged" &&
+        selectedMeshRef.current
+      ) {
+        const mesh = selectedMeshRef.current;
+        if (mesh.getBoundingInfo) {
+          const bb = mesh.getBoundingInfo().boundingBox;
+          boundingBox = {
+            min: {
+              x: bb.minimumWorld.x,
+              y: bb.minimumWorld.y,
+              z: bb.minimumWorld.z,
+            },
+            max: {
+              x: bb.maximumWorld.x,
+              y: bb.maximumWorld.y,
+              z: bb.maximumWorld.z,
+            },
+          };
+        }
+      }
+
+      if (!boundingBox) {
+        console.warn("Could not get bounding box for selected mesh");
+        return;
+      }
+
+      const camera = cameraRef.current;
+      const cameraData = calculateCameraPositionForBounds(
+        boundingBox,
+        camera,
+        1.2
+      ); // 1.2 padding for closer focus
+
+      if (!cameraData) return;
+
+      // Position camera for optimal viewing (front view)
+      const cameraPosition = new BABYLON.Vector3(
+        cameraData.center.x,
+        cameraData.center.y,
+        cameraData.center.z - cameraData.distance
+      );
+
+      setCameraPosition(cameraPosition, cameraData.center);
+    } catch (error) {
+      console.error("Error focusing on selected mesh:", error);
+    }
+  }, [
+    selectedMeshInfo,
+    getMeshBoundingBoxFromDB,
+    calculateCameraPositionForBounds,
+    setCameraPosition,
+  ]);
+
+  // STEP 2: Add the missing hideSelected function
+  const hideSelected = useCallback(() => {
+    if (!selectedMeshInfo) {
+      console.warn("No mesh selected to hide");
+      alert("Please select a mesh first");
+      return;
+    }
+
+    try {
+      if (selectedMeshInfo.type === "individual" && selectedMeshRef.current) {
+        const mergedMesh = selectedMeshRef.current;
+        const meshId = selectedMeshInfo.meshId;
+
+        const mapping = mergedMesh.metadata.vertexMappings?.find(
+          (m) => m.meshId === meshId
+        );
+
+        if (mapping) {
+          // Use indices removal method instead of transparency
+          hideByRemovingIndices(mergedMesh, mapping, meshId);
+          setHiddenIndividualMeshes((prev) => new Set([...prev, meshId]));
         } else {
-          console.warn(`No bounding box found for mesh ID: ${meshId}`);
-          resolve(null);
+          console.warn("❌ No mapping found for meshId:", meshId);
+        }
+      } else if (
+        selectedMeshInfo.type === "merged" &&
+        selectedMeshRef.current
+      ) {
+        const mesh = selectedMeshRef.current;
+        mesh.isVisible = false;
+        const nodeNumber = mesh.metadata?.nodeNumber;
+        if (nodeNumber) {
+          setHiddenMeshes((prev) => new Set([...prev, nodeNumber]));
+        }
+      }
+    } catch (error) {
+      console.error("❌ Error hiding selected mesh:", error);
+    }
+  }, [selectedMeshInfo]);
+
+  // Add this new function that actually removes the geometry
+  const hideByRemovingIndices = useCallback((mergedMesh, mapping, meshId) => {
+    try {
+      const indices = mergedMesh.getIndices();
+      if (!indices) return;
+
+      // Store original indices
+      if (!mergedMesh._originalIndices) {
+        mergedMesh._originalIndices = indices.slice();
+      }
+
+      // Create new indices array excluding the hidden mesh
+      const newIndices = [];
+      const startIdx = mapping.startIndex;
+      const endIdx = mapping.startIndex + mapping.indexCount;
+
+      for (let i = 0; i < indices.length; i++) {
+        if (i < startIdx || i >= endIdx) {
+          newIndices.push(indices[i]);
+        }
+      }
+
+      // Update mesh with new indices
+      mergedMesh.updateIndices(new Uint32Array(newIndices));
+    } catch (error) {
+      console.error("❌ Error removing indices:", error);
+    }
+  }, []);
+
+  const hideUnselected = useCallback(() => {
+    if (!selectedMeshInfo) {
+      console.warn("No mesh selected - cannot hide unselected");
+      alert("Please select a mesh first");
+      return;
+    }
+
+    try {
+      if (lodManagerRef.current && lodManagerRef.current.activeMeshes) {
+        const activeMeshes = lodManagerRef.current.activeMeshes;
+        const selectedNodeNumber = selectedMeshInfo.nodeNumber;
+
+        let hiddenCount = 0;
+
+        // Hide all other merged meshes (different nodes)
+        activeMeshes.forEach((mesh, nodeNumber) => {
+          if (nodeNumber !== selectedNodeNumber) {
+            mesh.isVisible = false;
+            setHiddenMeshes((prev) => new Set([...prev, nodeNumber]));
+            hiddenCount++;
+          }
+        });
+
+        // If individual mesh is selected, hide other individual meshes in the same merged mesh
+        if (selectedMeshInfo.type === "individual" && selectedMeshRef.current) {
+          const mergedMesh = selectedMeshRef.current;
+          const selectedMeshId = selectedMeshInfo.meshId;
+
+          if (mergedMesh.metadata.vertexMappings) {
+            // Use indices removal method to keep only the selected mesh
+            hideUnselectedIndividualMeshes(mergedMesh, selectedMeshId);
+
+            // Track all other individual meshes as hidden
+            mergedMesh.metadata.vertexMappings.forEach((mapping) => {
+              if (mapping.meshId !== selectedMeshId) {
+                setHiddenIndividualMeshes(
+                  (prev) => new Set([...prev, mapping.meshId])
+                );
+              }
+            });
+          }
+        }
+      }
+    } catch (error) {
+      console.error("❌ Error hiding unselected meshes:", error);
+    }
+  }, [selectedMeshInfo]);
+
+  // New function to hide unselected individual meshes using indices removal
+  const hideUnselectedIndividualMeshes = useCallback(
+    (mergedMesh, selectedMeshId) => {
+      try {
+        const indices = mergedMesh.getIndices();
+        if (!indices) {
+          console.error("❌ No indices available");
+          return;
+        }
+
+        // Store original indices if not already stored
+        if (!mergedMesh._originalIndices) {
+          mergedMesh._originalIndices = indices.slice();
+        }
+
+        // Find the mapping for the selected mesh (the one we want to KEEP)
+        const selectedMapping = mergedMesh.metadata.vertexMappings?.find(
+          (m) => m.meshId === selectedMeshId
+        );
+
+        if (!selectedMapping) {
+          console.error(
+            "❌ No mapping found for selected mesh:",
+            selectedMeshId
+          );
+          return;
+        }
+
+        // Create new indices array with ONLY the selected mesh
+        const newIndices = [];
+        const startIdx = selectedMapping.startIndex;
+        const endIdx = selectedMapping.startIndex + selectedMapping.indexCount;
+
+        // Copy only the indices belonging to the selected mesh
+        for (let i = startIdx; i < endIdx; i++) {
+          if (i < indices.length) {
+            newIndices.push(indices[i]);
+          }
+        }
+
+        // Update the mesh with new indices (only the selected mesh remains)
+        mergedMesh.updateIndices(new Uint32Array(newIndices));
+      } catch (error) {
+        console.error("❌ Error hiding unselected individual meshes:", error);
+      }
+    },
+    []
+  );
+
+  // Enhanced restore function that handles both methods
+  const restoreAllIndividualMeshesEnhanced = useCallback((mergedMesh) => {
+    try {
+      // Restore indices if available (for indices removal method)
+      if (mergedMesh._originalIndices) {
+        mergedMesh.updateIndices(mergedMesh._originalIndices);
+      }
+
+      // Restore colors if available (for transparency method)
+      if (mergedMesh._originalColors) {
+        mergedMesh.setVerticesData(
+          BABYLON.VertexBuffer.ColorKind,
+          mergedMesh._originalColors,
+          true
+        );
+      }
+
+      // Reset material properties
+      if (mergedMesh.material) {
+        mergedMesh.material.transparencyMode = BABYLON.Material.MATERIAL_OPAQUE;
+        mergedMesh.material.useVertexColors = false;
+        mergedMesh.material.markDirty();
+      }
+    } catch (error) {
+      console.error("❌ Error restoring individual meshes:", error);
+    }
+  }, []);
+
+  // Update your unhideAllEnhanced function to use the enhanced restore
+  const unhideAllEnhanced = useCallback(() => {
+    try {
+      let shownCount = 0;
+
+      // Method 1: Use LOD manager if available
+      if (lodManagerRef.current && lodManagerRef.current.activeMeshes) {
+        lodManagerRef.current.activeMeshes.forEach((mesh, nodeNumber) => {
+          mesh.isVisible = true;
+
+          // Restore individual meshes within merged meshes using enhanced method
+          if (mesh.metadata.isLodMesh && mesh.metadata.vertexMappings) {
+            restoreAllIndividualMeshesEnhanced(mesh);
+          }
+
+          shownCount++;
+        });
+      }
+      // Method 2: Fallback to scene meshes
+      else if (sceneRef.current) {
+        sceneRef.current.meshes.forEach((mesh) => {
+          if (
+            !mesh.name.includes("skyBox") &&
+            !mesh.name.includes("ground") &&
+            !mesh.name.includes("water") &&
+            !mesh.name.includes("octreeVisBox")
+          ) {
+            mesh.isVisible = true;
+
+            // Try to restore individual meshes using enhanced method
+            if (mesh.metadata && mesh.metadata.isLodMesh) {
+              restoreAllIndividualMeshesEnhanced(mesh);
+            }
+
+            shownCount++;
+          }
+        });
+      }
+
+      // Clear tracking state
+      setHiddenMeshes(new Set());
+      setHiddenIndividualMeshes(new Set());
+    } catch (error) {
+      console.error("❌ Enhanced unhide all error:", error);
+    }
+  }, []);
+
+  const hideAllEnhanced = useCallback(() => {
+    try {
+      let hiddenCount = 0;
+
+      // Method 1: Use LOD manager if available
+      if (lodManagerRef.current && lodManagerRef.current.activeMeshes) {
+        lodManagerRef.current.activeMeshes.forEach((mesh, nodeNumber) => {
+          mesh.isVisible = false;
+          setHiddenMeshes((prev) => new Set([...prev, nodeNumber]));
+          hiddenCount++;
+        });
+      }
+      // Method 2: Fallback to scene meshes
+      else if (sceneRef.current) {
+        sceneRef.current.meshes.forEach((mesh) => {
+          // Skip environment meshes
+          if (
+            !mesh.name.includes("skyBox") &&
+            !mesh.name.includes("ground") &&
+            !mesh.name.includes("water") &&
+            !mesh.name.includes("octreeVisBox")
+          ) {
+            mesh.isVisible = false;
+            hiddenCount++;
+          }
+        });
+      }
+
+      setHiddenIndividualMeshes(new Set());
+    } catch (error) {
+      console.error("❌ Enhanced hide all error:", error);
+    }
+  }, []);
+
+  // 4. DEBUGGING FUNCTION: Check mesh states
+  const debugMeshStates = useCallback(() => {
+    if (lodManagerRef.current && lodManagerRef.current.activeMeshes) {
+      lodManagerRef.current.activeMeshes.forEach((mesh, nodeNumber) => {});
+    }
+
+    if (sceneRef.current) {
+      const visibleMeshes = sceneRef.current.meshes.filter(
+        (m) => m.isVisible && m.name !== "BackgroundPlane"
+      );
+      const hiddenMeshes = sceneRef.current.meshes.filter(
+        (m) => !m.isVisible && m.name !== "BackgroundPlane"
+      );
+    }
+  }, [hiddenMeshes, hiddenIndividualMeshes, selectedMeshInfo]);
+
+  const handleShowlineEqpInfo = () => {
+    if (selectedMeshInfo.additionalDetails) {
+      setLineEqpInfo(true);
+      setIsMenuOpen(false);
+    } else {
+      setCustomAlert(true);
+      setModalMessage("No Info availible, please select item!!!!");
+      setIsMenuOpen(false);
+    }
+  };
+
+  const handleTagInfo = () => {
+    if (selectedMeshInfo.additionalDetails) {
+      setTagInfoVisible(true);
+      setIsMenuOpen(false);
+    } else {
+      setCustomAlert(true);
+      setModalMessage("No Info availible, please select item!!!!");
+      setIsMenuOpen(false);
+    }
+  };
+ const handleShowFileInfo = () => {
+        if (selectedMeshInfo.additionalDetails) {
+          setShowFileInfo(true);
+          setIsMenuOpen(false);
+        } else {
+             setCustomAlert(true);
+          setModalMessage("No Info availible, please select item!!!!");
+          setIsMenuOpen(false);
         }
       };
-      request.onerror = () => reject(request.error);
-    });
-  } catch (error) {
-    console.error('Error getting mesh bounding box from DB:', error);
-    return null;
-  }
-}, [initDB]);
+  const handleCloselineEqpInfo = () => {
+    setLineEqpInfo(false);
+  };
+  const handleCloseTagInfo = () => {
+    setTagInfoVisible(false);
+  };
 
-// 2. Function to calculate camera position for bounding box
-const calculateCameraPositionForBounds = useCallback((boundingBox, camera, padding = 1.5) => {
-  if (!boundingBox || !boundingBox.min || !boundingBox.max) {
-    console.warn('Invalid bounding box provided');
-    return null;
-  }
+  const handleMenuOptionClick = useCallback(
+    (option) => {
+      switch (option.label) {
+        case "Zoom selected":
+          if (selectedMeshInfo) {
+            zoomToSelected();
+          } else {
+            setCustomAlert(true);
+            setModalMessage("Please select a mesh first");
+          }
+          setIsMenuOpen(false);
+          break;
 
-  const min = new BABYLON.Vector3(
-    boundingBox.min.x,
-    boundingBox.min.y,
-    boundingBox.min.z
-  );
-  const max = new BABYLON.Vector3(
-    boundingBox.max.x,
-    boundingBox.max.y,
-    boundingBox.max.z
-  );
+        case "Focus Selected":
+          if (selectedMeshInfo) {
+            focusOnSelected();
+          } else {
+            setCustomAlert(true);
+            setModalMessage("Please select a mesh first");
+          }
+          setIsMenuOpen(false);
+          break;
 
-  const center = BABYLON.Vector3.Center(min, max);
-  const size = max.subtract(min);
-  const maxDimension = Math.max(size.x, size.y, size.z);
+        case "Hide selected":
+          if (selectedMeshInfo) {
+            hideSelected();
+          } else {
+            setCustomAlert(true);
+            setModalMessage("Please select a mesh first");
+          }
+          setIsMenuOpen(false);
+          break;
 
-  // Calculate distance needed to fit bounding box in view
-  const fov = camera.fov || Math.PI / 4;
-  const distance = (maxDimension * padding) / (2 * Math.tan(fov / 2));
+        case "Hide unselected":
+          if (selectedMeshInfo) {
+            hideUnselected();
+          } else {
+            setCustomAlert(true);
+            setModalMessage("Please select a mesh first");
+          }
+          setIsMenuOpen(false);
+          break;
 
-  return { center, distance, size, min, max };
-}, []);
+        case "Hide all":
+          hideAllEnhanced();
+          setIsMenuOpen(false);
+          break;
 
-// 3. Function to set camera position directly (no animation)
-const setCameraPosition = useCallback((targetPosition, targetCenter) => {
-  if (!sceneRef.current || !cameraRef.current) return;
+        case "Unhide all":
+          unhideAllEnhanced();
+          setIsMenuOpen(false);
+          break;
 
-  const camera = cameraRef.current;
+        case "Deselect":
+          clearSelection();
+          setIsMenuOpen(false);
+          break;
 
-  if (camera instanceof BABYLON.ArcRotateCamera) {
-    // Set orbit camera position directly
-    const direction = targetPosition.subtract(targetCenter).normalize();
-    const newRadius = BABYLON.Vector3.Distance(targetPosition, targetCenter);
-    const newAlpha = Math.atan2(direction.x, direction.z);
-    const newBeta = Math.acos(Math.max(-1, Math.min(1, direction.y)));
+        case "Add Comment":
+          setIsModalOpen(true);
+          break;
 
-    camera.target = targetCenter;
-    camera.alpha = newAlpha;
-    camera.beta = newBeta;
-    camera.radius = newRadius;
-
-  } else if (camera instanceof BABYLON.UniversalCamera) {
-    // Set fly camera position directly
-    camera.position = targetPosition;
-    camera.setTarget(targetCenter);
-  }
-}, []);
-
-// 4. Zoom to selected mesh function
-const zoomToSelected = useCallback(async () => {
-  if (!selectedMeshInfo || !cameraRef.current) {
-    console.warn('No mesh selected or camera not available');
-    return;
-  }
-
-  try {
-    let boundingBox = null;
-
-    // Get bounding box based on mesh type
-    if (selectedMeshInfo.type === 'individual' && selectedMeshInfo.meshId) {
-      boundingBox = await getMeshBoundingBoxFromDB(selectedMeshInfo.meshId);
-    } else if (selectedMeshInfo.type === 'merged' && selectedMeshRef.current) {
-      const mesh = selectedMeshRef.current;
-      if (mesh.getBoundingInfo) {
-        const bb = mesh.getBoundingInfo().boundingBox;
-        boundingBox = {
-          min: { x: bb.minimumWorld.x, y: bb.minimumWorld.y, z: bb.minimumWorld.z },
-          max: { x: bb.maximumWorld.x, y: bb.maximumWorld.y, z: bb.maximumWorld.z }
-        };
+        case "Tag info":
+          if (selectedMeshInfo) {
+            handleShowlineEqpInfo();
+          } else {
+            setCustomAlert(true);
+            setModalMessage("Please select a mesh first");
+          }
+          setIsMenuOpen(false);
+         break;
+          case "File info":
+          if (selectedMeshInfo) {
+            handleShowFileInfo();
+          } else {
+            setCustomAlert(true);
+            setModalMessage("Please select a mesh first");
+          }
+          setIsMenuOpen(false);
+         break;
+         
+        default:
+          setIsMenuOpen(false);
       }
-    }
-
-    if (!boundingBox) {
-      console.warn('Could not get bounding box for selected mesh');
-      return;
-    }
-
-    const camera = cameraRef.current;
-    const cameraData = calculateCameraPositionForBounds(boundingBox, camera, 2.0); // 2.0 padding for zoom
-
-    if (!cameraData) return;
-
-    // Calculate camera position maintaining current viewing direction
-    let cameraPosition;
-    if (camera instanceof BABYLON.ArcRotateCamera) {
-      const currentDirection = camera.position.subtract(camera.target).normalize();
-      cameraPosition = cameraData.center.add(currentDirection.scale(cameraData.distance));
-    } else {
-      const currentDirection = camera.getTarget().subtract(camera.position).normalize();
-      cameraPosition = cameraData.center.subtract(currentDirection.scale(cameraData.distance));
-    }
-
-    setCameraPosition(cameraPosition, cameraData.center);
-    console.log('Zoomed to selected mesh:', selectedMeshInfo);
-
-  } catch (error) {
-    console.error('Error zooming to selected mesh:', error);
-  }
-}, [selectedMeshInfo, getMeshBoundingBoxFromDB, calculateCameraPositionForBounds, setCameraPosition]);
-
-// 5. Focus on selected mesh function
-const focusOnSelected = useCallback(async () => {
-  if (!selectedMeshInfo || !cameraRef.current) {
-    console.warn('No mesh selected or camera not available');
-    return;
-  }
-
-  try {
-    let boundingBox = null;
-
-    // Get bounding box based on mesh type
-    if (selectedMeshInfo.type === 'individual' && selectedMeshInfo.meshId) {
-      boundingBox = await getMeshBoundingBoxFromDB(selectedMeshInfo.meshId);
-    } else if (selectedMeshInfo.type === 'merged' && selectedMeshRef.current) {
-      const mesh = selectedMeshRef.current;
-      if (mesh.getBoundingInfo) {
-        const bb = mesh.getBoundingInfo().boundingBox;
-        boundingBox = {
-          min: { x: bb.minimumWorld.x, y: bb.minimumWorld.y, z: bb.minimumWorld.z },
-          max: { x: bb.maximumWorld.x, y: bb.maximumWorld.y, z: bb.maximumWorld.z }
-        };
-      }
-    }
-
-    if (!boundingBox) {
-      console.warn('Could not get bounding box for selected mesh');
-      return;
-    }
-
-    const camera = cameraRef.current;
-    const cameraData = calculateCameraPositionForBounds(boundingBox, camera, 1.2); // 1.2 padding for closer focus
-
-    if (!cameraData) return;
-
-    // Position camera for optimal viewing (front view)
-    const cameraPosition = new BABYLON.Vector3(
-      cameraData.center.x,
-      cameraData.center.y,
-      cameraData.center.z - cameraData.distance
-    );
-
-    setCameraPosition(cameraPosition, cameraData.center);
-    console.log('Focused on selected mesh:', selectedMeshInfo);
-
-  } catch (error) {
-    console.error('Error focusing on selected mesh:', error);
-  }
-}, [selectedMeshInfo, getMeshBoundingBoxFromDB, calculateCameraPositionForBounds, setCameraPosition]);
-
-// 6. Handle menu option clicks
-const handleMenuOptionClick = useCallback((option) => {
-  switch (option.label) {
-    case 'Zoom selected':
-      zoomToSelected();
-      setIsMenuOpen(false);
-      break;
-    case 'Focus Selected':
-      focusOnSelected();
-      setIsMenuOpen(false);
-      break;
-    case 'Deselect':
-      clearSelection();
-      setIsMenuOpen(false);
-      break;
-    case 'Add Comment':
-      console.log('Add comment clicked');
-      setIsMenuOpen(false);
-      break;
-    default:
-      console.log('Menu option clicked:', option.label);
-      setIsMenuOpen(false);
-  }
-}, [zoomToSelected, focusOnSelected, clearSelection]);
-
+    },
+    [
+      selectedMeshInfo,
+      zoomToSelected,
+      focusOnSelected,
+      hideSelected,
+      hideUnselected,
+      hideAllEnhanced,
+      unhideAllEnhanced,
+      clearSelection,
+      handleShowlineEqpInfo,
+    ]
+  );
 
   const menuOptions = [
     { label: selectedItemName ? `${selectedItemName.parentFileName}` : "" },
     { label: selectedItemName ? `${selectedItemName.name}` : "" },
-    { label: "Add Comment",action: () => handleMenuOptionClick({ label: "Add Comment" }) },
+    {
+      label: "Add Comment",
+      action: () => handleMenuOptionClick({ label: "Add Comment" }),
+    },
     {
       label: "Info",
       children: [
-        { label: "Tag info" },
+        {
+          label: "Tag info",
+          action: () => handleMenuOptionClick({ label: "Tag info" }),
+        },
         { label: "Tag GenInfo" },
-        { label: "File Info" },
+        { label: "File Info", action: () => handleMenuOptionClick({ label: "File info" }) },
       ],
     },
-    { label: "Change Color" },
-    { label: "Deselect", action: () => handleMenuOptionClick({ label: "Deselect" })  },
+    {
+      label: "Deselect",
+      action: () => handleMenuOptionClick({ label: "Deselect" }),
+    },
     { label: "Select tag" },
     {
       label: "Visibility",
       children: [
-        { label: "Hide all" },
-        { label: "Unhide all" },
-        { label: "Hide selected" },
-        { label: "Hide unselected" },
+        {
+          label: "Hide all",
+          action: () => handleMenuOptionClick({ label: "Hide all" }),
+        },
+        {
+          label: "Unhide all",
+          action: () => handleMenuOptionClick({ label: "Unhide all" }),
+        },
+        {
+          label: "Hide selected",
+          action: () => handleMenuOptionClick({ label: "Hide selected" }),
+        },
+        {
+          label: "Hide unselected",
+          action: () => handleMenuOptionClick({ label: "Hide unselected" }),
+        },
       ],
     },
-    { label: "Zoom selected",action: () => handleMenuOptionClick({ label: "Zoom selected" }) },
-    { label: "Focus Selected",action: () => handleMenuOptionClick({ label: "Focus Selected" }) },
+    {
+      label: "Zoom selected",
+      action: () => handleMenuOptionClick({ label: "Zoom selected" }),
+    },
+    {
+      label: "Focus Selected",
+      action: () => handleMenuOptionClick({ label: "Focus Selected" }),
+    },
+    // Debug option
+    // { label: "Debug States", action: () => { debugMeshStates(); setIsMenuOpen(false); } },
   ];
+
+  const createCommentLabel = (comment, index, scene) => {
+    // Create a simple position mesh (invisible) to anchor the label
+    const position = BABYLON.MeshBuilder.CreateBox(
+      `marker-position-${comment.number}`,
+      { size: 0.1 }, // Small invisible box
+      scene
+    );
+    position.position = new BABYLON.Vector3(
+      comment.coOrdinateX,
+      comment.coOrdinateY,
+      comment.coOrdinateZ
+    );
+
+    // Make the position mesh invisible
+    position.isVisible = false;
+
+    // Create the fullscreen UI
+    const advancedTexture = GUI.AdvancedDynamicTexture.CreateFullscreenUI(
+      `UI-${comment.number}`,
+      true,
+      scene
+    );
+
+    // Get the status color from comment status
+    const statusColor =
+      allCommentStatus.find((status) => status.statusname === comment.status)
+        ?.color || "gray";
+
+    // Create the main label (number)
+    const label = new GUI.Rectangle("label");
+    label.background = statusColor || "red"; // Use status color or default to red
+    label.height = "20px";
+    label.alpha = 0.8;
+    label.width = "20px";
+    label.thickness = 1;
+    label.linkOffsetY = -10;
+    label.isPointerBlocker = true; // Make sure it can be clicked
+    label.onPointerClickObservable.add(() => {
+      handleCommentInfo(comment); // Pass the comment object to the handler
+    });
+
+    const text = new GUI.TextBlock();
+    text.text = index; // Fixed typo from 'numbber' to 'number'
+    text.color = "white";
+    text.fontSize = 10;
+
+    label.addControl(text);
+    advancedTexture.addControl(label);
+    // Add hover behavior to the mesh
+    position.actionManager = new BABYLON.ActionManager(scene);
+
+    // Show tooltip on hover
+    position.actionManager.registerAction(
+      new BABYLON.ExecuteCodeAction(
+        BABYLON.ActionManager.OnPointerOverTrigger,
+        () => {
+          label.isVisible = true;
+        }
+      )
+    );
+
+    // Hide tooltip when not hovering
+    position.actionManager.registerAction(
+      new BABYLON.ExecuteCodeAction(
+        BABYLON.ActionManager.OnPointerOutTrigger,
+        () => {
+          label.isVisible = false;
+        }
+      )
+    );
+
+    // Link the main label to the 3D position
+    label.linkWithMesh(position);
+
+    // Return the label and position for future reference
+    return {
+      label: label,
+      position: position,
+      show: () => {
+        label.isVisible = true;
+      },
+      hide: () => {
+        label.isVisible = false;
+      },
+    };
+  };
+  const handleCommentInfo = (item) => {
+    setcommentinfo(item);
+    setcommentinfotable(true);
+  };
+
+  const handleclosecommentinfo = () => {
+    setIsEditing(false);
+    setcommentinfotable(false);
+    setcommentinfo(null);
+  };
+
+  const handleEditButtonClick = (comment) => {
+    setIsEditing(true);
+    setEditedCommentData(comment);
+    setCommentEdit(commentinfo.comment);
+    setStatus(commentinfo.status);
+    setPriority(commentinfo.priority);
+  };
+
+  const handleSaveButtonClick = async () => {
+    setIsEditing(false);
+
+    try {
+      const response = await updateComment(editedCommentData);
+      if (response.status === 200) {
+        const updatedComment = {
+          ...commentinfo,
+          editedCommentData,
+        };
+        setcommentinfo(updatedComment);
+        console.log(commentinfo);
+        handleclosecommentinfo();
+      }
+    } catch (error) {
+      console.error("Error updating comment:", error);
+      setCustomAlert(true);
+      setModalMessage("Failed to update comment");
+    }
+  };
+
+  const handleChange = (field, value) => {
+    setEditedCommentData({
+      ...editedCommentData,
+      [field]: value,
+    });
+  };
+
+  const handlePriorityChange = (priority) => {
+    setEditedCommentData({ ...editedCommentData, priority });
+  };
+
+  // useEffect for showAll comments functionality
+  useEffect(() => {
+    if (!sceneRef.current) return;
+    const scene = sceneRef.current;
+
+    // Track existing comment IDs
+    const existingCommentIds = new Set();
+    // allLabels.map((label) => label.commentId)
+    const currentCommentIds = new Set(
+      allComments.map((comment) => comment.number)
+    );
+
+    // Identify new comments and labels to remove
+    const commentsToAdd = allComments.filter(
+      (comment) => !existingCommentIds.has(comment.number)
+    );
+
+    const labelsToRemove = allLabels.filter(
+      (label) => !currentCommentIds.has(label.commentId)
+    );
+
+    // Remove labels that no longer exist
+    if (labelsToRemove.length > 0) {
+      labelsToRemove.forEach((labelElement) => {
+        if (labelElement.label?.dispose) {
+          labelElement.label.dispose();
+        }
+        if (labelElement.tooltip?.dispose) {
+          labelElement.tooltip.dispose();
+        }
+        if (labelElement.position?.dispose) {
+          labelElement.position.dispose();
+        }
+      });
+    }
+
+    // Update existing labels
+    const updatedLabels = allLabels
+      .filter((label) => currentCommentIds.has(label.commentId))
+      .map((labelElement) => {
+        const updatedComment = allComments.find(
+          (c) => c.number === labelElement.commentId
+        );
+
+        if (updatedComment) {
+          // Update visibility
+          labelElement.label.isVisible = showComment;
+          if (labelElement.tooltip) {
+            labelElement.tooltip.isVisible = showComment;
+          }
+
+          // Update position if changed
+          const newPosition = new BABYLON.Vector3(
+            updatedComment.coOrdinateX,
+            updatedComment.coOrdinateY,
+            updatedComment.coOrdinateZ
+          );
+          if (
+            labelElement.position &&
+            !labelElement.position.position.equals(newPosition)
+          ) {
+            labelElement.position.position = newPosition;
+          }
+
+          // ✅ Always update background color based on updated status
+          const updatedColor =
+            allCommentStatus.find((s) => s.statusname === updatedComment.status)
+              ?.color || "gray";
+          labelElement.label.background = updatedColor;
+        }
+
+        return labelElement;
+      });
+
+    // Add new labels
+    const newLabels = [];
+    commentsToAdd.forEach((comment, index = 1) => {
+      const labelElement = createCommentLabel(comment, index, scene);
+
+      // Set background color based on status
+      const labelColor =
+        allCommentStatus.find((s) => s.statusname === comment.status)?.color ||
+        "gray";
+      labelElement.label.background = labelColor;
+
+      // Set visibility
+      labelElement.label.isVisible = showComment;
+      if (labelElement.tooltip) {
+        labelElement.tooltip.isVisible = showComment;
+      }
+
+      labelElement.commentId = comment.number;
+
+      newLabels.push(labelElement);
+    });
+
+    // Update state with combined labels
+    setAllLabels([...updatedLabels, ...newLabels]);
+  }, [allComments, showComment, allCommentStatus]);
+
+  const handleDeleteComment = (commentId) => {
+    setCurrentDeleteNumber(commentId);
+    setShowConfirm(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    try {
+      const response = await deleteComment(currentDeleteNumber);
+      if (response.status === 200) {
+        SetAllComments(
+          allComments.filter(
+            (comment) => comment.number !== currentDeleteNumber
+          )
+        );
+        setShowConfirm(false);
+        setCurrentDeleteNumber(null);
+        handleclosecommentinfo();
+      }
+    } catch (error) {
+      console.error("Error deleting comment:", error);
+      setCustomAlert(true);
+      setModalMessage("Failed to delete comment");
+    }
+  };
+
+  const handleCancelDelete = () => {
+    setShowConfirm(false);
+    setCurrentDeleteNumber(null);
+  };
+
+    const handleCloseFileInfo = () => {
+        setShowFileInfo(false);
+      };
+
   return (
     <div>
       {/* Canvas */}
@@ -5663,6 +6520,16 @@ const handleMenuOptionClick = useCallback((option) => {
         ref={canvasRef}
         style={{ position: "absolute", width: "100%", height: "100vh" }}
       />
+
+      {isModalOpen && (
+        <CommentModal
+          isOpen={isModalOpen}
+          onClose={() => setIsModalOpen(false)}
+          content={commentPositionRef.current}
+          setIsMenuOpen={setIsMenuOpen}
+          docdetnum={selectedItemName.parentFileName}
+        />
+      )}
 
       {/* File Panel */}
       <div
@@ -5685,10 +6552,6 @@ const handleMenuOptionClick = useCallback((option) => {
 
         <button onClick={clearAllPipingStores} className="btn btn-dark">
           Clear DB
-        </button>
-
-        <button onClick={toggleSelectionMode} className="btn btn-dark">
-          select
         </button>
 
         {/* WebXR Camera Button - only show if supported */}
@@ -5948,7 +6811,604 @@ const handleMenuOptionClick = useCallback((option) => {
           </div>
         </div>
       )}
+
+      {/* comment info*/}
+      {commentinfotable && (
+        <div
+          style={{
+            position: "absolute",
+            top: 0,
+            right: 0,
+            height: "90vh",
+            backgroundColor: "#272626",
+            padding: "20px",
+            boxShadow: "0px 0px 5px 0px rgba(0,0,0,0.75)",
+            zIndex: 1000,
+            display: "flex",
+            flexDirection: "column",
+            color: "#fff",
+          }}
+        >
+          {/* Close button */}
+          <div
+            className="w-100"
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+            }}
+          >
+            <button className="btn btn-dark" onClick={handleclosecommentinfo}>
+              <i class="fa-solid fa-xmark"></i>
+            </button>
+            <div
+              className="btn btn-dark"
+              onClick={() => handleDeleteComment(commentinfo.number)}
+            >
+              <i class="fa-solid fa-trash"></i>
+            </div>
+            {commentinfo.status !== "closed" &&
+              (isEditing ? (
+                <div
+                  className="btn btn-dark"
+                  onClick={() => handleSaveButtonClick(commentinfo.number)}
+                >
+                  <i className="fa-solid fa-save"></i>
+                </div>
+              ) : (
+                <div
+                  className="btn btn-dark"
+                  onClick={() => handleEditButtonClick(commentinfo)}
+                >
+                  <i className="fa-solid fa-pencil"></i>
+                </div>
+              ))}
+          </div>
+          <div>
+            <h6 className="text-center">Comment Info </h6>
+            <p>
+              <strong>Comment No:</strong>
+              {commentinfo.number}
+            </p>
+            <p>
+              <strong>Comment:</strong>
+              {isEditing ? (
+                <textarea
+                  value={editedCommentData.comment || ""}
+                  onChange={(e) => handleChange("comment", e.target.value)}
+                  style={{ width: "100%" }}
+                />
+              ) : (
+                commentinfo.comment
+              )}
+            </p>
+            <p>
+              <strong>Date:</strong>
+              {commentinfo.createddate}
+            </p>
+            <p>
+              <strong>Created:</strong>
+              {commentinfo.createdby}
+            </p>
+            <p>
+              <strong>Status:</strong>
+              {isEditing ? (
+                <select
+                  value={editedCommentData.status || ""}
+                  onChange={(e) => handleChange("status", e.target.value)}
+                  style={{ width: "100%" }}
+                >
+                  <option value="" disabled>
+                    Choose status
+                  </option>
+                  {allCommentStatus.map((statusOption) => (
+                    <option
+                      key={statusOption.statusname}
+                      value={statusOption.statusname}
+                    >
+                      {statusOption.statusname}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                commentinfo.status
+              )}
+            </p>
+            <div>
+              <strong>Priority:</strong>
+              {isEditing ? (
+                <div style={{ display: "flex" }}>
+                  {[1, 2, 3].map((priority, index) => (
+                    <div key={priority} style={{ marginRight: "15px" }}>
+                      <input
+                        type="radio"
+                        name={`priority-${index}`}
+                        id={`priority-${index}-${priority}`}
+                        value={priority.toString()}
+                        checked={
+                          editedCommentData.priority === priority.toString()
+                        }
+                        onChange={() =>
+                          handlePriorityChange(priority.toString())
+                        }
+                      />
+                      <label htmlFor={`priority-${index}-${priority}`}>
+                        {priority}
+                      </label>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                commentinfo.priority
+              )}
+            </div>
+            {commentinfo.closedBy ? (
+              <p>
+                <strong>Closed By:</strong>
+                {commentinfo.closedBy}
+              </p>
+            ) : (
+              ""
+            )}
+            {commentinfo.closedDate ? (
+              <p>
+                <strong>Closed By:</strong>
+                {commentinfo.closedDate}
+              </p>
+            ) : (
+              ""
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Render tag info */}
+      {lineEqpInfo && (
+        <div
+          style={{
+            position: "absolute",
+            top: 0,
+            right: 0,
+            height: "90vh",
+            backgroundColor: "#272626",
+            padding: "20px",
+            boxShadow: "0px 0px 5px 0px rgba(0,0,0,0.75)",
+            zIndex: 1000,
+            display: "flex",
+            flexDirection: "column",
+            color: "#fff",
+            overflowY: "auto",
+          }}
+        >
+          <div style={{ display: "flex", justifyContent: "flex-end" }}>
+            <button className="btn btn-light" onClick={handleCloselineEqpInfo}>
+              <i className="fa-solid fa-xmark"></i>
+            </button>
+          </div>
+
+          <div>
+            {/* Display your tag information here */}
+            <h5 className="text-center fw-bold ">
+              {selectedMeshInfo.detailsType === "Equipment"
+                ? "Equipment Info"
+                : selectedMeshInfo.detailsType === "Line"
+                ? "Line Info"
+                : selectedMeshInfo.detailsType === "Valve"
+                ? "Valve Info"
+                : "Asset Info"}
+            </h5>
+
+            {/* Basic mesh info */}
+            <div
+              style={{
+                marginBottom: "20px",
+                borderBottom: "1px solid #444",
+                paddingBottom: "10px",
+              }}
+            >
+              <p>
+                <strong>Tag Name:</strong> {selectedMeshInfo.parentFileName}
+              </p>
+              {selectedMeshInfo.tagDetails && (
+                <>           
+                   <p>
+                    <strong>Type:</strong> {selectedMeshInfo.tagDetails.type}
+                  </p>
+                  {selectedMeshInfo.tagDetails.parenttag && (
+                    <p>
+                      <strong>Parent Tag:</strong>{" "}
+                      {selectedMeshInfo.tagDetails.parenttag}
+                    </p>
+                  )}
+                </>
+              )}
+            </div>
+
+            {/* Equipment Details */}
+            {selectedMeshInfo.detailsType === "Equipment" &&
+              selectedMeshInfo.additionalDetails && (
+                <div>
+                  <h6 style={{ color: "#f4b740", marginBottom: "15px" }}>
+                    Equipment Details
+                  </h6>
+                  <p>
+                    <strong>Description:</strong>{" "}
+                    {selectedMeshInfo.additionalDetails.descr || "N/A"}
+                  </p>
+                  <p>
+                    <strong>Quantity:</strong>{" "}
+                    {selectedMeshInfo.additionalDetails.qty || "N/A"}
+                  </p>
+                  <p>
+                    <strong>Capacity:</strong>{" "}
+                    {selectedMeshInfo.additionalDetails.capacity || "N/A"}
+                  </p>
+                  <p>
+                    <strong>Equipment Type:</strong>{" "}
+                    {selectedMeshInfo.additionalDetails.type || "N/A"}
+                  </p>
+                  <p>
+                    <strong>Materials:</strong>{" "}
+                    {selectedMeshInfo.additionalDetails.materials || "N/A"}
+                  </p>
+                  <p>
+                    <strong>Capacity/Duty:</strong>{" "}
+                    {selectedMeshInfo.additionalDetails.capacityDuty || "N/A"}
+                  </p>
+                  <p>
+                    <strong>Dimensions:</strong>{" "}
+                    {selectedMeshInfo.additionalDetails.dims || "N/A"}
+                  </p>
+                  <p>
+                    <strong>Design Pressure:</strong>{" "}
+                    {selectedMeshInfo.additionalDetails.dsgnPress || "N/A"}
+                  </p>
+                  <p>
+                    <strong>Operating Pressure:</strong>{" "}
+                    {selectedMeshInfo.additionalDetails.opPress || "N/A"}
+                  </p>
+                  <p>
+                    <strong>Design Temperature:</strong>{" "}
+                    {selectedMeshInfo.additionalDetails.dsgnTemp || "N/A"}
+                  </p>
+                  <p>
+                    <strong>Operating Temperature:</strong>{" "}
+                    {selectedMeshInfo.additionalDetails.opTemp || "N/A"}
+                  </p>
+                  <p>
+                    <strong>Dry Weight:</strong>{" "}
+                    {selectedMeshInfo.additionalDetails.dryWeight || "N/A"}
+                  </p>
+                  <p>
+                    <strong>Operating Weight:</strong>{" "}
+                    {selectedMeshInfo.additionalDetails.opWeight || "N/A"}
+                  </p>
+                  <p>
+                    <strong>Supplier:</strong>{" "}
+                    {selectedMeshInfo.additionalDetails.supplier || "N/A"}
+                  </p>
+                  <p>
+                    <strong>Remarks:</strong>{" "}
+                    {selectedMeshInfo.additionalDetails.remarks || "N/A"}
+                  </p>
+                  <p>
+                    <strong>Initial Status:</strong>{" "}
+                    {selectedMeshInfo.additionalDetails.initStatus || "N/A"}
+                  </p>
+                  <p>
+                    <strong>Revision:</strong>{" "}
+                    {selectedMeshInfo.additionalDetails.revision || "N/A"}
+                  </p>
+                  <p>
+                    <strong>Revision Date:</strong>{" "}
+                    {selectedMeshInfo.additionalDetails.revisionDate || "N/A"}
+                  </p>
+                </div>
+              )}
+
+            {/* Line Details */}
+            {selectedMeshInfo.detailsType === "Line" &&
+              selectedMeshInfo.additionalDetails && (
+                <div>
+                  <h6 style={{ color: "#17a2b8", marginBottom: "15px" }}>
+                    Line Details
+                  </h6>
+                  <p>
+                    <strong>Fluid Code:</strong>{" "}
+                    {selectedMeshInfo.additionalDetails.fluidCode || "N/A"}
+                  </p>
+                  <p>
+                    <strong>Medium:</strong>{" "}
+                    {selectedMeshInfo.additionalDetails.medium || "N/A"}
+                  </p>
+                  <p>
+                    <strong>Line Size (inch):</strong>{" "}
+                    {selectedMeshInfo.additionalDetails.lineSizeIn || "N/A"}
+                  </p>
+                  <p>
+                    <strong>Line Size (NB):</strong>{" "}
+                    {selectedMeshInfo.additionalDetails.lineSizeNb || "N/A"}
+                  </p>
+                  <p>
+                    <strong>Piping Spec:</strong>{" "}
+                    {selectedMeshInfo.additionalDetails.pipingSpec || "N/A"}
+                  </p>
+                  <p>
+                    <strong>Insulation Type:</strong>{" "}
+                    {selectedMeshInfo.additionalDetails.insType || "N/A"}
+                  </p>
+                  <p>
+                    <strong>Insulation Thickness:</strong>{" "}
+                    {selectedMeshInfo.additionalDetails.insThickness || "N/A"}
+                  </p>
+                  <p>
+                    <strong>Heat Tracing:</strong>{" "}
+                    {selectedMeshInfo.additionalDetails.heatTrace || "N/A"}
+                  </p>
+                  <p>
+                    <strong>Line From:</strong>{" "}
+                    {selectedMeshInfo.additionalDetails.lineFrom || "N/A"}
+                  </p>
+                  <p>
+                    <strong>Line To:</strong>{" "}
+                    {selectedMeshInfo.additionalDetails.lineTo || "N/A"}
+                  </p>
+                  <p>
+                    <strong>MOP:</strong>{" "}
+                    {selectedMeshInfo.additionalDetails.maxOpPress || "N/A"}
+                  </p>
+                  <p>
+                    <strong>MOT:</strong>{" "}
+                    {selectedMeshInfo.additionalDetails.maxOpTemp || "N/A"}
+                  </p>
+                  <p>
+                    <strong>Design Pressure:</strong>{" "}
+                    {selectedMeshInfo.additionalDetails.dsgnPress || "N/A"}
+                  </p>
+                  <p>
+                    <strong>Min Design Temp:</strong>{" "}
+                    {selectedMeshInfo.additionalDetails.minDsgnTemp || "N/A"}
+                  </p>
+                  <p>
+                    <strong>Max Design Temp:</strong>{" "}
+                    {selectedMeshInfo.additionalDetails.maxDsgnTemp || "N/A"}
+                  </p>
+                  <p>
+                    <strong>Test Pressure:</strong>{" "}
+                    {selectedMeshInfo.additionalDetails.testPress || "N/A"}
+                  </p>
+                  <p>
+                    <strong>Test Medium:</strong>{" "}
+                    {selectedMeshInfo.additionalDetails.testMedium || "N/A"}
+                  </p>
+                  <p>
+                    <strong>Test Medium Phase:</strong>{" "}
+                    {selectedMeshInfo.additionalDetails.testMediumPhase ||
+                      "N/A"}
+                  </p>
+                  <p>
+                    <strong>Mass Flow:</strong>{" "}
+                    {selectedMeshInfo.additionalDetails.massFlow || "N/A"}
+                  </p>
+                  <p>
+                    <strong>Volume Flow:</strong>{" "}
+                    {selectedMeshInfo.additionalDetails.volFlow || "N/A"}
+                  </p>
+                  <p>
+                    <strong>Density:</strong>{" "}
+                    {selectedMeshInfo.additionalDetails.density || "N/A"}
+                  </p>
+                  <p>
+                    <strong>Velocity:</strong>{" "}
+                    {selectedMeshInfo.additionalDetails.velocity || "N/A"}
+                  </p>
+                  <p>
+                    <strong>Paint System:</strong>{" "}
+                    {selectedMeshInfo.additionalDetails.paintSystem || "N/A"}
+                  </p>
+                  <p>
+                    <strong>NDT Group:</strong>{" "}
+                    {selectedMeshInfo.additionalDetails.ndtGroup || "N/A"}
+                  </p>
+                  <p>
+                    <strong>Chemical Cleaning:</strong>{" "}
+                    {selectedMeshInfo.additionalDetails.chemCleaning || "N/A"}
+                  </p>
+                  <p>
+                    <strong>PWHT:</strong>{" "}
+                    {selectedMeshInfo.additionalDetails.pwht || "N/A"}
+                  </p>
+                </div>
+              )}
+
+            {/* Valve Details */}
+            {selectedMeshInfo.detailsType === "Valve" &&
+              selectedMeshInfo.additionalDetails && (
+                <div>
+                  <h6 style={{ color: "#28a745", marginBottom: "15px" }}>
+                    Valve Details
+                  </h6>
+                  {/* Add valve-specific fields based on your valve data structure */}
+                  {Object.entries(selectedMeshInfo.additionalDetails).map(
+                    ([key, value]) => (
+                      <p key={key}>
+                        <strong>
+                          {key.charAt(0).toUpperCase() + key.slice(1)}:
+                        </strong>{" "}
+                        {value || "N/A"}
+                      </p>
+                    )
+                  )}
+                </div>
+              )}
+
+            {/* No additional details available */}
+            {!selectedMeshInfo.additionalDetails &&
+              selectedMeshInfo.detailsType && (
+                <div
+                  style={{
+                    marginTop: "20px",
+                    textAlign: "center",
+                    color: "#6c757d",
+                  }}
+                >
+                  <p>
+                    No additional {selectedMeshInfo.detailsType.toLowerCase()}{" "}
+                    details available
+                  </p>
+                </div>
+              )}
+
+            {/* No tag details at all */}
+            {!selectedMeshInfo.detailsType && (
+              <div
+                style={{
+                  marginTop: "20px",
+                  textAlign: "center",
+                  color: "#6c757d",
+                }}
+              >
+                <p>No tag information available for this mesh</p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+           {/* file info */}
+            {showFileInfo && (
+              <div
+                style={{
+                  position: "absolute",
+                  top: 0,
+                  right: 0,
+                  height: "100vh",
+                  backgroundColor: "#272626",
+                  padding: "20px",
+                  boxShadow: "0px 0px 5px 0px rgba(0,0,0,0.75)",
+                  zIndex: 1000,
+                  display: "flex",
+                  flexDirection: "column",
+                  color: "#fff",
+                }}
+              >
+                <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                  <button
+                    className="btn btn-light"
+                    onClick={handleCloseFileInfo}
+                  >
+                    <i className="fa-solid fa-xmark"></i>
+                  </button>
+                </div>
+
+                <div>
+                  {/* Display your tag information here */}
+                  <h5 className="text-center fw-bold ">File Info </h5>
+                  {/* <p>{taginfo.fileid}</p> */}
+                  <p>
+                    <strong>Filename:</strong>
+                    {selectedMeshInfo.parentFileName}
+                  </p>
+                  <p>
+                    <strong>Created:</strong>{" "}
+                    {new Date(selectedMeshInfo.fileMetadata.createdDate).toLocaleDateString()}
+                  </p>
+                  <p>
+                    <strong>Modified:</strong>{" "}
+                    {new Date(selectedMeshInfo.fileMetadata.modifiedDate).toLocaleDateString()}
+                  </p>
+                  <p>
+                    <strong>Accessed:</strong>{" "}
+                    {new Date(selectedMeshInfo.fileMetadata.accessedDate).toLocaleDateString()}
+                  </p>
+                  <p>
+                    <strong>Size:</strong>{" "}
+                    {(selectedMeshInfo.fileMetadata.fileSize / (1024 * 1024)).toFixed(2)} MB
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* user tag info */}
+            {/* {tagInfoVisible && (
+              <div
+                style={{
+                  position: "absolute",
+                  top: 0,
+                  right: 0,
+                  height: "90vh",
+                  backgroundColor: "#272626",
+                  padding: "20px",
+                  boxShadow: "0px 0px 5px 0px rgba(0,0,0,0.75)",
+                  zIndex: 1000,
+                  display: "flex",
+                  flexDirection: "column",
+                  color: "#fff",
+                  overflowY: "auto",
+                }}
+              >
+                <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                  <button
+                    className="btn btn-light"
+                    onClick={handleCloseTagInfo}
+                  >
+                    <i className="fa-solid fa-xmark"></i>
+                  </button>
+                </div>
+                <div>
+                  <h5 className="text-center fw-bold">General Tag Info</h5>
+                  <p>Filename: {selectedMeshInfo.parentFileName}</p>
+
+                  {selectedMeshInfo.extraTableData ? (
+                    <>
+                      {generalTagInfoFields
+                        .slice(0, 16)
+                        .map(({ id, field }) => {
+                          const key = `taginfo${id}`;
+                          const originalValue =
+                            taginfo.originalUsertagInfoDetails?.[key];
+
+                          // Display the field with unit if the value exists, otherwise show "N/A"
+                          const label =
+                            originalValue !== null &&
+                            originalValue !== undefined
+                              ? `${field} `
+                              : `${field}`; // Still show the field and unit even if the value is null or undefined
+
+                          return (
+                            <p key={key}>
+                              {label}:{" "}
+                              {originalValue !== null &&
+                              originalValue !== undefined
+                                ? originalValue
+                                : "N/A"}
+                            </p>
+                          );
+                        })}
+                    </>
+                  ) : (
+                    <p>No additional information available.</p>
+                  )}
+                </div>
+              </div>
+            )} */}
+
+
       {speedBar}
+      {customAlert && (
+        <Alert
+          message={modalMessage}
+          onAlertClose={() => setCustomAlert(false)}
+        />
+      )}
+
+      {showConfirm && (
+        <DeleteConfirm
+          message="Are you sure you want to delete this comment?"
+          onConfirm={handleConfirmDelete}
+          onCancel={handleCancelDelete}
+        />
+      )}
     </div>
   );
 };

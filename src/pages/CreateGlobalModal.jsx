@@ -218,7 +218,8 @@ function CreateGlobalModal() {
   const processFile = async (file) => {
     validateFile(file);
     const container = await loadFile(file);
-    const fileId = file.name.replace(/[^a-zA-Z0-9]/g, "_");
+const fileNameWithoutExt = file.name.replace(/\.glb$/i, ""); // Remove .glb (case-insensitive)
+const fileId = fileNameWithoutExt; // Replace non-alphanumerics with "_"
     const meshPromises = [];
     const dbOperations = [];
     

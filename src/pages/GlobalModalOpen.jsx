@@ -163,6 +163,7 @@ function GlobalModalOpen({leftNavVisible}) {
             selectedItem={selectedItem}
             setSelectedItem={setSelectedItem}
             setActiveButton={setActiveButton}
+            showComment={showComment}
           />
         </div>
 
