@@ -6,6 +6,7 @@
     "@babylonjs/core": "^8.11.0",
     "@babylonjs/gui": "^8.11.0",
     "@babylonjs/loaders": "^8.11.0",
+    "@babylonjs/materials": "^8.13.0",
     "@babylonjs/serializers": "^8.11.0",
     "@emotion/react": "^11.14.0",
     "@emotion/styled": "^11.14.0",

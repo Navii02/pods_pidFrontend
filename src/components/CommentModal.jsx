@@ -60,6 +60,7 @@ function CommentModal({
 
       const FetchStatus = async(projectId)=>{
         const response = await GetStatusComment(projectId)
+        
         if(response.status===200){
           console.log(response.data.data);
 setallCommentStatus(response.data.data)

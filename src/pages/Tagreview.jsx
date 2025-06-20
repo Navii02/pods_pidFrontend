@@ -277,7 +277,7 @@ const Tagreview = () => {
                         className="form-control bg-white text-black"
                       />
                     ) : (
-                      tag.model || "-"
+                      tag.filename || "-"
                     )}
                   </td>
                   <td style={{ backgroundColor: '#f0f0f0' }} className="text-center">

@@ -1,15 +1,14 @@
 import React, { useContext, useEffect, useState } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
-  faChevronUp,
-  faChevronDown,
   faTrash,
   faPlus,
-  faEye,
   faMinus,
   faFolder,
   faCube,
   faPlusCircle,
+  faEyeSlash,
+  faEye, // Added faEye for open eye icon
 } from "@fortawesome/free-solid-svg-icons";
 import EntityRegister from "./EntityRegister";
 import TagEntityModal from "../components/Tree/TagEntityModal";
@@ -21,7 +20,13 @@ import {
   getProjectTags,
 } from "../services/TreeManagementApi";
 import "../styles/ProjectDetails.css";
-import { TreeresponseContext, updateProjectContext } from "../context/ContextShare";
+import {
+  fileshowContext,
+  TreeresponseContext,
+  updateProjectContext,
+} from "../context/ContextShare";
+import { GetAllmodals } from "../services/iroamer";
+import { useNavigate } from "react-router-dom"; // Import useNavigate for navigation
 
 const ProjectDetails = ({
   showProjectDetails,
@@ -29,6 +34,7 @@ const ProjectDetails = ({
   activeTab,
 }) => {
   const { updateTree } = useContext(TreeresponseContext);
+  const { setmodalData } = useContext(fileshowContext);
   const { updateProject } = useContext(updateProjectContext);
   const selectedProject = JSON.parse(sessionStorage.getItem("selectedProject"));
   const [showEntityModal, setShowEntityModal] = useState(false);
@@ -42,7 +48,11 @@ const ProjectDetails = ({
   const [tagsMap, setTagsMap] = useState({});
   const [expandedDiscipline, setExpandedDiscipline] = useState(null);
   const [expandedSystem, setExpandedSystem] = useState(null);
-  const [hasProjectData, setHasProjectData] = useState(!!selectedProject);
+  // New state to track eye icon state for each entity
+  const [eyeState, setEyeState] = useState({});
+
+  const navigate = useNavigate(); // Hook for navigation
+
   const entityTypes = {
     areas: "Area",
     systems: "System",
@@ -50,91 +60,196 @@ const ProjectDetails = ({
   };
   const currentEntityType = entityTypes[activeTab] || "Area";
 
-  useEffect(() => {
-  if (selectedProject?.projectId) {
-    fetchAreas();
-
-    // If an area was expanded, fetch its disciplines
-    if (expandedArea) {
-      fetchDisciplines(expandedArea);
-    }
-
-    // If a discipline was expanded, fetch its systems
-    if (expandedDiscipline) {
-      const [areaCode, discCode] = expandedDiscipline.split("_");
-      fetchSystems(areaCode, discCode);
-    }
-
-    // If a system was expanded, fetch its tags
-    if (expandedSystem) {
-      const [area, disc, sys] = expandedSystem.split("_");
-      fetchTags(area, disc, sys);
-    }
-  }
-}, [updateTree, updateProject]);
-
-  const fetchAreas = async () => {
+  const fetchAllProjectData = async () => {
     try {
-      const response = await getProjectArea(selectedProject.projectId, {
+      const areasResponse = await getProjectArea(selectedProject.projectId, {
         type: "area",
       });
-      if (response.status === 200) {
-        setAreas(response.data.area || []);
-      }
-    } catch (error) {
-      console.error("Failed to fetch areas", error);
-    }
-  };
+      const allAreas = areasResponse.data.area || [];
+      setAreas(allAreas);
 
-  const fetchDisciplines = async (areaCode) => {
-    try {
-      const response = await getprojectDisipline(
-        areaCode,
-        selectedProject.projectId
+      const disciplinesPromises = allAreas.map(async (area) => {
+        const discResponse = await getprojectDisipline(
+          area.area,
+          selectedProject.projectId
+        );
+        return {
+          area: area.area,
+          disciplines: discResponse.data.disciplines || [],
+        };
+      });
+
+      const disciplinesResults = await Promise.all(disciplinesPromises);
+      const newDisciplinesMap = {};
+      disciplinesResults.forEach((result) => {
+        newDisciplinesMap[result.area] = result.disciplines;
+      });
+      setDisciplinesMap(newDisciplinesMap);
+
+      const systemsPromises = disciplinesResults.flatMap((result) =>
+        result.disciplines.map(async (disc) => {
+          const sysResponse = await getprojectsystem(
+            selectedProject.projectId,
+            result.area,
+            disc.disc
+          );
+          return {
+            key: `${result.area}_${disc.disc}`,
+            systems: sysResponse.data.systems || [],
+          };
+        })
       );
-      if (response.status === 200) {
-        setDisciplinesMap((prev) => ({
-          ...prev,
-          [areaCode]: response.data.disciplines || [],
-        }));
-        setExpandedArea(areaCode);
-      }
-    } catch (err) {
-      console.error("Failed to fetch disciplines", err);
+
+      const systemsResults = await Promise.all(systemsPromises);
+      const newSystemsMap = {};
+      systemsResults.forEach((result) => {
+        newSystemsMap[result.key] = result.systems;
+      });
+      setSystemsMap(newSystemsMap);
+
+      const tagsPromises = systemsResults.flatMap((result) =>
+        result.systems.map(async (sys) => {
+          const [area, disc] = result.key.split("_");
+          const tagResponse = await getProjectTags(
+            selectedProject.projectId,
+            area,
+            disc,
+            sys.sys
+          );
+          return {
+            key: `${area}_${disc}_${sys.sys}`,
+            tags: tagResponse.data.tags || [],
+          };
+        })
+      );
+
+      const tagsResults = await Promise.all(tagsPromises);
+      const newTagsMap = {};
+      tagsResults.forEach((result) => {
+        newTagsMap[result.key] = result.tags;
+      });
+      setTagsMap(newTagsMap);
+    } catch (error) {
+      console.error("Failed to fetch project data", error);
     }
   };
 
-  const fetchSystems = async (area, disc) => {
-    try {
-      const projectid = selectedProject.projectId;
-      const response = await getprojectsystem(projectid, area, disc);
-      if (response.status === 200) {
-        const key = `${area}_${disc}`;
-        setSystemsMap((prev) => ({
-          ...prev,
-          [key]: response.data.systems || [],
-        }));
-        setExpandedDiscipline(key);
-      }
-    } catch (error) {
-      console.error("Failed to fetch systems", error);
+  useEffect(() => {
+    if (selectedProject?.projectId) {
+      fetchAllProjectData();
     }
-  };
+  }, [selectedProject?.projectId, updateTree, updateProject]);
 
-  const fetchTags = async (area, disc, sys) => {
-    try {
-      const projectid = selectedProject.projectId;
-      const response = await getProjectTags(projectid, area, disc, sys);
-      if (response.status === 200) {
-        const key = `${area}_${disc}_${sys}`;
-        setTagsMap((prev) => ({
-          ...prev,
-          [key]: response.data.tags || [],
-        }));
-        setExpandedSystem(key);
+  const gatherEntityIds = async (entityType, entityData, entityKey) => {
+    const ids = {
+      areaIds: [],
+      discIds: [],
+      systemIds: [],
+      tagIds: [],
+    };
+
+    switch (entityType) {
+      case "Project":
+        areas.forEach((area) => {
+          ids.areaIds.push(area.area);
+          const disciplines = disciplinesMap[area.area] || [];
+          disciplines.forEach((disc) => {
+            ids.discIds.push(disc.disc);
+            const systemKey = `${area.area}_${disc.disc}`;
+            const systems = systemsMap[systemKey] || [];
+            systems.forEach((sys) => {
+              ids.systemIds.push(sys.sys);
+              const tagKey = `${area.area}_${disc.disc}_${sys.sys}`;
+              const tags = tagsMap[tagKey] || [];
+              tags.forEach((tag) => {
+                ids.tagIds.push(tag.tag);
+              });
+            });
+          });
+        });
+        break;
+
+      case "Area":
+        ids.areaIds = [entityData.area];
+        const disciplines = disciplinesMap[entityData.area] || [];
+        disciplines.forEach((disc) => {
+          ids.discIds.push(disc.disc);
+          const systemKey = `${entityData.area}_${disc.disc}`;
+          const systems = systemsMap[systemKey] || [];
+          systems.forEach((sys) => {
+            ids.systemIds.push(sys.sys);
+            const tagKey = `${entityData.area}_${disc.disc}_${sys.sys}`;
+            const tags = tagsMap[tagKey] || [];
+            tags.forEach((tag) => {
+              ids.tagIds.push(tag.tag);
+            });
+          });
+        });
+        break;
+
+      case "Discipline":
+        ids.areaIds = [entityData.area];
+        ids.discIds = [entityData.disc];
+        const systemKey = `${entityData.area}_${entityData.disc}`;
+        const systems = systemsMap[systemKey] || [];
+        systems.forEach((sys) => {
+          ids.systemIds.push(sys.sys);
+          const tagKey = `${entityData.area}_${entityData.disc}_${sys.sys}`;
+          const tags = tagsMap[tagKey] || [];
+          tags.forEach((tag) => {
+            ids.tagIds.push(tag.tag);
+          });
+        });
+        break;
+
+      case "System":
+        ids.areaIds = [entityData.area];
+        ids.discIds = [entityData.disc];
+        ids.systemIds = [entityData.sys];
+        const tagKey = `${entityData.area}_${entityData.disc}_${entityData.sys}`;
+        const tags = tagsMap[tagKey] || [];
+        tags.forEach((tag) => {
+          ids.tagIds.push(tag.tag);
+        });
+        break;
+
+      case "Tag":
+        ids.areaIds = [entityData.area];
+        ids.discIds = [entityData.disc];
+        ids.systemIds = [entityData.sys];
+        ids.tagIds = [entityData.tag];
+        break;
+
+      default:
+        break;
+    }
+
+    // Toggle eye state
+    const isOpen = eyeState[entityKey] || false;
+    setEyeState((prev) => ({ ...prev, [entityKey]: !isOpen }));
+
+    if (!isOpen) {
+      // Fetch data and navigate if eye is opening
+      try {
+        const response = await GetAllmodals(selectedProject.projectId, ids);
+        if (response.status === 200) {
+          setmodalData(response.data.data);
+          // Navigate to IromarPage with data
+          navigate("/iroamer", { state: { modalData: response.data.data } });
+        } else if (response.status === 400) {
+          alert("No Records Found");
+          // Revert eye state if no data
+          setEyeState((prev) => ({ ...prev, [entityKey]: false }));
+        }
+      } catch (error) {
+        console.error("Failed to fetch modal data", error);
+        alert("Failed to fetch data");
+        // Revert eye state on error
+        setEyeState((prev) => ({ ...prev, [entityKey]: false }));
       }
-    } catch (error) {
-      console.error("Failed to fetch tags", error);
+    } else {
+      // Clear data and stay on current page if eye is closing
+      setmodalData(null);
     }
   };
 
@@ -145,13 +260,9 @@ const ProjectDetails = ({
     if (!confirm) return;
     try {
       let deleteCode = code;
-
-      if (type === "Discipline") {
-        deleteCode = `${id}__${code}`;
-      } else if (type === "Tag") {
+      if (type === "Discipline" || type === "Tag") {
         deleteCode = `${id}__${code}`;
       }
-
       const response = await DeleteEntity(
         type,
         selectedProject.projectId,
@@ -159,14 +270,7 @@ const ProjectDetails = ({
       );
       if (response.status === 200) {
         alert(`${type} and children deleted.`);
-        if (type === "Area") fetchAreas();
-        else if (type === "Discipline") fetchDisciplines(id);
-        else if (type === "System")
-          fetchSystems(id.split("_")[0], id.split("_")[1]);
-        else if (type === "Tag") {
-          const [area, disc, sys] = id.split("_");
-          fetchTags(area, disc, sys);
-        }
+        fetchAllProjectData();
       }
     } catch (error) {
       console.error(`Failed to delete ${type}`, error);
@@ -181,49 +285,11 @@ const ProjectDetails = ({
     setShowTagModalFor(null);
   };
 
-const handleEntityRegisterSuccess = async (newEntity, entityType, parentInfo) => {
-  handleEntityRegisterClose();
+  const handleEntityRegisterSuccess = async () => {
+    handleEntityRegisterClose();
+    await fetchAllProjectData();
+  };
 
-  if (newEntity.refetch) {
-    if (entityType === "Area") {
-      await fetchAreas();
-    } else if (entityType === "Discipline" && parentInfo) {
-      await fetchDisciplines(parentInfo.area);
-      setExpandedArea(parentInfo.area);
-    } else if (entityType === "System" && parentInfo) {
-      await fetchSystems(parentInfo.area, parentInfo.disc);
-      setExpandedDiscipline(`${parentInfo.area}_${parentInfo.disc}`);
-    } else if (entityType === "Tag" && parentInfo) {
-      await fetchTags(parentInfo.area, parentInfo.disc, parentInfo.sys);
-      setExpandedSystem(`${parentInfo.area}_${parentInfo.disc}_${parentInfo.sys}`);
-    }
-  } else {
-    // Existing logic for when entity data is provided
-    if (entityType === "Area") {
-      setAreas(prev => [...prev, newEntity]);
-    } else if (entityType === "Discipline" && parentInfo) {
-      setDisciplinesMap(prev => ({
-        ...prev,
-        [parentInfo.area]: [...(prev[parentInfo.area] || []), newEntity]
-      }));
-      setExpandedArea(parentInfo.area);
-    } else if (entityType === "System" && parentInfo) {
-      const systemKey = `${parentInfo.area}_${parentInfo.disc}`;
-      setSystemsMap(prev => ({
-        ...prev,
-        [systemKey]: [...(prev[systemKey] || []), newEntity]
-      }));
-      setExpandedDiscipline(systemKey);
-    } else if (entityType === "Tag" && parentInfo) {
-      const tagKey = `${parentInfo.area}_${parentInfo.disc}_${parentInfo.sys}`;
-      setTagsMap(prev => ({
-        ...prev,
-        [tagKey]: [...(prev[tagKey] || []), newEntity]
-      }));
-      setExpandedSystem(tagKey);
-    }
-  }
-};
   const openDisciplineModal = (area) => setShowDisciplineModalFor(area);
   const openSystemModal = (discipline) => setShowSystemModalFor(discipline);
   const openTagModal = (system) => setShowTagModalFor(system);
@@ -235,20 +301,7 @@ const handleEntityRegisterSuccess = async (newEntity, entityType, parentInfo) =>
           showEntityModal || !!showDisciplineModalFor || !!showSystemModalFor
         }
         onClose={handleEntityRegisterClose}
-        onSuccess={(newEntity) => {
-          if (showSystemModalFor) {
-            handleEntityRegisterSuccess(newEntity, "System", {
-              area: showSystemModalFor.area,
-              disc: showSystemModalFor.disc
-            });
-          } else if (showDisciplineModalFor) {
-            handleEntityRegisterSuccess(newEntity, "Discipline", {
-              area: showDisciplineModalFor.area
-            });
-          } else {
-            handleEntityRegisterSuccess(newEntity, "Area");
-          }
-        }}
+        onSuccess={handleEntityRegisterSuccess}
         entityType={
           showSystemModalFor
             ? "System"
@@ -261,27 +314,33 @@ const handleEntityRegisterSuccess = async (newEntity, entityType, parentInfo) =>
         }
       />
 
-  <TagEntityModal
-  showTagModalFor={showTagModalFor}
-  setShowTagModalFor={setShowTagModalFor}
-  selectedProject={selectedProject}
-  tagsMap={tagsMap}
-  onSuccess={async ({ refetch, entityType, parentInfo }) => {
-    await handleEntityRegisterSuccess({ refetch }, entityType, parentInfo);
-  }}
-/>
+      <TagEntityModal
+        showTagModalFor={showTagModalFor}
+        setShowTagModalFor={setShowTagModalFor}
+        selectedProject={selectedProject}
+        tagsMap={tagsMap}
+        onSuccess={handleEntityRegisterSuccess}
+      />
 
-      <div className="project-toggle-wrapper ">
+      <div className="project-toggle-wrapper">
         {showProjectDetails && (
           <>
-            <div className="d-flex w-100 justify-content-between  selected-project-header mb-2 mt-3">
+            <div className="d-flex w-100 justify-content-between selected-project-header mb-2 mt-3">
               <div className="ms-3">{selectedProject?.projectName}</div>
               <div className="entity-icons">
-                <button>
-                  <FontAwesomeIcon icon={faEye} />
+                <button
+                  onClick={() =>
+                    gatherEntityIds("Project", selectedProject, "project")
+                  }
+                >
+                  <FontAwesomeIcon
+                    icon={eyeState["project"] ? faEye : faEyeSlash}
+                  />
                 </button>
-
-                <button onClick={() => setShowEntityModal(true)} className="me-2">
+                <button
+                  onClick={() => setShowEntityModal(true)}
+                  className="me-2"
+                >
                   <FontAwesomeIcon icon={faPlusCircle} />
                 </button>
               </div>
@@ -289,6 +348,7 @@ const handleEntityRegisterSuccess = async (newEntity, entityType, parentInfo) =>
 
             {areas.map((area) => {
               const isExpanded = expandedArea === area.area;
+              const areaKey = `area_${area.area}`;
               return (
                 <div key={area.area}>
                   <div className="folder-row">
@@ -296,9 +356,7 @@ const handleEntityRegisterSuccess = async (newEntity, entityType, parentInfo) =>
                       <FontAwesomeIcon
                         icon={isExpanded ? faMinus : faPlus}
                         onClick={() =>
-                          isExpanded
-                            ? setExpandedArea(null)
-                            : fetchDisciplines(area.area)
+                          setExpandedArea(isExpanded ? null : area.area)
                         }
                       />
                       <FontAwesomeIcon
@@ -308,8 +366,12 @@ const handleEntityRegisterSuccess = async (newEntity, entityType, parentInfo) =>
                       {area.area} - {area.name}
                     </div>
                     <div className="entity-icons">
-                      <button>
-                        <FontAwesomeIcon icon={faEye} />
+                      <button
+                        onClick={() => gatherEntityIds("Area", area, areaKey)}
+                      >
+                        <FontAwesomeIcon
+                          icon={eyeState[areaKey] ? faEye : faEyeSlash}
+                        />
                       </button>
                       <button onClick={() => openDisciplineModal(area)}>
                         <FontAwesomeIcon icon={faPlusCircle} />
@@ -326,7 +388,7 @@ const handleEntityRegisterSuccess = async (newEntity, entityType, parentInfo) =>
                     disciplinesMap[area.area]?.map((disc) => {
                       const systemKey = `${area.area}_${disc.disc}`;
                       const isDiscExpanded = expandedDiscipline === systemKey;
-                      const systems = systemsMap[systemKey] || [];
+                      const discKey = `disc_${systemKey}`;
 
                       return (
                         <div key={disc.disc} className="folder-indent-1">
@@ -335,9 +397,9 @@ const handleEntityRegisterSuccess = async (newEntity, entityType, parentInfo) =>
                               <FontAwesomeIcon
                                 icon={isDiscExpanded ? faMinus : faPlus}
                                 onClick={() =>
-                                  isDiscExpanded
-                                    ? setExpandedDiscipline(null)
-                                    : fetchSystems(area.area, disc.disc)
+                                  setExpandedDiscipline(
+                                    isDiscExpanded ? null : systemKey
+                                  )
                                 }
                               />
                               <FontAwesomeIcon
@@ -347,8 +409,18 @@ const handleEntityRegisterSuccess = async (newEntity, entityType, parentInfo) =>
                               {disc.disc} - {disc.name}
                             </div>
                             <div className="entity-icons">
-                              <button>
-                                <FontAwesomeIcon icon={faEye} />
+                              <button
+                                onClick={() =>
+                                  gatherEntityIds(
+                                    "Discipline",
+                                    { area: area.area, disc: disc.disc },
+                                    discKey
+                                  )
+                                }
+                              >
+                                <FontAwesomeIcon
+                                  icon={eyeState[discKey] ? faEye : faEyeSlash}
+                                />
                               </button>
                               <button
                                 onClick={() =>
@@ -370,16 +442,19 @@ const handleEntityRegisterSuccess = async (newEntity, entityType, parentInfo) =>
                                   )
                                 }
                               >
-                                <FontAwesomeIcon icon={faTrash} className="me-2" />
+                                <FontAwesomeIcon
+                                  icon={faTrash}
+                                  className="me-2"
+                                />
                               </button>
                             </div>
                           </div>
 
                           {isDiscExpanded &&
-                            systems.map((sys) => {
+                            systemsMap[systemKey]?.map((sys) => {
                               const tagKey = `${area.area}_${disc.disc}_${sys.sys}`;
                               const isSysExpanded = expandedSystem === tagKey;
-                              const tags = tagsMap[tagKey] || [];
+                              const sysKey = `sys_${tagKey}`;
 
                               return (
                                 <div key={sys.sys} className="folder-indent-2">
@@ -388,13 +463,9 @@ const handleEntityRegisterSuccess = async (newEntity, entityType, parentInfo) =>
                                       <FontAwesomeIcon
                                         icon={isSysExpanded ? faMinus : faPlus}
                                         onClick={() =>
-                                          isSysExpanded
-                                            ? setExpandedSystem(null)
-                                            : fetchTags(
-                                                area.area,
-                                                disc.disc,
-                                                sys.sys
-                                              )
+                                          setExpandedSystem(
+                                            isSysExpanded ? null : tagKey
+                                          )
                                         }
                                       />
                                       <FontAwesomeIcon
@@ -404,8 +475,22 @@ const handleEntityRegisterSuccess = async (newEntity, entityType, parentInfo) =>
                                       {sys.sys} - {sys.name}
                                     </div>
                                     <div className="entity-icons">
-                                      <button>
-                                        <FontAwesomeIcon icon={faEye} />
+                                      <button
+                                        onClick={() =>
+                                          gatherEntityIds(
+                                            "System",
+                                            {
+                                              area: area.area,
+                                              disc: disc.disc,
+                                              sys: sys.sys,
+                                            },
+                                            sysKey
+                                          )
+                                        }
+                                      >
+                                        <FontAwesomeIcon
+                                          icon={eyeState[sysKey] ? faEye : faEyeSlash}
+                                        />
                                       </button>
                                       <button
                                         onClick={() =>
@@ -413,7 +498,8 @@ const handleEntityRegisterSuccess = async (newEntity, entityType, parentInfo) =>
                                             ...sys,
                                             area: area.area,
                                             disc: disc.disc,
-                                            projectId: selectedProject.projectId,
+                                            projectId:
+                                              selectedProject.projectId,
                                           })
                                         }
                                       >
@@ -428,44 +514,72 @@ const handleEntityRegisterSuccess = async (newEntity, entityType, parentInfo) =>
                                           )
                                         }
                                       >
-                                        <FontAwesomeIcon icon={faTrash} className="me-2"/>
+                                        <FontAwesomeIcon
+                                          icon={faTrash}
+                                          className="me-2"
+                                        />
                                       </button>
                                     </div>
                                   </div>
 
                                   {isSysExpanded &&
-                                    tags.map((tag) => (
-                                      <div
-                                        key={tag.tag}
-                                        className="folder-indent-3"
-                                      >
-                                        <div className="tag-row">
-                                          <div className="entity-line">
-                                            <FontAwesomeIcon
-                                              icon={faCube}
-                                              className="folder-icon"
-                                            />
-                                            {tag.tag} - {tag.name}
-                                          </div>
-                                          <div className="entity-icons">
-                                            <button>
-                                              <FontAwesomeIcon icon={faEye} />
-                                            </button>
-                                            <button
-                                              onClick={() =>
-                                                handleDelete(
-                                                  "Tag",
-                                                  `${area.area}_${disc.disc}_${sys.sys}`,
-                                                  tag.tag
-                                                )
-                                              }
-                                            >
-                                              <FontAwesomeIcon icon={faTrash} className="me-2" />
-                                            </button>
+                                    tagsMap[tagKey]?.map((tag) => {
+                                      const tagEntityKey = `tag_${area.area}_${disc.disc}_${sys.sys}_${tag.tag}`;
+                                      return (
+                                        <div
+                                          key={tag.tag}
+                                          className="folder-indent-3"
+                                        >
+                                          <div className="tag-row">
+                                            <div className="entity-line">
+                                              <FontAwesomeIcon
+                                                icon={faCube}
+                                                className="folder-icon"
+                                              />
+                                              {tag.tag} - {tag.name}
+                                            </div>
+                                            <div className="entity-icons">
+                                              <button
+                                                onClick={() =>
+                                                  gatherEntityIds(
+                                                    "Tag",
+                                                    {
+                                                      area: area.area,
+                                                      disc: disc.disc,
+                                                      sys: sys.sys,
+                                                      tag: tag.tag,
+                                                    },
+                                                    tagEntityKey
+                                                  )
+                                                }
+                                              >
+                                                <FontAwesomeIcon
+                                                  icon={
+                                                    eyeState[tagEntityKey]
+                                                      ? faEye
+                                                      : faEyeSlash
+                                                  }
+                                                />
+                                              </button>
+                                              <button
+                                                onClick={() =>
+                                                  handleDelete(
+                                                    "Tag",
+                                                    `${area.area}_${disc.disc}_${sys.sys}`,
+                                                    tag.tag
+                                                  )
+                                                }
+                                              >
+                                                <FontAwesomeIcon
+                                                  icon={faTrash}
+                                                  className="me-2"
+                                                />
+                                              </button>
+                                            </div>
                                           </div>
                                         </div>
-                                      </div>
-                                    ))}
+                                      );
+                                    })}
                                 </div>
                               );
                             })}
