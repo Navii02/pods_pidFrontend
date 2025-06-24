@@ -33,7 +33,7 @@ function App() {
 
       {/* All pages that use the shared layout */}
       <Route element={<HomePage />}>
-        <Route path="/" element={<Dashboard />} />
+        <Route path="/" element={<Iroamer />} />
         <Route path="/spid" element={<Spid />} />
         <Route path="/documents/review" element={<DocumentReview />} />
         <Route path="/documents/register" element={<DocumentRegister />} />

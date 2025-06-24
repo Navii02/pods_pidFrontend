@@ -1,3 +1,4 @@
+
 import React, { useContext, useEffect, useState } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
@@ -8,7 +9,7 @@ import {
   faCube,
   faPlusCircle,
   faEyeSlash,
-  faEye, // Added faEye for open eye icon
+  faEye,
 } from "@fortawesome/free-solid-svg-icons";
 import EntityRegister from "./EntityRegister";
 import TagEntityModal from "../components/Tree/TagEntityModal";
@@ -21,12 +22,12 @@ import {
 } from "../services/TreeManagementApi";
 import "../styles/ProjectDetails.css";
 import {
-  fileshowContext,
+  iroamerContext,
   TreeresponseContext,
   updateProjectContext,
 } from "../context/ContextShare";
 import { GetAllmodals } from "../services/iroamer";
-import { useNavigate } from "react-router-dom"; // Import useNavigate for navigation
+import { useNavigate } from "react-router-dom";
 
 const ProjectDetails = ({
   showProjectDetails,
@@ -34,7 +35,8 @@ const ProjectDetails = ({
   activeTab,
 }) => {
   const { updateTree } = useContext(TreeresponseContext);
-  const { setmodalData } = useContext(fileshowContext);
+  const { viewHideThree,backgroundColorTag, setHighlightedTagKey, setTagsToRemove, setViewHideThree } =
+    useContext(iroamerContext);
   const { updateProject } = useContext(updateProjectContext);
   const selectedProject = JSON.parse(sessionStorage.getItem("selectedProject"));
   const [showEntityModal, setShowEntityModal] = useState(false);
@@ -48,10 +50,8 @@ const ProjectDetails = ({
   const [tagsMap, setTagsMap] = useState({});
   const [expandedDiscipline, setExpandedDiscipline] = useState(null);
   const [expandedSystem, setExpandedSystem] = useState(null);
-  // New state to track eye icon state for each entity
   const [eyeState, setEyeState] = useState({});
-
-  const navigate = useNavigate(); // Hook for navigation
+  const navigate = useNavigate();
 
   const entityTypes = {
     areas: "Area",
@@ -148,40 +148,71 @@ const ProjectDetails = ({
       tagIds: [],
     };
 
+    // Collect IDs and set eye states based on entity type
+    const newEyeState = { ...eyeState };
+    const isOpen = eyeState[entityKey] || false;
+    const newViewHideThree = {};
+
     switch (entityType) {
-      case "Project":
-        areas.forEach((area) => {
-          ids.areaIds.push(area.area);
-          const disciplines = disciplinesMap[area.area] || [];
-          disciplines.forEach((disc) => {
-            ids.discIds.push(disc.disc);
-            const systemKey = `${area.area}_${disc.disc}`;
-            const systems = systemsMap[systemKey] || [];
-            systems.forEach((sys) => {
-              ids.systemIds.push(sys.sys);
-              const tagKey = `${area.area}_${disc.disc}_${sys.sys}`;
-              const tags = tagsMap[tagKey] || [];
-              tags.forEach((tag) => {
-                ids.tagIds.push(tag.tag);
-              });
-            });
-          });
+ case "Project":
+  areas.forEach((area) => {
+    ids.areaIds.push(area.area);
+    newEyeState[`area_${area.area}`] = !isOpen;
+    newViewHideThree[`${area.area}`] = !isOpen;
+    const disciplines = disciplinesMap[area.area] || [];
+    disciplines.forEach((disc) => {
+      ids.discIds.push(disc.disc);
+      const discKey = `disc_${area.area}_${disc.disc}`;
+      newEyeState[discKey] = !isOpen;
+      newViewHideThree[`${area.area}-${disc.disc}`] = !isOpen;
+      const systemKey = `${area.area}_${disc.disc}`;
+      const systems = systemsMap[systemKey] || [];
+      systems.forEach((sys) => {
+        ids.systemIds.push(sys.sys);
+        const sysKey = `sys_${area.area}_${disc.disc}_${sys.sys}`;
+        newEyeState[sysKey] = !isOpen;
+        newViewHideThree[`${area.area}-${disc.disc}-${sys.sys}`] = !isOpen;
+        const tagKey = `${area.area}_${disc.disc}_${sys.sys}`;
+        const tags = tagsMap[tagKey] || [];
+        tags.forEach((tag) => {
+          ids.tagIds.push(tag.tag);
+          newEyeState[
+            `tag_${area.area}_${disc.disc}_${sys.sys}_${tag.tag}`
+          ] = !isOpen;
+          newViewHideThree[`${area.area}-${disc.disc}-${sys.sys}-${tag.tag}`] = !isOpen;
         });
-        break;
+      });
+    });
+  });
+  // Ensure project eye state is also updated
+  newEyeState["project"] = !isOpen;
+  break;
 
       case "Area":
         ids.areaIds = [entityData.area];
+        newEyeState[`area_${entityData.area}`] = !isOpen;
+        newViewHideThree[`${entityData.area}`] = !isOpen;
         const disciplines = disciplinesMap[entityData.area] || [];
         disciplines.forEach((disc) => {
           ids.discIds.push(disc.disc);
+          const discKey = `disc_${entityData.area}_${disc.disc}`;
+          newEyeState[discKey] = !isOpen;
+          newViewHideThree[`${entityData.area}-${disc.disc}`] = !isOpen;
           const systemKey = `${entityData.area}_${disc.disc}`;
           const systems = systemsMap[systemKey] || [];
           systems.forEach((sys) => {
             ids.systemIds.push(sys.sys);
+            const sysKey = `sys_${entityData.area}_${disc.disc}_${sys.sys}`;
+            newEyeState[sysKey] = !isOpen;
+            newViewHideThree[`${entityData.area}-${disc.disc}-${sys.sys}`] = !isOpen;
             const tagKey = `${entityData.area}_${disc.disc}_${sys.sys}`;
             const tags = tagsMap[tagKey] || [];
             tags.forEach((tag) => {
               ids.tagIds.push(tag.tag);
+              newEyeState[
+                `tag_${entityData.area}_${disc.disc}_${sys.sys}_${tag.tag}`
+              ] = !isOpen;
+              newViewHideThree[`${entityData.area}-${disc.disc}-${sys.sys}-${tag.tag}`] = !isOpen;
             });
           });
         });
@@ -190,14 +221,23 @@ const ProjectDetails = ({
       case "Discipline":
         ids.areaIds = [entityData.area];
         ids.discIds = [entityData.disc];
+        newEyeState[`disc_${entityData.area}_${entityData.disc}`] = !isOpen;
+        newViewHideThree[`${entityData.area}-${entityData.disc}`] = !isOpen;
         const systemKey = `${entityData.area}_${entityData.disc}`;
         const systems = systemsMap[systemKey] || [];
         systems.forEach((sys) => {
           ids.systemIds.push(sys.sys);
+          const sysKey = `sys_${entityData.area}_${entityData.disc}_${sys.sys}`;
+          newEyeState[sysKey] = !isOpen;
+          newViewHideThree[`${entityData.area}-${entityData.disc}-${sys.sys}`] = !isOpen;
           const tagKey = `${entityData.area}_${entityData.disc}_${sys.sys}`;
           const tags = tagsMap[tagKey] || [];
           tags.forEach((tag) => {
             ids.tagIds.push(tag.tag);
+            newEyeState[
+              `tag_${entityData.area}_${entityData.disc}_${sys.sys}_${tag.tag}`
+            ] = !isOpen;
+            newViewHideThree[`${entityData.area}-${entityData.disc}-${sys.sys}-${tag.tag}`] = !isOpen;
           });
         });
         break;
@@ -206,10 +246,18 @@ const ProjectDetails = ({
         ids.areaIds = [entityData.area];
         ids.discIds = [entityData.disc];
         ids.systemIds = [entityData.sys];
+        newEyeState[
+          `sys_${entityData.area}_${entityData.disc}_${entityData.sys}`
+        ] = !isOpen;
+        newViewHideThree[`${entityData.area}-${entityData.disc}-${entityData.sys}`] = !isOpen;
         const tagKey = `${entityData.area}_${entityData.disc}_${entityData.sys}`;
         const tags = tagsMap[tagKey] || [];
         tags.forEach((tag) => {
           ids.tagIds.push(tag.tag);
+          newEyeState[
+            `tag_${entityData.area}_${entityData.disc}_${entityData.sys}_${tag.tag}`
+          ] = !isOpen;
+          newViewHideThree[`${entityData.area}-${entityData.disc}-${entityData.sys}-${tag.tag}`] = !isOpen;
         });
         break;
 
@@ -218,38 +266,77 @@ const ProjectDetails = ({
         ids.discIds = [entityData.disc];
         ids.systemIds = [entityData.sys];
         ids.tagIds = [entityData.tag];
+        newEyeState[
+          `tag_${entityData.area}_${entityData.disc}_${entityData.sys}_${entityData.tag}`
+        ] = !isOpen;
+        newViewHideThree[`${entityData.area}-${entityData.disc}-${entityData.sys}-${entityData.tag}`] = !isOpen;
         break;
 
       default:
         break;
     }
 
-    // Toggle eye state
-    const isOpen = eyeState[entityKey] || false;
-    setEyeState((prev) => ({ ...prev, [entityKey]: !isOpen }));
+    // Update eye states
+    setEyeState(newEyeState);
+    setViewHideThree((prev) => ({ ...prev, ...newViewHideThree }));
 
     if (!isOpen) {
-      // Fetch data and navigate if eye is opening
+      // Eye is opening: Fetch data and load into scene
       try {
-        const response = await GetAllmodals(selectedProject.projectId, ids);
+        setTagsToRemove([]); // Clear tags to remove
+        const response = await GetAllmodals(selectedProject.projectId,ids.areaIds,
+        ids.discIds,
+        ids.systemIds,
+        ids.tagIds )
         if (response.status === 200) {
-          setmodalData(response.data.data);
-          // Navigate to IromarPage with data
-          navigate("/iroamer", { state: { modalData: response.data.data } });
+          console.log(response.data)
+          navigate("/iroamer", { state: { modalData: response.data.data, timestamp: Date.now() } });
         } else if (response.status === 400) {
           alert("No Records Found");
-          // Revert eye state if no data
-          setEyeState((prev) => ({ ...prev, [entityKey]: false }));
+          setEyeState((prev) => ({
+            ...prev,
+            [entityKey]: false,
+            ...(entityType !== "Tag" &&
+              Object.keys(newEyeState).reduce((acc, key) => {
+                if (key !== entityKey && newEyeState[key] === true) {
+                  acc[key] = false;
+                }
+                return acc;
+              }, {})),
+          }));
+          setViewHideThree((prev) => ({
+            ...prev,
+            ...Object.keys(newViewHideThree).reduce((acc, key) => {
+              acc[key] = false;
+              return acc;
+            }, {}),
+          }));
         }
       } catch (error) {
         console.error("Failed to fetch modal data", error);
         alert("Failed to fetch data");
-        // Revert eye state on error
-        setEyeState((prev) => ({ ...prev, [entityKey]: false }));
+        setEyeState((prev) => ({
+          ...prev,
+          [entityKey]: false,
+          ...(entityType !== "Tag" &&
+            Object.keys(newEyeState).reduce((acc, key) => {
+              if (key !== entityKey && newEyeState[key] === true) {
+                acc[key] = false;
+              }
+              return acc;
+            }, {})),
+        }));
+        setViewHideThree((prev) => ({
+          ...prev,
+          ...Object.keys(newViewHideThree).reduce((acc, key) => {
+            acc[key] = false;
+            return acc;
+          }, {}),
+        }));
       }
     } else {
-      // Clear data and stay on current page if eye is closing
-      setmodalData(null);
+      // Eye is closing: Unload tags from scene
+      setTagsToRemove(ids.tagIds);
     }
   };
 
@@ -293,6 +380,27 @@ const ProjectDetails = ({
   const openDisciplineModal = (area) => setShowDisciplineModalFor(area);
   const openSystemModal = (discipline) => setShowSystemModalFor(discipline);
   const openTagModal = (system) => setShowTagModalFor(system);
+
+  const getHighlightedTagPaths = () => {
+    const paths = [];
+    for (const [path, isHighlighted] of Object.entries(
+      backgroundColorTag || {}
+    )) {
+      if (isHighlighted) {
+        paths.push(path);
+      }
+    }
+    return paths;
+  };
+
+  const highlightedTagPaths = getHighlightedTagPaths();
+
+  const shouldHighlightTag = (area, disc, sys, tag) => {
+    const tagPath = `${area}-${disc}-${sys}-${tag}`.trim();
+    console.log(tagPath);
+    
+    return highlightedTagPaths.includes(tagPath);
+  };
 
   return (
     <div>
@@ -489,7 +597,11 @@ const ProjectDetails = ({
                                         }
                                       >
                                         <FontAwesomeIcon
-                                          icon={eyeState[sysKey] ? faEye : faEyeSlash}
+                                          icon={
+                                            eyeState[sysKey]
+                                              ? faEye
+                                              : faEyeSlash
+                                          }
                                         />
                                       </button>
                                       <button
@@ -525,18 +637,36 @@ const ProjectDetails = ({
                                   {isSysExpanded &&
                                     tagsMap[tagKey]?.map((tag) => {
                                       const tagEntityKey = `tag_${area.area}_${disc.disc}_${sys.sys}_${tag.tag}`;
+                                      const isTagHighlighted =
+                                        shouldHighlightTag(
+                                          area.area,
+                                          disc.disc,
+                                          sys.sys,
+                                          tag.tag
+                                        );
+
                                       return (
                                         <div
                                           key={tag.tag}
-                                          className="folder-indent-3"
+                                          className={`folder-indent-3 ${
+                                            isTagHighlighted
+                                              ? "highlighted"
+                                              : ""
+                                          }`}
                                         >
                                           <div className="tag-row">
-                                            <div className="entity-line">
+                                            <div
+                                              className="entity-line"
+                                              onClick={() => {
+                                                const tagKey = `${area.area}-${disc.disc}-${sys.sys}-${tag.tag}`;
+                                                setHighlightedTagKey(tagKey);
+                                              }}
+                                            >
                                               <FontAwesomeIcon
                                                 icon={faCube}
                                                 className="folder-icon"
                                               />
-                                              {tag.tag} - {tag.name}
+                                              {tag.name}
                                             </div>
                                             <div className="entity-icons">
                                               <button

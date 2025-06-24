@@ -2,7 +2,7 @@ import { commonApi } from "./apiStructure";
 import { url } from "./Url";
 
 export const RegisterArea = async(data)=>{
-    console.log(data);
+    //console.log(data);
     
     try {
         const response = await commonApi('POST',`${url}/api/add-area`,data)
@@ -33,7 +33,7 @@ export const RegisterDisipline= async(data)=>{
  export  const getSystem  = async(id)=>{
     try {
          const response = await commonApi('GET',`${url}/api/getsystems/${id}`,)
-         console.log( response);
+         //console.log( response);
          return response
     } catch (error) {
         throw error
@@ -67,10 +67,10 @@ export const deleteAllSystems = async () => {
   }
 };
  export  const getDisipline  = async(id)=>{
-  console.log(id)
+  //console.log(id)
     try {
          const response = await commonApi('GET',`${url}/api/getdispline/${id}`,)
-         console.log( response);
+         //console.log( response);
          return response
     } catch (error) {
         throw error
@@ -107,7 +107,7 @@ export const deleteAllDisciplines = async () => {
  export  const getArea  = async(id)=>{
     try {
          const response = await commonApi('GET',`${url}/api/getarea/${id}`,)
-         console.log( response);
+         //console.log( response);
          return response
     } catch (error) {
         throw error
@@ -148,7 +148,7 @@ export const deleteAllAreas = async () => {
 
  
  export const RegisterEnitity = async(entityType,data)=>{
-  console.log(data);
+  //console.log(data);
   
     const endpoints = {
     Area: 'api/project-areas',
@@ -189,7 +189,7 @@ export const deleteAllAreas = async () => {
   const endpoint = endpoints[entityType] || endpoints.Area;
   try {
     const response =  await commonApi('GET',`${url}/${endpoint}/${id}`)
-    console.log(response);
+    //console.log(response);
     
     return response
     
@@ -211,11 +211,11 @@ export const deleteAllAreas = async () => {
   }
 
    export const getprojectDisipline = async(area,id)=>{
-    console.log(id,area);
+    //console.log(id,area);
     
     try {
          const response =await commonApi('GET',`${url}/api/getproject-disipline?area=${area}&project_id=${id}`,)
-         console.log(response);
+         //console.log(response);
          
          return response
         
@@ -224,7 +224,7 @@ export const deleteAllAreas = async () => {
     }
    }
 export const getprojectsystem = async ( projectId,area, disc) => {
-    console.log(projectId,area,disc);
+    //console.log(projectId,area,disc);
 
   try {
     const response = await commonApi(
@@ -237,14 +237,14 @@ export const getprojectsystem = async ( projectId,area, disc) => {
   }
 };
 export const getProjectTags = async ( projectId,area, disc,sys) => {
-    console.log(projectId,area,disc);
+    //console.log(projectId,area,disc);
 
   try {
     const response = await commonApi(
       'GET',
       `${url}/api/getproject-tags?project_id=${projectId}&area=${area}&disc=${disc}&sys=${sys}`
     );
-    console.log(response);
+    //console.log(response);
     
     return response;
   } catch (error) {

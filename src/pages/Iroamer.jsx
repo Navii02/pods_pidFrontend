@@ -28,25 +28,26 @@ import {
   getAllTagsDetails,
   GetAllUnAssignedPath,
 } from "../services/iroamer";
-import { faGear, faMousePointer, faPlane, faScissors } from "@fortawesome/free-solid-svg-icons";
+import {
+  faGear,
+  faMousePointer,
+  faPlane,
+  faScissors,
+} from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { Axis3d } from "lucide-react";
-import { useLocation } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { url } from "../services/Url";
+import { iroamerContext } from "../context/ContextShare";
 
 const Iroamer = forwardRef(
   (
     {
       projectNo,
-    
-    
+
       viewHideThreeunassigned,
       leftNavVisible,
-      setBackgroundColorTag,
-    
-    
-     
-      setSelectedItem,
+
       allComments,
       allEquipementList,
       allLineList,
@@ -54,10 +55,8 @@ const Iroamer = forwardRef(
       generalTagInfoFields,
       allCommentStatus,
 
-    
       allViews,
- 
-    
+
       setViewHideThreeunassigned,
 
       currentProjectId,
@@ -68,149 +67,143 @@ const Iroamer = forwardRef(
       groundSettingParameter,
       applyViewSaved,
 
-
-
-
-      highlightedTagKey,
-      setHighlightedTagKey,
       setshowDisc,
       setShowTag,
       setshowSys,
     },
     ref
   ) => {
+    const [isModalOpen, setIsModalOpen] = useState(false);
+    const {
+      highlightedTagKey,
+      setHighlightedTagKey,
+      setBackgroundColorTag,
+      tagsToRemove,
+      setTagsToRemove,
+      viewHideThree,
+      setViewHideThree,
+    } = useContext(iroamerContext);
+    const location = useLocation();
+    const modalData = location.state?.modalData || [];
 
+    const navigate = useNavigate();
 
-  const [isModalOpen, setIsModalOpen] = useState(false);
- const location = useLocation();
-  const modalData = location.state?.modalData || [];
-  const [viewHideThree, setViewHideThree] = useState({});
-  
+    const [viewMode, setViewMode] = useState("Top View");
 
-  const mockContent = {
-    intersectionPointX: 100,
-    intersectionPointY: 200,
-    intersectionPointZ: 300,
-  };
+    const [mode, setMode] = useState("");
+    const [orthoviewmode, setOrthoviewmode] = useState("perspective");
+    const [showComment, setShowComment] = useState(false);
+    const [selectedItem, setselectedItem] = useState(false);
+    const [activeButton, setActiveButton] = useState(null);
 
+    const [settingbox, setsettingbox] = useState(false);
 
-  const [viewMode, setViewMode] = useState("Top View");
+    const [showMeasure, setShowMeasure] = useState(false);
+    const [showWireFrame, setShowWireFrame] = useState(false);
 
-  const [mode, setMode] = useState("");
-  const [orthoviewmode, setOrthoviewmode] = useState("perspective");
-  const [showComment, setShowComment] = useState(false);
-  const [selectedItem, setselectedItem] = useState(false);
-  const [activeButton, setActiveButton] = useState(null);
+    const [savedViewDialog, setSavedViewDialog] = useState(false);
 
-  const [settingbox, setsettingbox] = useState(false);
+    const [enableClipping, setEnableClipping] = useState(false);
 
-  const [showMeasure, setShowMeasure] = useState(false);
-  const [showWireFrame, setShowWireFrame] = useState(false);
+    // ------------------------------------PID--------------------------
 
-  const [savedViewDialog, setSavedViewDialog] = useState(false);
+    const [showAxis, setShowAxis] = useState(true);
+    const [backgroundTheme, setBackgroundTheme] = useState("DEFAULT");
+    const [groundSettingsVisible, setGroundSettingsVisible] = useState(false);
+    const [waterSettingsVisible, setWaterSettingsVisible] = useState(false);
 
-  const [enableClipping, setEnableClipping] = useState(false);
+    const [clippingSetting, setClippingSetting] = useState(false);
 
-  // ------------------------------------PID--------------------------
-
-  const [showAxis, setShowAxis] = useState(true);
-  const [backgroundTheme, setBackgroundTheme] = useState("DEFAULT");
-  const [groundSettingsVisible, setGroundSettingsVisible] = useState(false);
-  const [waterSettingsVisible, setWaterSettingsVisible] = useState(false);
-
-  const [clippingSetting, setClippingSetting] = useState(false);
-
-  // handel orbit control
-  const handleOrbitClick = (buttonName) => {
-    setMode("orbit");
-    setActiveButton(buttonName);
-  };
-
-  // handel fly control
-  const handleFlyClick = (buttonName) => {
-    setMode("fly");
-    setActiveButton(buttonName);
-  };
-
-  const handleShowAxis = (buttonName) => {
-    setShowAxis(!showAxis);
-    setActiveButton(buttonName);
-  };
-
-  // handleorthoview
-  const handleorthoview = (buttonName) => {
-    setOrthoviewmode("orthographic");
-    setActiveButton(buttonName);
-  };
-  // handleperspective
-
-  const handleperspective = (buttonName) => {
-    setOrthoviewmode("perspective");
-    setActiveButton(buttonName);
-  };
-
-  const handleViewChange = (viewName, buttonName) => {
-    setViewMode(""); // Reset first
-    setTimeout(() => {
-      setViewMode(viewName); // Then set the actual view
+    // handel orbit control
+    const handleOrbitClick = (buttonName) => {
+        console.log("Setting active button to:", buttonName);
+      setMode("orbit");
       setActiveButton(buttonName);
-    }, 10); // Ensure state updates properly
-  };
+    };
 
-  const handleorthotop = (buttonName) =>
-    handleViewChange("Top View", buttonName);
-  const handleorthofront = (buttonName) =>
-    handleViewChange("Front View", buttonName);
-  const handleortholeft = (buttonName) =>
-    handleViewChange("Left Side View", buttonName);
-  const handleorthoright = (buttonName) =>
-    handleViewChange("Right Side View", buttonName);
-  const handleorthobottom = (buttonName) =>
-    handleViewChange("Bottom View", buttonName);
-  const handleorthoback = (buttonName) =>
-    handleViewChange("Back View", buttonName);
-  const handlezoomfit = (buttonName) =>
-    handleViewChange("Fit View", buttonName);
+    // handel fly control
+    const handleFlyClick = (buttonName) => {
+      setMode("fly");
+      setActiveButton(buttonName);
+    };
 
-  // handle comment
-  const handlecomment = (buttonName) => {
-    setShowComment((prev) => !prev);
+    const handleShowAxis = (buttonName) => {
+      setShowAxis(!showAxis);
+      setActiveButton(buttonName);
+    };
+  const handleWireFrames = (buttonName) => {
+    setShowWireFrame(!showWireFrame);
     setActiveButton(buttonName);
   };
+    // handleorthoview
+    const handleorthoview = (buttonName) => {
+      setOrthoviewmode("orthographic");
+      setActiveButton(buttonName);
+    };
+    // handleperspective
 
-  // handle object selected
-  const handleObjectselected = (buttonName) => {
-    setselectedItem(true);
-    setActiveButton(buttonName);
-    setShowMeasure(false);
-  };
+    const handleperspective = (buttonName) => {
+      setOrthoviewmode("perspective");
+      setActiveButton(buttonName);
+    };
 
-  // handle setting
-  const handleSetting = (buttonName) => {
-    setsettingbox(true);
-    setActiveButton(buttonName);
-  };
+    const handleViewChange = (viewName, buttonName) => {
+      setViewMode(""); // Reset first
+      setTimeout(() => {
+        setViewMode(viewName); // Then set the actual view
+        setActiveButton(buttonName);
+      }, 10); // Ensure state updates properly
+    };
 
-  // const handleEnableSectioning = (buttonName) => {
-  //   setActiveButton(buttonName);
-  //   setEnableClipping(!enableClipping);
-  // };
+    const handleorthotop = (buttonName) =>
+      handleViewChange("Top View", buttonName);
+    const handleorthofront = (buttonName) =>
+      handleViewChange("Front View", buttonName);
+    const handleortholeft = (buttonName) =>
+      handleViewChange("Left Side View", buttonName);
+    const handleorthoright = (buttonName) =>
+      handleViewChange("Right Side View", buttonName);
+    const handleorthobottom = (buttonName) =>
+      handleViewChange("Bottom View", buttonName);
+    const handleorthoback = (buttonName) =>
+      handleViewChange("Back View", buttonName);
+    const handlezoomfit = (buttonName) =>
+      handleViewChange("Fit View", buttonName);
 
-  const handleShowMeasure = (buttonName) => {
-    setShowMeasure(!showMeasure);
-    setActiveButton(buttonName);
-  };
+    // handle comment
+    const handlecomment = (buttonName) => {
+      setShowComment((prev) => !prev);
+      setActiveButton(buttonName);
+    };
 
-  // const handleWireFrame = (buttonName) => {
-  //   setShowWireFrame(!showWireFrame);
-  //   setActiveButton(buttonName);
-  // };
+    // handle object selected
+    const handleObjectselected = (buttonName) => {
+      setselectedItem(true);
+      setActiveButton(buttonName);
+      setShowMeasure(false);
+    };
 
-  const handleSavedView = (buttonName) => {
-    setActiveButton(buttonName);
-    setSavedViewDialog(true);
-  };
+    // handle setting
+    const handleSetting = (buttonName) => {
+      setsettingbox(true);
+      setActiveButton(buttonName);
+    };
 
+    // const handleEnableSectioning = (buttonName) => {
+    //   setActiveButton(buttonName);
+    //   setEnableClipping(!enableClipping);
+    // };
+
+    const handleShowMeasure = (buttonName) => {
+      setShowMeasure(!showMeasure);
+      setActiveButton(buttonName);
+    };
+
+    
+    const handleSavedView = (buttonName) => {
+      setActiveButton(buttonName);
+      setSavedViewDialog(true);
+    };
 
     let camera, OrthoCamera;
     const canvasRef = useRef(null);
@@ -388,11 +381,11 @@ const Iroamer = forwardRef(
       }
     }, [reflectionIntensity]);
 
-    useEffect(() => {
-      if (showWireFrame) {
-        handleWireFrame();
-      }
-    }, [showWireFrame]);
+      useEffect(() => {
+        if (showWireFrame) {
+          handleWireFrame();
+        }
+      }, [showWireFrame]);
     const lastHighlightedTagRef = useRef(null);
 
     useEffect(() => {
@@ -402,7 +395,7 @@ const Iroamer = forwardRef(
       ) {
         const parts = lastHighlightedTagRef.current.split("-");
         const prevTag = parts.slice(3).join("-");
-        const prevMatchFilename = selectedTags.find(
+        const prevMatchFilename = selectedTags?.find(
           (t) =>
             t.area === parts[0] &&
             t.disc === parts[1] &&
@@ -436,7 +429,7 @@ const Iroamer = forwardRef(
 
       console.log("Parsed:", { area, disc, sys, tag });
 
-      const matchFilename = selectedTags.find(
+      const matchFilename = selectedTags?.find(
         (t) =>
           t.area === area && t.disc === disc && t.sys === sys && t.tag === tag
       )?.filename;
@@ -474,118 +467,110 @@ const Iroamer = forwardRef(
     // useEffect for reciecve all tag
 
     const AllTags = async () => {
-  
+      const data = modalData;
+      console.log(data);
 
-     const data= modalData
-     console.log(data);
-     
-        const fileDataArray = Array.isArray(data) ? data : [data];
-        console.log(fileDataArray);
-        
-        const formattedData = fileDataArray?.map((file) => ({
-          tag: file.tag,
-         filePath:` ${url}/tags/${file.filename}`,
-          filename: file.filename,
-          area: file.area,
-          disc: file.disc,
-          sys: file.sys,
-          fileDetails: file.fileDetails || {},
-        }));
-          console.log(formattedData)
-        setSelectedTags((prevTags) => {
-          // Create a new array to avoid duplicates
-          const newTags = formattedData?.filter(
-            (newTag) =>
-              !prevTags.some(
-                (prevTag) =>
-                  prevTag.tag === newTag.tag &&
-                  prevTag.filename === newTag.filename &&
-                  prevTag.area === newTag.area &&
-                  prevTag.disc === newTag.disc &&
-                  prevTag.sys === newTag.sys
-              )
-          );
-          // Highlight the tag in the scene
-          newTags?.forEach((tag) => highlightTagInScene(tag.filename));
+      if (!data || !Array.isArray(data) || data.length === 0) return;
+      const fileDataArray = Array.isArray(data) ? data : [data];
+      console.log(fileDataArray);
 
-          // Update the viewHideThree state to make the eye icon open
-          newTags?.forEach((tag) => {
-            const tagKey = `${tag.area}-${tag.disc}-${tag.sys}-${tag.tag}`;
-            setViewHideThree((prevState) => ({
-              ...prevState,
-              [tagKey]: true, // Set visibility to true
-            }));
-          });
-
-          return [...prevTags, ...newTags];
-        });
-      }
-
-    useEffect(() => {
-      AllTags();
-    },[modalData]);
-
-    // useEffect for reciecve all tag  from p &ID
-    const AlltagsPID = async () => {
-
-  
-        const data =[]
-        const fileDataArray = Array.isArray(data) ? data : [data];
-        const formattedData = fileDataArray?.map((file) => ({
-          tag: file.tag,
-          filePath:` ${url}/tags/${file.filePath}`,
-          filename: file.filename,
-          area: file.area,
-          disc: file.disc,
-          sys: file.sys,
-          fileDetails: file.fileDetails || {},
-        }));
-      
-
-        setSelectedTags((prevTags) => {
-          // Iterate through each file in formattedData
-          formattedData?.forEach((newTag) => {
-            const isPresent = prevTags.some(
+      const formattedData = fileDataArray?.map((file) => ({
+        tag: file.tag,
+        filePath: ` ${url}/tags/${file.filename}`,
+        filename: file.filename,
+        area: file.area,
+        disc: file.disc,
+        sys: file.sys,
+        fileDetails: file.fileDetails || {},
+      }));
+      console.log(formattedData);
+      setSelectedTags((prevTags) => {
+        // Create a new array to avoid duplicates
+        const newTags = formattedData?.filter(
+          (newTag) =>
+            !prevTags.some(
               (prevTag) =>
                 prevTag.tag === newTag.tag &&
                 prevTag.filename === newTag.filename &&
                 prevTag.area === newTag.area &&
                 prevTag.disc === newTag.disc &&
                 prevTag.sys === newTag.sys
-            );
-
-            if (isPresent) {
-              highlightTagInScene(newTag.filename);
-              const tagKey = `${newTag.area}-${newTag.disc}-${newTag.sys}-${newTag.tag}`;
-              setBackgroundColorTag((prevState) => ({
-                ...prevState,
-                [tagKey]: true, // Set visibility to true
-              }));
-            } else {
-              // Add the new tag to selectedTags
-              prevTags = [...prevTags, newTag];
-
-              // Update the viewHideThree state to make the eye icon open
-              const tagKey = `${newTag.area}-${newTag.disc}-${newTag.sys}-${newTag.tag}`;
-              setViewHideThree((prevState) => ({
-                ...prevState,
-                [tagKey]: true, // Set visibility to true
-              }));
-              setBackgroundColorTag((prevState) => ({
-                ...prevState,
-                [tagKey]: true, // Set visibility to true
-              }));
-
-              // // Highlight the new tag in the scene
-              highlightTagInScene(newTag.filename);
-            }
-          });
-
-          // Return the updated tags
-          return prevTags;
+            )
+        );
+        // Highlight the tag in the scene
+        newTags?.forEach((tag) => {
+          const tagKey = `${tag.area}-${tag.disc}-${tag.sys}-${tag.tag}`;
+          if (viewHideThree[tagKey] === true) {
+            highlightTagInScene(tag.filename);
+          }
         });
-      }
+        navigate(location.pathname, { replace: true, state: {} });
+        return [...prevTags, ...newTags];
+      });
+    };
 
+    useEffect(() => {
+      AllTags();
+    }, [location.state?.timestamp]);
+
+    // useEffect for reciecve all tag  from p &ID
+    const AlltagsPID = async () => {
+      const data = [];
+
+      const fileDataArray = Array.isArray(data) ? data : [data];
+      const formattedData = fileDataArray?.map((file) => ({
+        tag: file.tag,
+        filePath: ` ${url}/tags/${file.filePath}`,
+        filename: file.filename,
+        area: file.area,
+        disc: file.disc,
+        sys: file.sys,
+        fileDetails: file.fileDetails || {},
+      }));
+
+      setSelectedTags((prevTags) => {
+        // Iterate through each file in formattedData
+        formattedData?.forEach((newTag) => {
+          const isPresent = prevTags.some(
+            (prevTag) =>
+              prevTag.tag === newTag.tag &&
+              prevTag.filename === newTag.filename &&
+              prevTag.area === newTag.area &&
+              prevTag.disc === newTag.disc &&
+              prevTag.sys === newTag.sys
+          );
+
+          if (isPresent) {
+            highlightTagInScene(newTag.filename);
+            const tagKey = `${newTag.area}-${newTag.disc}-${newTag.sys}-${newTag.tag}`;
+            setBackgroundColorTag((prevState) => ({
+              ...prevState,
+              [tagKey]: true, // Set visibility to true
+            }));
+          } else {
+            // Add the new tag to selectedTags
+            prevTags = [...prevTags, newTag];
+
+            // Update the viewHideThree state to make the eye icon open
+            const tagKey = `${newTag.area}-${newTag.disc}-${newTag.sys}-${newTag.tag}`;
+            setViewHideThree((prevState) => ({
+              ...prevState,
+              [tagKey]: true, // Set visibility to true
+            }));
+            setBackgroundColorTag((prevState) => ({
+              ...prevState,
+              [tagKey]: true, // Set visibility to true
+            }));
+
+            // // Highlight the new tag in the scene
+            highlightTagInScene(newTag.filename);
+          }
+        });
+
+        // Return the updated tags
+        return prevTags;
+      });
+    };
 
     useEffect(() => {
       AlltagsPID();
@@ -593,31 +578,28 @@ const Iroamer = forwardRef(
 
     // useEffect for reciecve all unassigned path
     const GetAllUnAssignedPaths = async () => {
-      
+      const data = [];
+      const fileDataArray = Array.isArray(data) ? data : [data];
+      const formattedData = fileDataArray?.map((file) => ({
+        tag: file.number,
+        filePath: file.filePath.replace(/\\/g, "/"),
+        filename: file.filename,
+      }));
 
-        const data = []
-        const fileDataArray = Array.isArray(data) ? data : [data];
-        const formattedData = fileDataArray?.map((file) => ({
-          tag: file.number,
-          filePath: file.filePath.replace(/\\/g, "/"),
-          filename: file.filename,
-        }));
-
-        setSelectedTags((prevTags) => {
-          // Create a new array to avoid duplicates
-          const newTags = formattedData?.filter(
-            (newTag) =>
-              !prevTags.some(
-                (prevTag) =>
-                  prevTag.tag === newTag.tag &&
-                  prevTag.filename === newTag.filename
-              )
-          );
-          // Return the updated array
-          return [...prevTags, ...newTags];
-        });
-      }
-
+      setSelectedTags((prevTags) => {
+        // Create a new array to avoid duplicates
+        const newTags = formattedData?.filter(
+          (newTag) =>
+            !prevTags.some(
+              (prevTag) =>
+                prevTag.tag === newTag.tag &&
+                prevTag.filename === newTag.filename
+            )
+        );
+        // Return the updated array
+        return [...prevTags, ...newTags];
+      });
+    };
 
     useEffect(() => {
       GetAllUnAssignedPaths();
@@ -1403,7 +1385,7 @@ const Iroamer = forwardRef(
     }, [applyViewSaved]);
     const removeMeshesFromScene = (scene, tagList) => {
       tagList?.forEach((tag) => {
-        const mesh = scene.meshes.find(
+        const mesh = scene.meshes?.find(
           (mesh) =>
             mesh.metadata?.tag === tag || mesh.metadata?.tagNo?.tag === tag
         );
@@ -1539,7 +1521,7 @@ const Iroamer = forwardRef(
             const discKey = `${model.area}-${model.disc}`;
             if (!seen.has(discKey)) {
               seen.add(discKey);
-              Object.keys(updated || {} )?.forEach((key) => {
+              Object.keys(updated || {})?.forEach((key) => {
                 if (key === discKey || key.startsWith(`${discKey}-`)) {
                   const tagPart = key.split("-").slice(3).join("-");
                   discTagsToRemove.push(tagPart);
@@ -1651,7 +1633,7 @@ const Iroamer = forwardRef(
     // useEffect for show and hide
     useEffect(() => {
       Object.keys(viewHideThreeunassigned || {})?.forEach((tag) => {
-        const tagDetail = selectedTags.find(
+        const tagDetail = selectedTags?.find(
           (selectedTag) =>
             selectedTag.tag === tag &&
             (!selectedTag.area || !selectedTag.disc || !selectedTag.sys)
@@ -1667,13 +1649,17 @@ const Iroamer = forwardRef(
 
     // useEffect for show and hide basedon area,disc and sys
     useEffect(() => {
-   
-      
       const getVisibility = (area, disc, sys, tag) => {
         const tagKey = `${area}-${disc}-${sys}-${tag}`;
         const sysKey = `${area}-${disc}-${sys}`;
         const discKey = `${area}-${disc}`;
         const areaKey = area;
+        if (
+          viewHideThree?.[tagKey] !== undefined &&
+          viewHideThree?.[tagKey] !== null
+        ) {
+          return viewHideThree[tagKey];
+        }
 
         console.log("Keys checked:", { tagKey, sysKey, discKey, areaKey });
 
@@ -1705,18 +1691,32 @@ const Iroamer = forwardRef(
         const newTags = selectedTags?.filter(
           (tag) => !loadedFiles.includes(tag.filename)
         );
-      console.log(newTags)
+        console.log(newTags);
         if (newTags.length > 0) {
-          console.log("loadfile")
+          console.log("loadfile");
           // Load files sequentially
           loadFilesSequentially(scene, newTags);
-       
+
           // Update loaded files state
           setLoadedFiles((prevFiles) => [
             ...prevFiles,
             ...newTags?.map((tag) => tag.filename),
           ]);
         }
+      }
+      selectedTags?.forEach((tag, index) => {
+        const tagKey = `${tag.areaTag}-${tag.discTag}-${tag.sysTag}-${tag.tagTag}`;
+        if (
+          viewHideThree?.[tagKey] === false ||
+          tagsToRemove.includes(tag.tagTag)
+        ) {
+          setLoadedFiles((prevFiles) =>
+            prevFiles.filter((filename) => filename !== tag.filename)
+          );
+        }
+      });
+      if (tagsToRemove.length > 0) {
+        setTagsToRemove([]);
       }
     }, [selectedTags, loadedFiles]);
 
@@ -1814,9 +1814,9 @@ const Iroamer = forwardRef(
     //             setFileInfoDetails(mesh.metadata.tagNo.fileDetails);
     //             const tagid = mesh.metadata.tagNo.tag;
 
-    //             const linelistDetails = allLineList.find((line) => line.tag === tagid);
-    //             const equipmentlistDetails = allEquipementList.find((equipment) => equipment.tag === tagid);
-    //             const UsertagInfoDetails = userTagInfotable.find((tag) => tag.tag === tagid);
+    //             const linelistDetails = allLineList?.find((line) => line.tag === tagid);
+    //             const equipmentlistDetails = allEquipementList?.find((equipment) => equipment.tag === tagid);
+    //             const UsertagInfoDetails = userTagInfotable?.find((tag) => tag.tag === tagid);
 
     //             const tagInfoDetails = {
     //               filename: tagid,
@@ -1908,7 +1908,7 @@ const Iroamer = forwardRef(
                 setBackgroundColorTag({ [tagKey]: true });
 
                 const intersectionPoint = pointerInfo.pickInfo.pickedPoint;
-                setSelectedItem(true);
+                setselectedItem(true);
                 setSelectedItemName({ name: mesh.name });
                 setCommentPosition({
                   intersectionPointX: intersectionPoint.x,
@@ -1919,13 +1919,13 @@ const Iroamer = forwardRef(
                 setFileInfoDetails(mesh.metadata.tagNo.fileDetails);
 
                 const tagid = mesh.metadata.tagNo.tag;
-                const linelistDetails = allLineList.find(
+                const linelistDetails = allLineList?.find(
                   (line) => line.tag === tagid
                 );
-                const equipmentlistDetails = allEquipementList.find(
+                const equipmentlistDetails = allEquipementList?.find(
                   (equipment) => equipment.tag === tagid
                 );
-                const UsertagInfoDetails = userTagInfotable.find(
+                const UsertagInfoDetails = userTagInfotable?.find(
                   (tag) => tag.tag === tagid
                 );
                 console.log(UsertagInfoDetails);
@@ -1958,7 +1958,7 @@ const Iroamer = forwardRef(
                 setFileInfoDetails(null);
                 setCommentPosition(null);
                 setBackgroundColorTag({});
-                setSelectedItem(false);
+                setselectedItem(false);
                 setActiveButton("");
                 setSelectedItemName("");
                 setIsMenuOpen(false);
@@ -2104,7 +2104,7 @@ const Iroamer = forwardRef(
       const updatedLabels = allLabels
         ?.filter((label) => currentCommentIds.has(label.commentId))
         ?.map((labelElement) => {
-          const updatedComment = allComments.find(
+          const updatedComment = allComments?.find(
             (c) => c.number === labelElement.commentId
           );
 
@@ -2130,7 +2130,7 @@ const Iroamer = forwardRef(
 
             // ✅ Always update background color based on updated status
             const updatedColor =
-              allCommentStatus.find(
+              allCommentStatus?.find(
                 (s) => s.statusname === updatedComment.status
               )?.color || "gray";
             labelElement.label.background = updatedColor;
@@ -2146,7 +2146,7 @@ const Iroamer = forwardRef(
 
         // Set background color based on status
         const labelColor =
-          allCommentStatus.find((s) => s.statusname === comment.status)
+          allCommentStatus?.find((s) => s.statusname === comment.status)
             ?.color || "gray";
         labelElement.label.background = labelColor;
 
@@ -2871,7 +2871,7 @@ const Iroamer = forwardRef(
 
     //   // Get the status color from comment status
     //   const statusColor =
-    //     allCommentStatus.find(
+    //     allCommentStatus?.find(
     //       (status) => status.statusname === comment.status
     //     )?.color || "gray";
 
@@ -2887,7 +2887,7 @@ const Iroamer = forwardRef(
     //   label.commentId = comment.number; // Save only the ID
 
     //   label.onPointerClickObservable.add(() => {
-    //     const latestComment = allComments.find(
+    //     const latestComment = allComments?.find(
     //       (c) => c.number === label.commentId
     //     );
     //     if (latestComment) {
@@ -2996,7 +2996,7 @@ const Iroamer = forwardRef(
 
       // Get the status color from comment status
       const statusColor =
-        allCommentStatus.find((status) => status.statusname === comment.status)
+        allCommentStatus?.find((status) => status.statusname === comment.status)
           ?.color || "gray";
 
       // Create the main label (number)
@@ -3208,7 +3208,7 @@ const Iroamer = forwardRef(
       const scene = sceneRef.current;
 
       // 1. Find the parent mesh by tag name
-      const parentMesh = scene.meshes.find(
+      const parentMesh = scene.meshes?.find(
         (mesh) => mesh.name === tagName || mesh.metadata?.tagNo?.tag === tagName
       );
       console.log(parentMesh);
@@ -3234,7 +3234,7 @@ const Iroamer = forwardRef(
       selectedMeshRef.current = [];
       setBackgroundColorTag({});
       setIsMenuOpen(false);
-      setSelectedItem(false);
+      setselectedItem(false);
       setActiveButton(null);
     };
 
@@ -3356,7 +3356,7 @@ const Iroamer = forwardRef(
     const handleReload = () => {
       // Handle reload logic here
       setReload(!reload);
-      setSelectedItem(false);
+      setselectedItem(false);
       setViewMode("Top View");
       setShowMeasure(false);
       setActiveButton("");
@@ -3453,7 +3453,9 @@ const Iroamer = forwardRef(
       return scene;
     };
 
-    const highlightTagInScene = (filename) => {
+    const highlightTagInScene = (file) => {
+      const filename = file.slice(0, file.lastIndexOf("."));
+      console.log(filename);
       if (!sceneRef.current) return;
 
       const meshesToHighlight = [];
@@ -3463,9 +3465,12 @@ const Iroamer = forwardRef(
       let foundTagNo = null; // For extracting tag info
 
       sceneRef.current.meshes?.forEach((mesh) => {
+        //console.log(mesh.metadata)
         if (mesh.name.includes("__root__") || mesh.name.includes("sky")) return;
 
-        if (mesh.metadata && mesh.metadata.tag === filename) {
+        if (mesh.metadata && mesh.metadata.tagNo.tag === filename) {
+          console.log("sdgsd");
+
           meshesToHighlight.push(mesh);
 
           // Highlight logic
@@ -3534,11 +3539,11 @@ const Iroamer = forwardRef(
         setFileInfoDetails(foundTagNo.fileDetails);
 
         const tagid = foundTagNo.tag;
-        const linelistDetails = allLineList.find((line) => line.tag === tagid);
-        const equipmentlistDetails = allEquipementList.find(
+        const linelistDetails = allLineList?.find((line) => line.tag === tagid);
+        const equipmentlistDetails = allEquipementList?.find(
           (equipment) => equipment.tag === tagid
         );
-        const UsertagInfoDetails = userTagInfotable.find(
+        const UsertagInfoDetails = userTagInfotable?.find(
           (tag) => tag.tag === tagid
         );
 
@@ -3686,8 +3691,8 @@ const Iroamer = forwardRef(
       for (let i = 0; i < tags.length; i++) {
         const tag = tags[i];
         const { filePath, filename, tag: tagName } = tag;
- console.log("tagdata");
- 
+        console.log("tagdata");
+
         try {
           await new Promise((resolve) => {
             loadModelFromFilePath(
@@ -3740,12 +3745,21 @@ const Iroamer = forwardRef(
       setLoadingProgress(0);
     };
 
-    const toggleFileVisibility = (filename, isVisible) => {
+    const toggleFileVisibility = (file, isVisible) => {
+      const filename = file.slice(0, file.lastIndexOf("."));
+      console.log(filename);
+
       if (sceneRef.current) {
         // Iterate through all meshes in the scene
         sceneRef.current.meshes?.forEach((mesh) => {
           // Check if the mesh has metadata and the tag matches
-          if (mesh.metadata && mesh.metadata.tag === filename) {
+          const meta = mesh.metadata;
+          const match =
+            meta?.tag === filename ||
+            meta?.tagNo?.tag === filename ||
+            meta?.tagNo?.filename === file;
+
+          if (match) {
             mesh.setEnabled(isVisible);
             mesh.isVisible = isVisible; // In Babylon.js, we use setEnabled instead of visible
           }
@@ -3764,7 +3778,7 @@ const Iroamer = forwardRef(
     ) => {
       // Extract file extension to determine loader type
       const fileExtension = filePath.split(".").pop().toLowerCase();
-    
+
       try {
         // IMPORTANT: The ImportMeshAsync function returns a Promise,
         // but we're using the callback pattern here to match your existing code
@@ -3775,19 +3789,17 @@ const Iroamer = forwardRef(
 
             // // Enable anti-aliasing for sharper edges
             // scene.getEngine().setHardwareScalingLevel(1.0);
-        
 
-            const rootUrl = filePath
+            const rootUrl = filePath;
             console.log(rootUrl);
-            
 
-            const fileName = filePath
+            const fileName = filePath;
 
             BABYLON.SceneLoader.ImportMeshAsync(
               "",
               "",
               rootUrl,
-              
+
               scene
             ).then(
               (result) => {
@@ -4885,22 +4897,23 @@ const Iroamer = forwardRef(
     const handlecontrolsopen = () => {
       setShowControls(!showControls);
     };
-    const handleWireFrame = () => {
-      if (!sceneRef.current) return;
-      const scene = sceneRef.current;
-      // scene.meshes?.forEach((mesh) => {
-      //   if (
-      //     mesh.material &&
-      //     mesh.name !== "skyBox" &&
-      //     mesh.name !== "waterMesh" &&
-      //     mesh.name !== "ground"
-      //   ) {
-      //     mesh.material.wireframe = !mesh.material.wireframe;
-      //   }
-      // });
-      scene.forceWireframe = !scene.forceWireframe;
-      setShowWireFrame((prev) => !prev);
-    };
+   const handleWireFrame = () => {
+        if (!sceneRef.current) return;
+        const scene = sceneRef.current;
+        // scene.meshes.forEach((mesh) => {
+        //   if (
+        //     mesh.material &&
+        //     mesh.name !== "skyBox" &&
+        //     mesh.name !== "waterMesh" &&
+        //     mesh.name !== "ground"
+        //   ) {
+        //     mesh.material.wireframe = !mesh.material.wireframe;
+        //   }
+        // });
+        scene.forceWireframe = !scene.forceWireframe;
+        setShowWireFrame((prev) => !prev);
+      };
+
 
     const handleResetSettings = () => {
       // === Reset State Variables ===
@@ -5102,9 +5115,7 @@ const Iroamer = forwardRef(
 
     return (
       <div className="d-flex">
-        <div
-      className="w-100"
-        >
+        <div className="w-100">
           {/* 3D Canvas */}
           <canvas
             ref={canvasRef}
@@ -5159,6 +5170,7 @@ const Iroamer = forwardRef(
           {/* CAD Axis */}
 
           {showAxis && sceneRef.current && (
+            
             <CADTopViewAxisIndicator scene={sceneRef.current} />
           )}
 
@@ -5356,6 +5368,7 @@ const Iroamer = forwardRef(
           {isCommentOpen && (
             <Comment
               isOpen={isCommentOpen}
+              setIsMenuOpen={setIsMenuOpen}
               onClose={handleCloseComment}
               content={commentPosition}
               allCommentStatus={allCommentStatus}
@@ -6788,326 +6801,325 @@ const Iroamer = forwardRef(
             />
           )}
         </div>
-          <div>
-        <div class="right-sidenav">
-          <div className="rightSideNav">
-            <ul>
-              <li className={activeButton === "axis" ? "active" : ""}>
-                <div className="tooltip-container">
-                  <span
-                    className="icon-tooltip"
-                    onClick={() => handleShowAxis("axis")}
-                    title="Show Axis"
-                  >
-                    <Axis3d />
-                  </span>
-                </div>
-              </li>
-
-              <li className={activeButton === "orbit" ? "active" : ""}>
-                <div className="tooltip-container">
-                  <span
-                    className="icon-tooltip"
-                    onClick={() => handleOrbitClick("orbit")}
-                    title="Orbit Camera"
-                  >
-                    <img
-                      style={{ width: "30px", height: "30px" }}
-                      src="images/orbit.png"
-                      alt=""
-                    />{" "}
-                  </span>
-                </div>
-              </li>
-
-              <li className={activeButton === "fly" ? "active" : ""}>
-                <div className="tooltip-container">
-                  <span
-                    className="icon-tooltip"
-                    onClick={() => handleFlyClick("fly")}
-                    title="Fly camera"
-                  >
-                    <FontAwesomeIcon icon={faPlane} size="lg" />
-                  </span>
-                </div>
-              </li>
-
-              <li className={activeButton === "select" ? "active" : ""}>
-                <div className="tooltip-container">
-                  <span
-                    className="icon-tooltip"
-                    title="Selection"
-                    onClick={() => handleObjectselected("select")}
-                  >
-                    <FontAwesomeIcon icon={faMousePointer} size="lg" />
-                  </span>
-                </div>
-              </li>
-              <li className={activeButton === "clip" ? "active" : ""}>
-                <div
-                  className="tooltip-container"
-                  onContextMenu={(e) => {
-                    e.preventDefault(); // Prevent default right-click menu
-                    setClippingSetting(true);
-                  }}
-                  onClick={() => handleEnableSectioning("clip")}
-                >
-                  <span className="icon-tooltip" title="Enable sectioning">
-                    <FontAwesomeIcon icon={faScissors} size="lg" />
-                  </span>
-                </div>
-              </li>
-
-              <li className={activeButton === "fitview" ? "active" : ""}>
-                <div
-                  className="tooltip-container"
-                  onClick={() => handlezoomfit("fitview")}
-                >
-                  <span className="icon-tooltip" title="Fit View">
-                    <i class="fa-solid fa-arrows-to-dot fs-4"></i>{" "}
-                  </span>
-                </div>
-              </li>
-              <li className={activeButton === "setting" ? "active" : ""}>
-                <div
-                  className="tooltip-container"
-                  onClick={() => handleSetting("setting")}
-                >
-                  <span className="icon-tooltip" title="Setting">
-                    <FontAwesomeIcon icon={faGear} size="lg" />
-                  </span>
-                </div>
-              </li>
-
-              <li className={activeButton === "orthographic" ? "active" : ""}>
-                <div className="tooltip-container">
-                  <span
-                    className="icon-tooltip"
-                    onClick={() => handleorthoview("orthographic")}
-                    title="Orthographic View"
-                  >
-                    <img
-                      className="button"
-                      src="images/orthographic.png"
-                      alt=""
-                    />
-                  </span>
-                </div>
-              </li>
-              <li className={activeButton === "perspective" ? "active" : ""}>
-                <div className="tooltip-container">
-                  <span
-                    className="icon-tooltip"
-                    onClick={() => handleperspective("perspective")}
-                    title="Perspective View"
-                  >
-                    <img
-                      className="button"
-                      src="images/perspective.png"
-                      alt=""
-                    />
-                  </span>
-                </div>
-              </li>
-              <li className={activeButton === "front" ? "active" : ""}>
-                <div className="tooltip-container">
-                  <span
-                    className="icon-tooltip"
-                    onClick={() => handleorthofront("front")}
-                    title="Front View"
-                  >
-                    <img className="button" src="images/front.png" alt="" />
-                  </span>
-                </div>
-              </li>
-              <li className={activeButton === "left" ? "active" : ""}>
-                <div className="tooltip-container">
-                  <span
-                    className="icon-tooltip"
-                    onClick={() => handleortholeft("left")}
-                    title="Left View"
-                  >
-                    <img className="button" src="images/left.png" alt="" />
-                  </span>
-                </div>
-              </li>
-              <li className={activeButton === "back" ? "active" : ""}>
-                <div className="tooltip-container">
-                  <span
-                    className="icon-tooltip"
-                    onClick={() => handleorthoback("back")}
-                    title="Back View"
-                  >
-                    <img className="button" src="images/back.png" alt="" />
-                  </span>
-                </div>
-              </li>
-              <li className={activeButton === "right" ? "active" : ""}>
-                <div className="tooltip-container">
-                  <span
-                    className="icon-tooltip"
-                    onClick={() => handleorthoright("right")}
-                    title="Right View"
-                  >
-                    <img className="button" src="images/right.png" alt="" />
-                  </span>
-                </div>
-              </li>
-              <li className={activeButton === "top" ? "active" : ""}>
-                <div className="tooltip-container">
-                  <span
-                    className="icon-tooltip"
-                    onClick={() => handleorthotop("top")}
-                    title="Top View"
-                  >
-                    <img className="button" src="images/top.png" alt="" />
-                  </span>
-                </div>
-              </li>
-              <li className={activeButton === "bottom" ? "active" : ""}>
-                <div className="tooltip-container">
-                  <span
-                    className="icon-tooltip"
-                    onClick={() => handleorthobottom("bottom")}
-                    title="Bottom View"
-                  >
-                    <img className="button" src="images/bottom.png" alt="" />
-                  </span>
-                </div>
-              </li>
-              <li className={activeButton === "measure" ? "active" : ""}>
-                <div className="tooltip-container">
-                  <span
-                    className="icon-tooltip"
-                    onClick={() => handleShowMeasure("measure")}
-                    title="Measure"
-                  >
-                    <img
-                      id="measure"
-                      class="button"
-                      src="images/measure.png"
-                      alt=""
-                    />
-                  </span>
-                </div>
-              </li>
-              <li className={activeButton === "wireframe" ? "active" : ""}>
-                <div className="tooltip-container">
-                  <span
-                    className="icon-tooltip"
-                    onClick={() => handleWireFrame("wireframe")}
-                    title="Measure"
-                  >
-                    <img
-                      id="wireframe"
-                      class="button"
-                      src="images/wireframe.png"
-                      alt=""
-                    />
-                  </span>
-                </div>
-              </li>
-
-              <li className={activeButton === "savedview" ? "active" : ""}>
-                <div className="tooltip-container">
-                  <span
-                    className="icon-tooltip"
-                    onClick={() => handleSavedView("savedview")}
-                    title="Saved view"
-                  >
-                    <img
-                      id="measure"
-                      class="button"
-                      src="images/save-icon.png"
-                      alt=""
-                    />
-                  </span>
-                </div>
-              </li>
-
-              <li className={activeButton === "Background" ? "active" : ""}>
-                <div className="tooltip-container">
-                  <span
-                    className="icon-tooltip"
-                    title="Default background"
-                    onClick={() => {
-                      // Cycle through background themes
-                      switch (backgroundTheme) {
-                        case "DEFAULT":
-                          setBackgroundTheme("WHITE");
-                          setActiveButton("Background");
-                          break;
-                        case "WHITE":
-                          setBackgroundTheme("GROUND_SKY");
-                          setActiveButton("Background");
-                          break;
-                        case "GROUND_SKY":
-                          setBackgroundTheme("SEA_SKY");
-                          setActiveButton("Background");
-                          break;
-                        case "SEA_SKY":
-                          setBackgroundTheme("DEFAULT");
-                          setActiveButton("Background");
-                          break;
-                        default:
-                          setBackgroundTheme("DEFAULT");
-                          setActiveButton("Background");
-                      }
-                    }}
+       
+          <div class="right-sidenav">
+            <div className="rightSideNav">
+              <ul>
+                <li className={activeButton === "axis" ? "active" : ""}>
+                  <div className="tooltip-container">
+                    <span
+                      className="icon-tooltip"
+                      onClick={() => handleShowAxis("axis")}
+                      title="Show Axis"
+                    >
+                      <Axis3d />
+                    </span>
+                  </div>
+                </li>
+                <li className={activeButton === "orbit" ? "active" : ""}>
+                  <div className="tooltip-container">
+                    <span
+                      className="icon-tooltip"
+                      onClick={() => handleOrbitClick("orbit")}
+                      title="Orbit Camera"
+                    >
+                      <img
+                        style={{ width: "30px", height: "30px" }}
+                        src="images/orbit.png"
+                        alt=""
+                      />{" "}
+                    </span>
+                  </div>
+                </li>
+                <li className={activeButton === "fly" ? "active" : ""}>
+                  <div className="tooltip-container">
+                    <span
+                      className="icon-tooltip"
+                      onClick={() => handleFlyClick("fly")}
+                      title="Fly camera"
+                    >
+                      <FontAwesomeIcon icon={faPlane} size="lg" />
+                    </span>
+                  </div>
+                </li>
+                <li className={activeButton === "select" ? "active" : ""}>
+                  <div className="tooltip-container">
+                    <span
+                      className="icon-tooltip"
+                      title="Selection"
+                      onClick={() => handleObjectselected("select")}
+                    >
+                      <FontAwesomeIcon icon={faMousePointer} size="lg" />
+                    </span>
+                  </div>
+                </li>
+                <li className={activeButton === "clip" ? "active" : ""}>
+                  <div
+                    className="tooltip-container"
                     onContextMenu={(e) => {
                       e.preventDefault(); // Prevent default right-click menu
-
-                      // Only show settings for relevant themes
-                      if (backgroundTheme === "GROUND_SKY") {
-                        setGroundSettingsVisible(true);
-                      } else if (backgroundTheme === "SEA_SKY") {
-                        setWaterSettingsVisible(true);
+                      setClippingSetting(true);
+                    }}
+                    onClick={() => {
+                      if (sceneRef.current) {
+                        handleEnableSectioning(
+                          sceneRef.current,
+                          clippingPosition
+                        );
                       }
                     }}
                   >
-                    <img
-                      id="theme"
-                      className="button"
-                      src="images/theme.png"
-                      alt=""
-                    />
-                  </span>
-                </div>
-              </li>
-
-              <li className={activeButton === "4dplan" ? "active" : ""}>
-                <div className="tooltip-container">
-                  <span
-                    className="icon-tooltip"
-                    onClick={() => handleWireFrame("4dplan")}
-                    title="4D plan"
+                    <span className="icon-tooltip" title="Enable sectioning">
+                      <FontAwesomeIcon icon={faScissors} size="lg" />
+                    </span>
+                  </div>
+                </li>
+                <li className={activeButton === "fitview" ? "active" : ""}>
+                  <div
+                    className="tooltip-container"
+                    onClick={() => handlezoomfit("fitview")}
                   >
-                    <img
-                      id="4dplan"
-                      class="button"
-                      src="images/4d_plan.png"
-                      alt=""
-                    />
-                  </span>
-                </div>
-              </li>
-
-              <li className={activeButton === "comment" ? "active" : ""}>
-                <div className="tooltip-container">
-                  <span
-                    className="icon-tooltip"
-                    onClick={() => handlecomment("comment")}
-                    title="Show comment"
+                    <span className="icon-tooltip" title="Fit View">
+                      <i class="fa-solid fa-arrows-to-dot fs-4"></i>{" "}
+                    </span>
+                  </div>
+                </li>
+                <li className={activeButton === "setting" ? "active" : ""}>
+                  <div
+                    className="tooltip-container"
+                    onClick={() => handleSetting("setting")}
                   >
-                    <i class="fa-solid fa-comment fs-4"></i>
-                  </span>
-                </div>
-              </li>
-            </ul>
+                    <span className="icon-tooltip" title="Setting">
+                      <FontAwesomeIcon icon={faGear} size="lg" />
+                    </span>
+                  </div>
+                </li>
+                <li className={activeButton === "orthographic" ? "active" : ""}>
+                  <div className="tooltip-container">
+                    <span
+                      className="icon-tooltip"
+                      onClick={() => handleorthoview("orthographic")}
+                      title="Orthographic View"
+                    >
+                      <img
+                        className="button"
+                        src="images/orthographic.png"
+                        alt=""
+                      />
+                    </span>
+                  </div>
+                </li>
+                <li className={activeButton === "perspective" ? "active" : ""}>
+                  <div className="tooltip-container">
+                    <span
+                      className="icon-tooltip"
+                      onClick={() => handleperspective("perspective")}
+                      title="Perspective View"
+                    >
+                      <img
+                        className="button"
+                        src="images/perspective.png"
+                        alt=""
+                      />
+                    </span>
+                  </div>
+                </li>
+                <li className={activeButton === "front" ? "active" : ""}>
+                  <div className="tooltip-container">
+                    <span
+                      className="icon-tooltip"
+                      onClick={() => handleorthofront("front")}
+                      title="Front View"
+                    >
+                      <img className="button" src="images/front.png" alt="" />
+                    </span>
+                  </div>
+                </li>
+                <li className={activeButton === "left" ? "active" : ""}>
+                  <div className="tooltip-container">
+                    <span
+                      className="icon-tooltip"
+                      onClick={() => handleortholeft("left")}
+                      title="Left View"
+                    >
+                      <img className="button" src="images/left.png" alt="" />
+                    </span>
+                  </div>
+                </li>
+                <li className={activeButton === "back" ? "active" : ""}>
+                  <div className="tooltip-container">
+                    <span
+                      className="icon-tooltip"
+                      onClick={() => handleorthoback("back")}
+                      title="Back View"
+                    >
+                      <img className="button" src="images/back.png" alt="" />
+                    </span>
+                  </div>
+                </li>
+                <li className={activeButton === "right" ? "active" : ""}>
+                  <div className="tooltip-container">
+                    <span
+                      className="icon-tooltip"
+                      onClick={() => handleorthoright("right")}
+                      title="Right View"
+                    >
+                      <img className="button" src="images/right.png" alt="" />
+                    </span>
+                  </div>
+                </li>
+                <li className={activeButton === "top" ? "active" : ""}>
+                  <div className="tooltip-container">
+                    <span
+                      className="icon-tooltip"
+                      onClick={() => handleorthotop("top")}
+                      title="Top View"
+                    >
+                      <img className="button" src="images/top.png" alt="" />
+                    </span>
+                  </div>
+                </li>
+                <li className={activeButton === "bottom" ? "active" : ""}>
+                  <div className="tooltip-container">
+                    <span
+                      className="icon-tooltip"
+                      onClick={() => handleorthobottom("bottom")}
+                      title="Bottom View"
+                    >
+                      <img className="button" src="images/bottom.png" alt="" />
+                    </span>
+                  </div>
+                </li>
+                <li className={activeButton === "measure" ? "active" : ""}>
+                  <div className="tooltip-container">
+                    <span
+                      className="icon-tooltip"
+                      onClick={() => handleShowMeasure("measure")}
+                      title="Measure"
+                    >
+                      <img
+                        id="measure"
+                        class="button"
+                        src="images/measure.png"
+                        alt=""
+                      />
+                    </span>
+                  </div>
+                </li>
+               
+                <li className={activeButton === "wireframe" ? "active" : ""}>
+                  <div className="tooltip-container">
+                    <span
+                      className="icon-tooltip"
+                      onClick={() => handleWireFrames("wireframe")}
+                      title="Wireframe"
+                    >
+                      <img
+                        id="wireframe"
+                        className="button"
+                        src="images/wireframe.png"
+                        alt=""
+                      />
+                    </span>
+                  </div>
+                </li>
+                <li className={activeButton === "savedview" ? "active" : ""}>
+                  <div className="tooltip-container">
+                    <span
+                      className="icon-tooltip"
+                      onClick={() => handleSavedView("savedview")}
+                      title="Saved view"
+                    >
+                      <img
+                        id="measure"
+                        class="button"
+                        src="images/save-icon.png"
+                        alt=""
+                      />
+                    </span>
+                  </div>
+                </li>
+                <li className={activeButton === "Background" ? "active" : ""}>
+                  <div className="tooltip-container">
+                    <span
+                      className="icon-tooltip"
+                      title="Default background"
+                      onClick={() => {
+                        // Cycle through background themes
+                        switch (backgroundTheme) {
+                          case "DEFAULT":
+                            setBackgroundTheme("WHITE");
+                            setActiveButton("Background");
+                            break;
+                          case "WHITE":
+                            setBackgroundTheme("GROUND_SKY");
+                            setActiveButton("Background");
+                            break;
+                          case "GROUND_SKY":
+                            setBackgroundTheme("SEA_SKY");
+                            setActiveButton("Background");
+                            break;
+                          case "SEA_SKY":
+                            setBackgroundTheme("DEFAULT");
+                            setActiveButton("Background");
+                            break;
+                          default:
+                            setBackgroundTheme("DEFAULT");
+                            setActiveButton("Background");
+                        }
+                      }}
+                      onContextMenu={(e) => {
+                        e.preventDefault(); // Prevent default right-click menu
+
+                        // Only show settings for relevant themes
+                        if (backgroundTheme === "GROUND_SKY") {
+                          setGroundSettingsVisible(true);
+                        } else if (backgroundTheme === "SEA_SKY") {
+                          setWaterSettingsVisible(true);
+                        }
+                      }}
+                    >
+                      <img
+                        id="theme"
+                        className="button"
+                        src="images/theme.png"
+                        alt=""
+                      />
+                    </span>
+                  </div>
+                </li>
+                <li className={activeButton === "4dplan" ? "active" : ""}>
+                  <div className="tooltip-container">
+                    <span
+                      className="icon-tooltip"
+                      onClick={() => handleWireFrame("4dplan")}
+                      title="4D plan"
+                    >
+                      <img
+                        id="4dplan"
+                        class="button"
+                        src="images/4d_plan.png"
+                        alt=""
+                      />
+                    </span>
+                  </div>
+                </li>
+                <li className={activeButton === "comment" ? "active" : ""}>
+                  <div className="tooltip-container">
+                    <span
+                      className="icon-tooltip"
+                      onClick={() => handlecomment("comment")}
+                      title="Show comment"
+                    >
+                      <i class="fa-solid fa-comment fs-4"></i>
+                    </span>
+                  </div>
+                </li>
+              </ul>
+            </div>
           </div>
         </div>
-      </div>
-      </div>
+    
     );
   }
 );

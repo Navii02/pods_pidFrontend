@@ -174,7 +174,7 @@ const TagEntityModal = ({ showTagModalFor, setShowTagModalFor, selectedProject,t
       setIsLoading(false);
     }
   };
-  console.log(showTagModalFor,tagsMap);
+  //console.log(showTagModalFor,tagsMap);
 const [searchQuery, setSearchQuery] = useState(''); 
    const [typeFilter, setTypeFilter] = useState('all');
   const [assignmentFilter, setAssignmentFilter] = useState('all');

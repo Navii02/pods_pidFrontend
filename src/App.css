@@ -353,7 +353,7 @@ header {
 }
 
 .rightSideNav li.active {
-  background-color: #5B66CB;
+  background-color: #5B66CB !important ;
 }
 
 /* Adjust scrollbar styles as needed */
@@ -986,7 +986,7 @@ div.drop-file1 input {
   color: #f0f0f0;
   width: 87%;
   padding: 5%; 
-  overflow-y: auto;
+  /* overflow-y: auto; */
 }
 
 #bulkImportDiv h4{

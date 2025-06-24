@@ -21,7 +21,7 @@ function EntityRegister({
   const [existingEntities, setExistingEntities] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const codeInputRef = useRef(null);
-  console.log(parentEntity);
+  //console.log(parentEntity);
 
   const entityConfig = {
     Area: {
@@ -89,7 +89,7 @@ function EntityRegister({
       }[entityType];
 
       if (response.status === 200) {
-        console.log(response.data);
+        //console.log(response.data);
 
         const fetchedList = response.data[endpoint];
         setExistingEntities(Array.isArray(fetchedList) ? fetchedList : []);

@@ -12,10 +12,10 @@ export const getAllTags= async()=>{
     
 }
 
-export const GetAllmodals= async(projectId,ids)=>{
-   console.log(projectId,ids);
+export const GetAllmodals= async(projectId,areaIds,systemIds,discIds,tagIds)=>{
+   console.log(projectId,areaIds,systemIds,discIds,tagIds);
     try {
-        const response = await commonApi('GET',`${url}/api/getmodel/${projectId}/${ids}`)
+        const response = await commonApi('GET',`${url}/api/getmodel/${projectId}/${areaIds}/${discIds}/${systemIds}/${tagIds}`)
          return response
     } catch (error) {
         throw error
