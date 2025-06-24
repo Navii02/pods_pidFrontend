@@ -1,4 +1,3 @@
-
 import React, { useContext, useEffect, useState } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
@@ -6,6 +5,7 @@ import {
   faPlus,
   faMinus,
   faFolder,
+  faFolderOpen,
   faCube,
   faPlusCircle,
   faEyeSlash,
@@ -148,7 +148,6 @@ const ProjectDetails = ({
       tagIds: [],
     };
 
-    // Collect IDs and set eye states based on entity type
     const newEyeState = { ...eyeState };
     const isOpen = eyeState[entityKey] || false;
     const newViewHideThree = {};
@@ -184,7 +183,6 @@ const ProjectDetails = ({
       });
     });
   });
-  // Ensure project eye state is also updated
   newEyeState["project"] = !isOpen;
   break;
 
@@ -276,14 +274,12 @@ const ProjectDetails = ({
         break;
     }
 
-    // Update eye states
     setEyeState(newEyeState);
     setViewHideThree((prev) => ({ ...prev, ...newViewHideThree }));
 
     if (!isOpen) {
-      // Eye is opening: Fetch data and load into scene
       try {
-        setTagsToRemove([]); // Clear tags to remove
+        setTagsToRemove([]);
         const response = await GetAllmodals(selectedProject.projectId,ids.areaIds,
         ids.discIds,
         ids.systemIds,
@@ -335,7 +331,6 @@ const ProjectDetails = ({
         }));
       }
     } else {
-      // Eye is closing: Unload tags from scene
       setTagsToRemove(ids.tagIds);
     }
   };
@@ -401,6 +396,13 @@ const ProjectDetails = ({
     
     return highlightedTagPaths.includes(tagPath);
   };
+
+  const trimText = (text, maxLength = 12) => {
+  if (!text) return '';
+  return text.length > maxLength 
+    ? `${text.substring(0, maxLength)}...` 
+    : text;
+};
 
   return (
     <div>
@@ -468,7 +470,7 @@ const ProjectDetails = ({
                         }
                       />
                       <FontAwesomeIcon
-                        icon={faFolder}
+                        icon={isExpanded ? faFolderOpen : faFolder}
                         className="folder-icon"
                       />
                       {area.area} - {area.name}
@@ -511,7 +513,7 @@ const ProjectDetails = ({
                                 }
                               />
                               <FontAwesomeIcon
-                                icon={faFolder}
+                                icon={isDiscExpanded ? faFolderOpen : faFolder}
                                 className="folder-icon"
                               />
                               {disc.disc} - {disc.name}
@@ -577,7 +579,7 @@ const ProjectDetails = ({
                                         }
                                       />
                                       <FontAwesomeIcon
-                                        icon={faFolder}
+                                        icon={isSysExpanded ? faFolderOpen : faFolder}
                                         className="folder-icon"
                                       />
                                       {sys.sys} - {sys.name}
@@ -666,7 +668,7 @@ const ProjectDetails = ({
                                                 icon={faCube}
                                                 className="folder-icon"
                                               />
-                                              {tag.name}
+                                              {trimText(tag.name)}
                                             </div>
                                             <div className="entity-icons">
                                               <button

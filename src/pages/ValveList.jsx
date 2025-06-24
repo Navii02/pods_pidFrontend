@@ -75,7 +75,7 @@ function ValveList() {
   };
 
   const handleConfirm = async () => {
-    const response = await deletevalveList(currentDeleteNumber);
+    const response = await deletevalveList(projectId,currentDeleteNumber);
     if (response.status === 200) {
       setShowConfirm(false);
       setCurrentDeleteNumber(null);

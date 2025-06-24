@@ -10,6 +10,14 @@ export const RegisterTag = async (formData) => {
     throw error;
   }
 };
+ export const SaveUpdatedTagFile = async(files)=>{
+   try {
+      const response = await commonApi('POST',`${url}/api/save-updated-tagfile`,files)
+       return response
+   } catch (error) {
+      throw error
+   }
+ }
 export const GetTagDetails = async (id) => {
   try {
     const response = await commonApi("GET", `${url}/api/get-alltags/${id}`);
@@ -212,11 +220,11 @@ export const EditValvelist = async (data) => {
     throw error;
   }
 };
-export const deletevalveList = async (tagId) => {
+export const deletevalveList = async ( projectId, tag ) => {
   try {
     const response = await commonApi(
-      "DELETE",
-      `${url}/api/delete-valve-list/${tagId}`
+      "PUT",
+      `${url}/api/delete-valve-list`, {projectId, tag }
     );
     return response;
   } catch (error) {
