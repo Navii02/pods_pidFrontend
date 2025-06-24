@@ -21,6 +21,7 @@ import GlobalModalOpen from "./pages/GlobalModalOpen";
 import CreateGlobalModal from "./pages/CreateGlobalModal";
 import EquipmentList from "./pages/EquipmentList";
 import UnAssignedtags from "./pages/UnAssignedtags";
+import GeneralTagInfoTable from "./pages/GeneralTagInfoTable";
 
 
 // import Login from './pages/Login';
@@ -43,15 +44,15 @@ function App() {
         <Route path="/bulk-model-import" element={<BulkModelImport />} />
         <Route path="/comment-review" element={<CommentReview />} />
         <Route path="/comment-status" element={<CommentStatusTable />} />
-                <Route path="/iroamer" element={<Iroamer />} />
-                
+        <Route path="/iroamer" element={<Iroamer />} />       
         <Route path="/global-model/open" element={<GlobalModalOpen />} />
         <Route path="/global-model/create" element={<CreateGlobalModal/>}/>
         <Route path="/equipment-list" element={<EquipmentList />} />
         <Route path="/valve-list" element={<ValveList />} />
-
         <Route path="/line-list" element={<LineList />} />
-                        <Route path="/assign-tag-models" element={<UnAssignedtags />} />
+        <Route path="/assign-tag-models" element={<UnAssignedtags />} />
+        <Route path="/tag-info/review" element={<GeneralTagInfoTable />} />
+
 
       </Route>
 

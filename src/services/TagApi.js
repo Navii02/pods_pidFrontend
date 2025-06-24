@@ -2,10 +2,8 @@ import { commonApi } from "./apiStructure";
 import { url } from "./Url";
 
 export const RegisterTag = async (formData) => {
-  //console.log(formData);
   try {
     const response = await commonApi("POST", `${url}/api/addtag`, formData);
-    console.log(response);
 
     return response;
   } catch (error) {
@@ -36,8 +34,6 @@ export const getTagDetailsFromFileName = async (projectId, parentFileName) => {
 };
 
 export const deleteTag = async (TagId) => {
-  console.log(TagId);
-
   try {
     const response = await commonApi(
       "DELETE",
@@ -65,7 +61,6 @@ export const updateTags = async (TagId, data) => {
 export const AssignTag = async (tagId, uniqueIds, fileId) => {
   try {
     const data = { tagId, uniqueIds, fileId };
-    //console.log(tagId,uniqueIds,fileId);
     const response = await commonApi("POST", `${url}/api/assign-tag`, data);
     return response;
   } catch (error) {
@@ -74,7 +69,6 @@ export const AssignTag = async (tagId, uniqueIds, fileId) => {
 };
 
 export const getAssignedTags = async (fileId) => {
-  //console.log(fileId);
   try {
     const response = await commonApi(
       "GET",
@@ -103,7 +97,6 @@ export const getdocumentsbyTags = async (tagId) => {
 export const getLineList = async (id) => {
   try {
     const response = await commonApi("GET", `${url}/api/getline/${id}`);
-    //console.log(response);
     return response;
   } catch (error) {
     throw error;
@@ -116,7 +109,6 @@ export const getLineDetails = async (id, tagId) => {
       "GET",
       `${url}/api/getline-details/${id}/${tagId}`
     );
-    console.log(response);
     return response;
   } catch (error) {
     throw error;
@@ -148,7 +140,6 @@ export const deletelineList = async (tagId) => {
 export const getequipmentList = async (id) => {
   try {
     const response = await commonApi("GET", `${url}/api/getequipment/${id}`);
-    console.log(response);
     return response;
   } catch (error) {
     throw error;
@@ -240,6 +231,72 @@ export const fetchFromGentagInfo = async (id, tagId) => {
     const response = await commonApi(
       "GET",
       `${url}/api/getgeneral-taginfo-details/${id}/${tagId}`
+    );
+    return response;
+  } catch (error) {
+    throw error;
+  }
+};
+
+export const fetchAllGentagInfo = async (id) => {
+  try {
+    const response = await commonApi(
+      "GET",
+      `${url}/api/get-allgeneral-taginfo/${id}`
+    );
+    console.log(response);
+
+    return response;
+  } catch (error) {
+    throw error;
+  }
+};
+
+export const fetchFromGentagInfoFields = async (id) => {
+  try {
+    const response = await commonApi(
+      "GET",
+      `${url}/api/getgeneral-taginfo-field/${id}`
+    );
+    return response;
+  } catch (error) {
+    throw error;
+  }
+};
+
+export const UpdateGentagInfoFields = async (data) => {
+  try {
+    const response = await commonApi(
+      "PUT",
+      `${url}/api/update-general-taginfo-field`,
+      data
+    );
+    return response;
+  } catch (error) {
+    throw error;
+  }
+};
+
+export const EditGeneralTagInfolist = async (data) => {
+  try {
+    const response = await commonApi(
+      "PUT",
+      `${url}/api/edit-general-taginfo-list`,
+      data
+    );
+    return response;
+  } catch (error) {
+    throw error;
+  }
+};
+
+
+export const DeleteGeneralTagInfolist = async (data) => {
+  try {
+    const response = await commonApi(
+      "PUT",
+      `${url}/api/delete-general-taginfo-list`,
+      data
     );
     return response;
   } catch (error) {

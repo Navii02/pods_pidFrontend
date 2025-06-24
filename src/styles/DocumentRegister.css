@@ -43,7 +43,7 @@
   color: #ff4d4f;
 }
 
-.form-control,
+/* .form-control,
 .form-select {
   background-color: #2a3439;
   color: #b0b8c4;
@@ -90,7 +90,7 @@
 textarea.form-control {
   resize: vertical;
   min-height: 80px;
-}
+} */
 
 /* Custom Select Dropdown Styling */
 .custom-select {
