@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState, useCallback } from "react";
 import * as BABYLON from "@babylonjs/core";
 import "@babylonjs/loaders";
 import "@babylonjs/gui";
+import {Modal} from 'react-bootstrap';
 import { FreeCameraMouseInput } from "../Utils/FlyControls";
 import { FreeCameraTouchInput } from "../Utils/TouchControls";
 import * as GUI from "@babylonjs/gui";
@@ -17,7 +18,6 @@ import {
   getTagDetailsFromFileName,
   getValveDetails,
 } from "../services/TagApi";
-import { getequipmentList } from "../services/TagApi";
 import CommentModal from "./CommentModal";
 import {
   getAllcomments,
@@ -2869,6 +2869,8 @@ const BabylonLODManager = ({
   setSelectedItem,
   setActiveButton,
   showComment,
+   savedViewDialog,
+    setSavedViewDialog
 }) => {
   const currentHighlightedMeshRef = useRef(null);
   const currentHighlightedMeshIdRef = useRef(null);
@@ -2966,6 +2968,8 @@ const BabylonLODManager = ({
   const [lineEqpInfo, setLineEqpInfo] = useState(false);
   const [showFileInfo, setShowFileInfo] = useState(false);
   const [tagInfoVisible, setTagInfoVisible] = useState(false);
+  const [saveViewName, setSaveViewName] = useState("");
+
   const projectString = sessionStorage.getItem("selectedProject");
   const project = projectString ? JSON.parse(projectString) : null;
   const projectId = project?.projectId;
@@ -6983,7 +6987,80 @@ useEffect(() => {
     const handleCloseFileInfo = () => {
         setShowFileInfo(false);
       };
+      const handleSaveView = () => {
+        if (!saveViewName.trim()) {
+          setCustomAlert(true);
+          setModalMessage("Please enter a view name");
+          return;
+        }
 
+        // Check if a view with the same name already exists
+        // const viewExists = allViews.some(
+        //   (view) => view.name === saveViewName.trim()
+        // );
+        // if (viewExists) {
+        //   setCustomAlert(true);
+        //   setModalMessage("A view with this name already exists");
+        //   return;
+        // }
+
+        // Get current camera data
+        if (!sceneRef.current || !sceneRef.current.activeCamera) {
+          setCustomAlert(true);
+          setModalMessage("Cannot save view - camera not initialized");
+          return;
+        }
+
+        const camera = sceneRef.current.activeCamera;
+
+        const viewData = {
+          name: saveViewName.trim(),
+          posX: camera.position.x,
+          posY: camera.position.y,
+          posZ: camera.position.z,
+          targX:
+            camera instanceof BABYLON.ArcRotateCamera
+              ? camera.target.x
+              : camera.getTarget().x,
+          targY:
+            camera instanceof BABYLON.ArcRotateCamera
+              ? camera.target.y
+              : camera.getTarget().y,
+          targZ:
+            camera instanceof BABYLON.ArcRotateCamera
+              ? camera.target.z
+              : camera.getTarget().z,
+          // Store additional camera properties if needed
+          cameraType:
+            camera instanceof BABYLON.ArcRotateCamera ? "arc" : "free",
+          // For ArcRotate camera, store specific properties
+          ...(camera instanceof BABYLON.ArcRotateCamera && {
+            alpha: camera.alpha,
+            beta: camera.beta,
+            radius: camera.radius,
+          }),
+        };
+
+       
+
+        // Show success message
+        setCustomAlert(true);
+        setModalMessage(`View "${saveViewName}" saved successfully`);
+
+        // Close dialog and reset name
+        setSavedViewDialog(false);
+        setSaveViewName("");
+
+        // Hide message after a delay
+        setTimeout(() => {
+          setCustomAlert(false);
+        }, 2000);
+      };
+
+      const handleCloseSavedView = () => {
+        setSavedViewDialog(false);
+        setSaveViewName("");
+      };
   return (
     <div>
       {/* Canvas */}
@@ -7866,6 +7943,55 @@ useEffect(() => {
 
 
       {speedBar}
+
+          {/*saved view modal box */}
+
+            <Modal
+              onHide={handleCloseSavedView}
+              show={savedViewDialog}
+              backdrop="static"
+              keyboard={false}
+              dialogClassName="custom-modal"
+            >
+              <div className="save-dialog">
+                <div className="title-dialog">
+                  <p className="text-light">Save view</p>
+                  <p
+                    className="text-light cross"
+                    onClick={handleCloseSavedView}
+                  >
+                    &times;
+                  </p>
+                </div>
+                <div className="dialog-input">
+                  <label>Name*</label>
+                  <input
+                    type="text"
+                    value={saveViewName}
+                    onChange={(e) => setSaveViewName(e.target.value)}
+                  />
+                </div>
+                <div
+                  className="dialog-button"
+                  style={{
+                    display: "flex",
+                    justifyContent: "flex-end",
+                    gap: "10px",
+                  }}
+                >
+                  <button
+                    className="btn btn-secondary"
+                    onClick={handleCloseSavedView}
+                  >
+                    Cancel
+                  </button>
+                  <button className="btn btn-dark" onClick={handleSaveView}>
+                    Save
+                  </button>
+                </div>
+              </div>
+            </Modal>
+
       {customAlert && (
         <Alert
           message={modalMessage}
