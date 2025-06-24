@@ -11,9 +11,9 @@ import {
 } from "../Utils/GeometryCalculation";
 import {
   fetchFromGentagInfo,
+  fetchFromGentagInfoFields,
   getEquipmentDetails,
   getLineDetails,
-  getLineList,
   getTagDetailsFromFileName,
   getValveDetails,
 } from "../services/TagApi";
@@ -1863,6 +1863,276 @@ class WebWorkerTilesetLODManager {
     });
   }
 
+findAllMeshesByTag(tagName) {
+  const results = [];
+  
+  // Search through all active LOD meshes
+  for (const [nodeNumber, lodMesh] of this.activeMeshes.entries()) {
+    if (!lodMesh.metadata || !lodMesh.metadata.vertexMappings) {
+      continue;
+    }
+
+    // Find all mappings in this mesh that match the tag
+    const matchingMappings = lodMesh.metadata.vertexMappings.filter(mapping => {
+      return (
+        mapping.name === tagName ||
+        mapping.fileName === tagName ||
+        mapping.meshId === tagName ||
+        mapping.metadataId === tagName ||
+        (mapping.parentFileName && mapping.parentFileName === tagName) ||
+        // Also check for tag-based identifiers
+        (mapping.tag && mapping.tag === tagName) ||
+        (mapping.tagId && mapping.tagId === tagName)
+      );
+    });
+
+    // Add each matching mapping as a separate result
+    matchingMappings.forEach(mapping => {
+      results.push({
+        lodMesh,
+        mapping,
+        nodeNumber,
+        depth: lodMesh.metadata.depth
+      });
+    });
+  }
+
+  return results;
+}
+
+// UPDATED: Select tag that may span multiple nodes
+selectTagInLOD(tagName) {
+  console.log("🔍 Searching for tag across all LOD meshes:", tagName);
+
+  const results = this.findAllMeshesByTag(tagName);
+  
+  if (results.length === 0) {
+    console.warn("❌ Tag not found in any LOD mesh:", tagName);
+    return null;
+  }
+
+  console.log(`✅ Found tag in ${results.length} LOD mesh(es):`, {
+    tagName,
+    meshCount: results.length,
+    nodes: results.map(r => r.nodeNumber),
+    depths: results.map(r => r.depth)
+  });
+
+  // Clear any existing highlights
+  this.clearAllHighlights();
+
+  // Highlight ALL occurrences of the tag
+  let totalHighlighted = 0;
+  results.forEach((result, index) => {
+    const { lodMesh, mapping, nodeNumber, depth } = result;
+    
+    console.log(`🎯 Highlighting tag part ${index + 1}/${results.length} in node ${nodeNumber}:`, {
+      meshName: lodMesh.name,
+      mapping: {
+        meshId: mapping.meshId,
+        name: mapping.name,
+        startVertex: mapping.startVertex,
+        vertexCount: mapping.vertexCount
+      }
+    });
+
+    if (lodMesh.highlightOriginalMesh) {
+      lodMesh.highlightOriginalMesh(mapping.meshId);
+      totalHighlighted++;
+    }
+  });
+
+  // Store multi-node selection state
+  if (this.highlightRefs) {
+    this.highlightRefs.currentHighlightedMeshRef.current = results[0].lodMesh; // Primary mesh
+    this.highlightRefs.currentHighlightedMeshIdRef.current = tagName;
+    this.highlightRefs.multiNodeSelection = results; // Store all highlighted parts
+  }
+
+  console.log(`✅ Successfully highlighted ${totalHighlighted} parts of tag "${tagName}"`);
+  
+  return {
+    tagName,
+    results,
+    totalParts: results.length,
+    highlightedParts: totalHighlighted,
+    nodes: results.map(r => r.nodeNumber),
+    isMultiNode: results.length > 1
+  };
+}
+
+// UPDATED: Enhanced focus method for multi-node tags
+selectAndFocusTag(tagName, shouldFocus = false) {
+  const result = this.selectTagInLOD(tagName);
+  
+  if (!result || !shouldFocus) {
+    return result;
+  }
+
+  // Calculate combined bounding box for all parts of the tag
+  try {
+    let minX = Infinity, minY = Infinity, minZ = Infinity;
+    let maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
+    let hasValidBounds = false;
+
+    result.results.forEach(({ lodMesh, mapping }) => {
+      const meshData = lodMesh.extractIndividualMeshData(mapping.meshIndex);
+      if (meshData && meshData.positions) {
+        // Calculate bounds for this part
+        for (let i = 0; i < meshData.positions.length; i += 3) {
+          const x = meshData.positions[i];
+          const y = meshData.positions[i + 1];
+          const z = meshData.positions[i + 2];
+
+          minX = Math.min(minX, x);
+          minY = Math.min(minY, y);
+          minZ = Math.min(minZ, z);
+          maxX = Math.max(maxX, x);
+          maxY = Math.max(maxY, y);
+          maxZ = Math.max(maxZ, z);
+          hasValidBounds = true;
+        }
+      }
+    });
+
+    if (hasValidBounds) {
+      // Calculate center and size of combined bounding box
+      const center = new BABYLON.Vector3(
+        (minX + maxX) / 2,
+        (minY + maxY) / 2,
+        (minZ + maxZ) / 2
+      );
+
+      const size = Math.max(maxX - minX, maxY - minY, maxZ - minZ);
+
+      console.log(`🎯 Focusing on multi-node tag "${tagName}":`, {
+        center: { x: center.x, y: center.y, z: center.z },
+        size,
+        totalParts: result.totalParts
+      });
+
+      // Focus camera on the combined bounds
+      this.focusCameraOnPoint(center, size);
+    }
+  } catch (error) {
+    console.error("Error focusing on multi-node tag:", error);
+  }
+
+  return result;
+}
+
+// UPDATED: Enhanced clear highlights to handle multi-node selections
+clearAllHighlights() {
+  console.log("🧹 Clearing all highlights (including multi-node selections)");
+  
+  // Clear highlights from all LOD meshes
+  for (const [nodeNumber, lodMesh] of this.activeMeshes.entries()) {
+    if (lodMesh.removeHighlight) {
+      lodMesh.removeHighlight();
+    }
+  }
+
+  // Clear any manager-level highlight references
+  if (this.highlightRefs) {
+    if (this.highlightRefs.currentHighlightedMeshRef) {
+      this.highlightRefs.currentHighlightedMeshRef.current = null;
+    }
+    if (this.highlightRefs.currentHighlightedMeshIdRef) {
+      this.highlightRefs.currentHighlightedMeshIdRef.current = null;
+    }
+    // Clear multi-node selection state
+    if (this.highlightRefs.multiNodeSelection) {
+      this.highlightRefs.multiNodeSelection = null;
+    }
+  }
+
+  // Clear traditional highlight
+  this.unhighlightMesh();
+  
+  console.log("✅ All highlights cleared");
+}
+
+// NEW: Get information about current multi-node selection
+getCurrentMultiNodeSelection() {
+  if (this.highlightRefs && this.highlightRefs.multiNodeSelection) {
+    const selection = this.highlightRefs.multiNodeSelection;
+    return {
+      tagName: this.highlightRefs.currentHighlightedMeshIdRef.current,
+      totalParts: selection.length,
+      nodes: selection.map(r => r.nodeNumber),
+      depths: selection.map(r => r.depth),
+      meshNames: selection.map(r => r.lodMesh.name),
+      isMultiNode: selection.length > 1
+    };
+  }
+  return null;
+}
+
+// NEW: Utility to find which nodes contain parts of a specific tag
+getNodesContainingTag(tagName) {
+  const results = this.findAllMeshesByTag(tagName);
+  return {
+    tagName,
+    nodeNumbers: [...new Set(results.map(r => r.nodeNumber))],
+    totalParts: results.length,
+    isMultiNode: results.length > 1,
+    details: results.map(r => ({
+      nodeNumber: r.nodeNumber,
+      depth: r.depth,
+      meshName: r.lodMesh.name,
+      partName: r.mapping.name || r.mapping.meshId
+    }))
+  };
+}
+
+// NEW: Enhanced method to check if a tag spans multiple nodes
+isTagMultiNode(tagName) {
+  const results = this.findAllMeshesByTag(tagName);
+  const uniqueNodes = new Set(results.map(r => r.nodeNumber));
+  return {
+    isMultiNode: uniqueNodes.size > 1,
+    nodeCount: uniqueNodes.size,
+    partCount: results.length,
+    nodes: Array.from(uniqueNodes)
+  };
+}
+
+
+
+// Helper method to focus camera
+focusCameraOnPoint(center, size) {
+  if (!this.camera) return;
+
+  const distance = size * 2; // Adjust multiplier as needed
+  const direction = this.camera.position.subtract(center).normalize();
+  const newPosition = center.add(direction.scale(distance));
+
+  // Animate camera to new position
+  BABYLON.Animation.CreateAndStartAnimation(
+    "cameraFocus",
+    this.camera,
+    "position",
+    30, // fps
+    30, // duration frames
+    this.camera.position,
+    newPosition,
+    BABYLON.Animation.ANIMATIONLOOPMODE_CONSTANT
+  );
+
+  // Update camera target
+  BABYLON.Animation.CreateAndStartAnimation(
+    "cameraTarget",
+    this.camera,
+    "target", 
+    30,
+    30,
+    this.camera.getTarget(),
+    center,
+    BABYLON.Animation.ANIMATIONLOOPMODE_CONSTANT
+  );
+}
+
+
   // MODIFIED: Update method with priority scheduling
   update() {
     const now = performance.now();
@@ -2628,6 +2898,7 @@ const BabylonLODManager = ({
   const [priority, setPriority] = useState("");
   const [commentEdit, setCommentEdit] = useState("");
   const [editedCommentData, setEditedCommentData] = useState({});
+  const [generalTagInfoFields, setGeneralTagInfoFields] = useState([]);
 
   // Camera and LOD state
   const [cameraType, setCameraType] = useState("orbit");
@@ -2717,6 +2988,7 @@ const BabylonLODManager = ({
       fetchComments(projectId);
     }
   }, [projectId, updateProject, isModalOpen]);
+
   const getStatusTable = async (projectId) => {
     try {
       const response = await getStatustableData(projectId);
@@ -2730,6 +3002,21 @@ const BabylonLODManager = ({
 
   useEffect(() => {
     getStatusTable(projectId);
+  }, [updateProject]);
+
+    const getGeneralTagInfoField = async (projectId) => {
+    try {
+      const response = await fetchFromGentagInfoFields(projectId);
+      if (response.status === 200) {
+        setGeneralTagInfoFields(response.data);
+      }
+    } catch (error) {
+      console.error("Failed to fetch status table data:", error);
+    }
+  };
+
+  useEffect(() => {
+    getGeneralTagInfoField(projectId);
   }, [updateProject]);
 
   const [performanceStats, setPerformanceStats] = useState({
@@ -5004,6 +5291,8 @@ const BabylonLODManager = ({
 
   // 4. UPDATE THE clearSelection FUNCTION
   const clearSelection = () => {
+
+    
     // Remove highlighting from currently selected mesh
     if (
       currentHighlightedMeshRef.current &&
@@ -5300,6 +5589,8 @@ const BabylonLODManager = ({
         // Based on tag type, fetch corresponding details
         let additionalDetails = null;
         let extraTableData = null;
+             const userDefinedDisplay = new Map();
+
 
         switch (matchingTag.type?.toLowerCase()) {
           case "line":
@@ -5321,7 +5612,18 @@ const BabylonLODManager = ({
         if(response.status===200){
         console.log("🗂️ Additional table data fetched:", extraTableData);
 
+                  if (extraTableData.data) {
+                    generalTagInfoFields.forEach(({ id, field, unit }) => {
+                      const taginfoKey = `taginfo${id}`;
+                      const value = extraTableData.data[taginfoKey];
+
+                      // Insert into Map to guarantee order
+                      userDefinedDisplay.set(`${field} (${unit})`, value);
+                    });
+                  }
+                  console.log("userDefinedDisplay",userDefinedDisplay);
         }
+        
       } catch (extraError) {
         console.error("⚠️ Failed to fetch additional table data:", extraError);
         // Continue execution even if additional table fetch fails
@@ -5334,7 +5636,9 @@ const BabylonLODManager = ({
             additionalDetails: additionalDetails,
             detailsType: matchingTag.type,
             fileMetadata: fileMetadata,
-            extraTableData:extraTableData
+            extraTableData:extraTableData,
+            UsertagInfoDetails: Object.fromEntries(userDefinedDisplay),
+            originalUsertagInfoDetails: extraTableData.data || null,
           }));
         }
       }
@@ -6034,6 +6338,83 @@ const BabylonLODManager = ({
     }
   }, []);
 
+
+const handleSelectTag = () => {
+  if (!selectedItemName || !selectedItemName.name) {
+    console.warn("No tag selected");
+    return;
+  }
+
+  // Get the tag name from your tag info
+  const tagName = selectedMeshInfo.parentFileName || selectedItemName.name;
+  console.log("🏷️ Selecting tag (multi-node aware):", tagName);
+
+  // Use the LOD manager to select the tag
+  if (lodManagerRef.current) {
+    const result = lodManagerRef.current.selectTagInLOD(tagName);
+    
+    if (result) {
+      console.log("✅ Tag selected successfully:", {
+        tagName: result.tagName,
+        totalParts: result.totalParts,
+        isMultiNode: result.isMultiNode,
+        nodes: result.nodes,
+        highlightedParts: result.highlightedParts
+      });
+      
+      // Update your selected mesh reference to the primary mesh
+      if (selectedMeshRef) {
+        selectedMeshRef.current = result.results[0].lodMesh;
+      }
+
+      // Show user feedback for multi-node tags
+      if (result.isMultiNode) {
+        console.log(`📍 Multi-node tag: "${tagName}" spans ${result.totalParts} parts across ${result.nodes.length} nodes`);
+        
+        // Optional: Show notification to user
+        // showNotification(`Tag "${tagName}" spans multiple nodes (${result.nodes.length} nodes, ${result.totalParts} parts)`);
+      }
+    } else {
+      console.warn("❌ Tag not found in LOD system");
+      
+      // Fallback to traditional mesh search if LOD search fails
+      if (sceneRef.current) {
+        const scene = sceneRef.current;
+        const parentMesh = scene.meshes.find(
+          (mesh) =>
+            mesh.name === tagName || 
+            mesh.metadata?.tagNo?.tag === tagName
+        );
+        
+        if (parentMesh) {
+          console.log("📦 Found tag in traditional meshes");
+          const meshesToSelect = [parentMesh, ...parentMesh.getChildMeshes()];
+          dehighlightMesh();
+          highlightMesh(meshesToSelect);
+        }
+      }
+    }
+  }
+  
+  // Close menu
+  setIsMenuOpen(false);
+};
+// Enhanced version with focus option
+const handleSelectAndFocusTag = () => {
+  if (!selectedItemName || !selectedItemName.name) {
+    console.warn("No tag selected");
+    return;
+  }
+
+  const tagName = selectedMeshInfo.filename || selectedItemName.name;
+  console.log("🎯 Selecting and focusing tag:", tagName);
+
+  if (lodManagerRef.current) {
+    lodManagerRef.current.selectAndFocusTag(tagName, true);
+  }
+  
+  setIsMenuOpen(false);
+};
   // 4. DEBUGGING FUNCTION: Check mesh states
   const debugMeshStates = useCallback(() => {
     if (lodManagerRef.current && lodManagerRef.current.activeMeshes) {
@@ -6168,6 +6549,25 @@ const BabylonLODManager = ({
           }
           setIsMenuOpen(false);
          break;
+          case "Select tag":
+          if (selectedMeshInfo) {
+            handleSelectTag();
+          } else {
+            setCustomAlert(true);
+            setModalMessage("Please select a mesh first");
+          }
+          setIsMenuOpen(false);
+         break;
+            case "Tag GenInfo":
+          if (selectedMeshInfo) {
+            handleTagInfo();
+          } else {
+            setCustomAlert(true);
+            setModalMessage("Please select a mesh first");
+          }
+          setIsMenuOpen(false);
+         break;
+         
          
         default:
           setIsMenuOpen(false);
@@ -6200,7 +6600,7 @@ const BabylonLODManager = ({
           label: "Tag info",
           action: () => handleMenuOptionClick({ label: "Tag info" }),
         },
-        { label: "Tag GenInfo" },
+        { label: "Tag GenInfo", action: () => handleMenuOptionClick({ label: "Tag GenInfo" }) },
         { label: "File Info", action: () => handleMenuOptionClick({ label: "File info" }) },
       ],
     },
@@ -6208,7 +6608,7 @@ const BabylonLODManager = ({
       label: "Deselect",
       action: () => handleMenuOptionClick({ label: "Deselect" }),
     },
-    { label: "Select tag" },
+    { label: "Select tag", action: () => handleMenuOptionClick({ label: "Select tag" }), },
     {
       label: "Visibility",
       children: [
@@ -6242,92 +6642,92 @@ const BabylonLODManager = ({
     // { label: "Debug States", action: () => { debugMeshStates(); setIsMenuOpen(false); } },
   ];
 
-  const createCommentLabel = (comment, index, scene) => {
-    // Create a simple position mesh (invisible) to anchor the label
-    const position = BABYLON.MeshBuilder.CreateBox(
-      `marker-position-${comment.number}`,
-      { size: 0.1 }, // Small invisible box
-      scene
-    );
-    position.position = new BABYLON.Vector3(
-      comment.coOrdinateX,
-      comment.coOrdinateY,
-      comment.coOrdinateZ
-    );
+  // const createCommentLabel = (comment, index, scene) => {
+  //   // Create a simple position mesh (invisible) to anchor the label
+  //   const position = BABYLON.MeshBuilder.CreateBox(
+  //     `marker-position-${comment.number}`,
+  //     { size: 0.1 }, // Small invisible box
+  //     scene
+  //   );
+  //   position.position = new BABYLON.Vector3(
+  //     comment.coOrdinateX,
+  //     comment.coOrdinateY,
+  //     comment.coOrdinateZ
+  //   );
 
-    // Make the position mesh invisible
-    position.isVisible = false;
+  //   // Make the position mesh invisible
+  //   position.isVisible = false;
 
-    // Create the fullscreen UI
-    const advancedTexture = GUI.AdvancedDynamicTexture.CreateFullscreenUI(
-      `UI-${comment.number}`,
-      true,
-      scene
-    );
+  //   // Create the fullscreen UI
+  //   const advancedTexture = GUI.AdvancedDynamicTexture.CreateFullscreenUI(
+  //     `UI-${comment.number}`,
+  //     true,
+  //     scene
+  //   );
 
-    // Get the status color from comment status
-    const statusColor =
-      allCommentStatus.find((status) => status.statusname === comment.status)
-        ?.color || "gray";
+  //   // Get the status color from comment status
+  //   const statusColor =
+  //     allCommentStatus.find((status) => status.statusname === comment.status)
+  //       ?.color || "gray";
 
-    // Create the main label (number)
-    const label = new GUI.Rectangle("label");
-    label.background = statusColor || "red"; // Use status color or default to red
-    label.height = "20px";
-    label.alpha = 0.8;
-    label.width = "20px";
-    label.thickness = 1;
-    label.linkOffsetY = -10;
-    label.isPointerBlocker = true; // Make sure it can be clicked
-    label.onPointerClickObservable.add(() => {
-      handleCommentInfo(comment); // Pass the comment object to the handler
-    });
+  //   // Create the main label (number)
+  //   const label = new GUI.Rectangle("label");
+  //   label.background = statusColor || "red"; // Use status color or default to red
+  //   label.height = "20px";
+  //   label.alpha = 0.8;
+  //   label.width = "20px";
+  //   label.thickness = 1;
+  //   label.linkOffsetY = -10;
+  //   label.isPointerBlocker = true; // Make sure it can be clicked
+  //   label.onPointerClickObservable.add(() => {
+  //     handleCommentInfo(comment); // Pass the comment object to the handler
+  //   });
 
-    const text = new GUI.TextBlock();
-    text.text = index; // Fixed typo from 'numbber' to 'number'
-    text.color = "white";
-    text.fontSize = 10;
+  //   const text = new GUI.TextBlock();
+  //   text.text = index; // Fixed typo from 'numbber' to 'number'
+  //   text.color = "white";
+  //   text.fontSize = 10;
 
-    label.addControl(text);
-    advancedTexture.addControl(label);
-    // Add hover behavior to the mesh
-    position.actionManager = new BABYLON.ActionManager(scene);
+  //   label.addControl(text);
+  //   advancedTexture.addControl(label);
+  //   // Add hover behavior to the mesh
+  //   position.actionManager = new BABYLON.ActionManager(scene);
 
-    // Show tooltip on hover
-    position.actionManager.registerAction(
-      new BABYLON.ExecuteCodeAction(
-        BABYLON.ActionManager.OnPointerOverTrigger,
-        () => {
-          label.isVisible = true;
-        }
-      )
-    );
+  //   // Show tooltip on hover
+  //   position.actionManager.registerAction(
+  //     new BABYLON.ExecuteCodeAction(
+  //       BABYLON.ActionManager.OnPointerOverTrigger,
+  //       () => {
+  //         label.isVisible = true;
+  //       }
+  //     )
+  //   );
 
-    // Hide tooltip when not hovering
-    position.actionManager.registerAction(
-      new BABYLON.ExecuteCodeAction(
-        BABYLON.ActionManager.OnPointerOutTrigger,
-        () => {
-          label.isVisible = false;
-        }
-      )
-    );
+  //   // Hide tooltip when not hovering
+  //   position.actionManager.registerAction(
+  //     new BABYLON.ExecuteCodeAction(
+  //       BABYLON.ActionManager.OnPointerOutTrigger,
+  //       () => {
+  //         label.isVisible = false;
+  //       }
+  //     )
+  //   );
 
-    // Link the main label to the 3D position
-    label.linkWithMesh(position);
+  //   // Link the main label to the 3D position
+  //   label.linkWithMesh(position);
 
-    // Return the label and position for future reference
-    return {
-      label: label,
-      position: position,
-      show: () => {
-        label.isVisible = true;
-      },
-      hide: () => {
-        label.isVisible = false;
-      },
-    };
-  };
+  //   // Return the label and position for future reference
+  //   return {
+  //     label: label,
+  //     position: position,
+  //     show: () => {
+  //       label.isVisible = true;
+  //     },
+  //     hide: () => {
+  //       label.isVisible = false;
+  //     },
+  //   };
+  // };
   const handleCommentInfo = (item) => {
     setcommentinfo(item);
     setcommentinfotable(true);
@@ -6378,106 +6778,177 @@ const BabylonLODManager = ({
   const handlePriorityChange = (priority) => {
     setEditedCommentData({ ...editedCommentData, priority });
   };
+// 1. Move createCommentLabel outside of component or make it stable
+const createCommentLabel = useCallback((comment, index, scene, commentStatusArray, onCommentClick) => {
+  // Create a simple position mesh (invisible) to anchor the label
+  const position = BABYLON.MeshBuilder.CreateBox(
+    `marker-position-${comment.number}`,
+    { size: 0.1 },
+    scene
+  );
+  position.position = new BABYLON.Vector3(
+    comment.coOrdinateX,
+    comment.coOrdinateY,
+    comment.coOrdinateZ
+  );
 
-  // useEffect for showAll comments functionality
-  useEffect(() => {
-    if (!sceneRef.current) return;
-    const scene = sceneRef.current;
+  // Make the position mesh invisible
+  position.isVisible = false;
 
-    // Track existing comment IDs
-    const existingCommentIds = new Set();
-    // allLabels.map((label) => label.commentId)
-    const currentCommentIds = new Set(
-      allComments.map((comment) => comment.number)
-    );
+  // Create the fullscreen UI
+  const advancedTexture = GUI.AdvancedDynamicTexture.CreateFullscreenUI(
+    `UI-${comment.number}`,
+    true,
+    scene
+  );
 
-    // Identify new comments and labels to remove
-    const commentsToAdd = allComments.filter(
-      (comment) => !existingCommentIds.has(comment.number)
-    );
+  // Get the status color from comment status
+  const statusColor =
+    commentStatusArray.find((status) => status.statusname === comment.status)
+      ?.color || "gray";
 
-    const labelsToRemove = allLabels.filter(
-      (label) => !currentCommentIds.has(label.commentId)
-    );
+  // Create the main label (number)
+  const label = new GUI.Rectangle("label");
+  label.background = statusColor || "red";
+  label.height = "20px";
+  label.alpha = 0.8;
+  label.width = "20px";
+  label.thickness = 1;
+  label.linkOffsetY = -10;
+  label.isPointerBlocker = true;
+  label.onPointerClickObservable.add(() => {
+    onCommentClick(comment);
+  });
 
-    // Remove labels that no longer exist
-    if (labelsToRemove.length > 0) {
-      labelsToRemove.forEach((labelElement) => {
-        if (labelElement.label?.dispose) {
-          labelElement.label.dispose();
-        }
-        if (labelElement.tooltip?.dispose) {
-          labelElement.tooltip.dispose();
-        }
-        if (labelElement.position?.dispose) {
-          labelElement.position.dispose();
-        }
-      });
-    }
+  const text = new GUI.TextBlock();
+  text.text = index.toString();
+  text.color = "white";
+  text.fontSize = 10;
 
-    // Update existing labels
-    const updatedLabels = allLabels
-      .filter((label) => currentCommentIds.has(label.commentId))
-      .map((labelElement) => {
-        const updatedComment = allComments.find(
-          (c) => c.number === labelElement.commentId
-        );
+  label.addControl(text);
+  advancedTexture.addControl(label);
 
-        if (updatedComment) {
-          // Update visibility
-          labelElement.label.isVisible = showComment;
-          if (labelElement.tooltip) {
-            labelElement.tooltip.isVisible = showComment;
-          }
-
-          // Update position if changed
-          const newPosition = new BABYLON.Vector3(
-            updatedComment.coOrdinateX,
-            updatedComment.coOrdinateY,
-            updatedComment.coOrdinateZ
-          );
-          if (
-            labelElement.position &&
-            !labelElement.position.position.equals(newPosition)
-          ) {
-            labelElement.position.position = newPosition;
-          }
-
-          // ✅ Always update background color based on updated status
-          const updatedColor =
-            allCommentStatus.find((s) => s.statusname === updatedComment.status)
-              ?.color || "gray";
-          labelElement.label.background = updatedColor;
-        }
-
-        return labelElement;
-      });
-
-    // Add new labels
-    const newLabels = [];
-    commentsToAdd.forEach((comment, index = 1) => {
-      const labelElement = createCommentLabel(comment, index, scene);
-
-      // Set background color based on status
-      const labelColor =
-        allCommentStatus.find((s) => s.statusname === comment.status)?.color ||
-        "gray";
-      labelElement.label.background = labelColor;
-
-      // Set visibility
-      labelElement.label.isVisible = showComment;
-      if (labelElement.tooltip) {
-        labelElement.tooltip.isVisible = showComment;
+  // Add hover behavior
+  position.actionManager = new BABYLON.ActionManager(scene);
+  position.actionManager.registerAction(
+    new BABYLON.ExecuteCodeAction(
+      BABYLON.ActionManager.OnPointerOverTrigger,
+      () => {
+        label.isVisible = true;
       }
+    )
+  );
 
-      labelElement.commentId = comment.number;
+  position.actionManager.registerAction(
+    new BABYLON.ExecuteCodeAction(
+      BABYLON.ActionManager.OnPointerOutTrigger,
+      () => {
+        label.isVisible = false;
+      }
+    )
+  );
 
-      newLabels.push(labelElement);
-    });
+  // Link the main label to the 3D position
+  label.linkWithMesh(position);
 
-    // Update state with combined labels
-    setAllLabels([...updatedLabels, ...newLabels]);
-  }, [allComments, showComment, allCommentStatus]);
+  return {
+    label: label,
+    position: position,
+    commentId: comment.number,
+    advancedTexture: advancedTexture,
+    show: () => {
+      label.isVisible = true;
+    },
+    hide: () => {
+      label.isVisible = false;
+    },
+    dispose: () => {
+      try {
+        if (label?.dispose) label.dispose();
+        if (position?.dispose) position.dispose();
+        if (advancedTexture?.dispose) advancedTexture.dispose();
+      } catch (error) {
+        console.warn("Error disposing label:", error);
+      }
+    }
+  };
+}, []); // Empty dependency array since we pass everything as parameters
+
+// 2. Use refs to track previous values and prevent unnecessary updates
+const prevCommentsRef = useRef([]);
+const prevStatusRef = useRef([]);
+const prevShowCommentRef = useRef(showComment);
+
+// 3. Stable handler function
+const handleCommentClick = useCallback((comment) => {
+  handleCommentInfo(comment);
+}, [handleCommentInfo]);
+
+// 4. Fixed useEffect with proper dependency management
+useEffect(() => {
+  if (!sceneRef.current) return;
+  
+  const scene = sceneRef.current;
+  
+  // Check if we actually need to update
+  const commentsChanged = JSON.stringify(allComments) !== JSON.stringify(prevCommentsRef.current);
+  const statusChanged = JSON.stringify(allCommentStatus) !== JSON.stringify(prevStatusRef.current);
+  const showCommentChanged = showComment !== prevShowCommentRef.current;
+  
+  if (!commentsChanged && !statusChanged && !showCommentChanged) {
+    return; // No changes, skip update
+  }
+
+  // Update refs
+  prevCommentsRef.current = allComments;
+  prevStatusRef.current = allCommentStatus;
+  prevShowCommentRef.current = showComment;
+
+  // Clear existing labels
+  allLabels.forEach((labelElement) => {
+    if (labelElement.dispose) {
+      labelElement.dispose();
+    }
+  });
+
+  // Create new labels only if we have comments
+  if (allComments.length === 0) {
+    setAllLabels([]);
+    return;
+  }
+
+  const newLabels = allComments.map((comment, index) => {
+    const labelElement = createCommentLabel(
+      comment, 
+      index + 1, 
+      scene, 
+      allCommentStatus, 
+      handleCommentClick
+    );
+
+    // Set visibility based on showComment state
+    labelElement.label.isVisible = showComment;
+
+    return labelElement;
+  });
+
+  setAllLabels(newLabels);
+}, [allComments, allCommentStatus, showComment, createCommentLabel, handleCommentClick]);
+
+
+
+// 6. Separate useEffect for visibility updates only
+useEffect(() => {
+  allLabels.forEach((labelElement) => {
+    if (labelElement.label) {
+      labelElement.label.isVisible = showComment;
+    }
+    if (labelElement.tooltip) {
+      labelElement.tooltip.isVisible = showComment;
+    }
+  });
+}, [showComment, allLabels]);
+
 
   const handleDeleteComment = (commentId) => {
     setCurrentDeleteNumber(commentId);
@@ -6813,7 +7284,7 @@ const BabylonLODManager = ({
       )}
 
       {/* comment info*/}
-      {commentinfotable && (
+      {showComment && commentinfotable && (
         <div
           style={{
             position: "absolute",
@@ -7330,7 +7801,7 @@ const BabylonLODManager = ({
             )}
 
             {/* user tag info */}
-            {/* {tagInfoVisible && (
+             {tagInfoVisible && (
               <div
                 style={{
                   position: "absolute",
@@ -7366,7 +7837,7 @@ const BabylonLODManager = ({
                         .map(({ id, field }) => {
                           const key = `taginfo${id}`;
                           const originalValue =
-                            taginfo.originalUsertagInfoDetails?.[key];
+                            selectedMeshInfo.originalUsertagInfoDetails?.[key];
 
                           // Display the field with unit if the value exists, otherwise show "N/A"
                           const label =
@@ -7391,7 +7862,7 @@ const BabylonLODManager = ({
                   )}
                 </div>
               </div>
-            )} */}
+            )} 
 
 
       {speedBar}

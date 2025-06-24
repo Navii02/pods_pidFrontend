@@ -274,8 +274,8 @@ header {
 }
 
 .btn-primary {
-  background-color: #007bff;
-  border-color: #007bff;
+  background-color: #5B66CB;
+  border-color: #5B66CB;
   color: #fff;
 }
 
@@ -1521,26 +1521,26 @@ button#addCommentBtn {
 }
 
 .button-container .btn-cancel {
-  background-color: #f44336;
+  background-color: #D64550;
   color: white;
 }
 
 .button-container .btn-cancel:hover {
-  background-color: #d32f2f;
+  background-color: #D64550;
 }
 
 .button-container .btn-confirm {
-  background-color: #007bff;
+  background-color: #5B66CB;
   color: white;
 }
 
 .button-container .btn-confirm:hover {
-  background-color: #0056b3;
+  background-color: #5B66CB;
 }
 .save-dialog{
   width: 280px;
   border:solid;
-  background-color: #ebebf0;
+  background-color: #f5f6fa;
   margin-left: 25%;
   margin-top: 30%;
   border-radius: 10px;
@@ -1554,7 +1554,7 @@ button#addCommentBtn {
   width: 30px;
   height: 30px;
   border-radius: 50%;
-  background-color: #007bff;
+  background-color: #5B66CB;
   color: white;
   text-align: center;
   line-height: 30px;

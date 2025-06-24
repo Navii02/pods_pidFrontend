@@ -64,9 +64,9 @@ fetchEquipmentlist(projectId)
   try {
     const response = await EditEquipmentlist(editedEquipmentData); 
     if(response.status === 200) {
-      const updatedLineList = [...allEquipementList];
-      updatedLineList[editedRowIndex] = { ...editedEquipmentData, tag: tag };
-      setallEquipementList(updatedLineList);
+      const updatedEquipmentList = [...allEquipementList];
+      updatedEquipmentList[editedRowIndex] = { ...editedEquipmentData, tag: tag };
+      setallEquipementList(updatedEquipmentList);
       setEditedRowIndex(-1);
       seteditedEquipmentData({});
     }
