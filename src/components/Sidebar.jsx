@@ -2,43 +2,31 @@ import React, { useState, useEffect, useRef, useContext } from "react";
 import { useNavigate } from "react-router-dom";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import Alert from "../components/Alert";
-// import "../styles/Sidebar.css";
-import treeIcon from "../assets/images/tree.png";
 import Arearegister from "../components/Tree/Arearegister";
 import DisciplineRegister from "../components/Tree/DisiplineRegister";
 import SystemRegister from "../components/Tree/SystemRegister";
 import ProjectDetails from "./ProjectDetails";
 import { updateProjectContext } from "../context/ContextShare";
+import { Modal } from "react-bootstrap";
 import {
-  faFolderOpen,
   faFighterJet,
-  faBoxes,
-  faSitemap,
-  faGlobe,
   faTags,
   faInfoCircle,
-  faFileAlt,
   faListUl,
   faPenSquare,
-  faBriefcase,
-  faCommentAlt,
-  faChevronDown,
-  faChevronRight,
-  faChevronUp,
-  faPlusCircle,
   faArchive,
   faSliders,
-  faEye,
-  faEyeSlash,
-  faCaretDown,
-  faCaretUp,
-  faSuitcase,
   faLineChart,
-  faPencil,
   faBook,
-  faBoxArchive,
   faBoxesStacked,
+  faSuitcase,
 } from "@fortawesome/free-solid-svg-icons";
+import {
+  AllSavedView,
+  DeleteSavedView,
+  UpdateSavedView,
+} from "../services/CommonApis";
+import DeleteConfirm from "./DeleteConfirm";
 
 function Sidebar({
   onToggle,
@@ -52,6 +40,10 @@ function Sidebar({
   const [activeItem, setActiveItem] = useState(() => {
     return sessionStorage.getItem("activeItem") || "iRoamer";
   });
+
+  const projectString = sessionStorage.getItem("selectedProject");
+  const project = projectString ? JSON.parse(projectString) : null;
+  const projectId = project?.projectId;
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [showProjectName, setShowProjectName] = useState(false);
   const [showProjectDetails, setShowProjectDetails] = useState(true);
@@ -61,12 +53,21 @@ function Sidebar({
     disciplineRegister: false,
     systemRegister: false,
   });
+  const [allSavedViews, setAllSavedViews] = useState([]);
 
   const [showContents, setShowCOntents] = useState(false);
   const [activeLink, setActiveLink] = useState(() => {
     return sessionStorage.getItem("activeLink") || "three";
   });
   const [activeTab, setActiveTab] = useState("");
+  const [editViewDialog, setEditViewDialog] = useState(false);
+  const [editingView, setEditingView] = useState(null);
+  const [editViewName, setEditViewName] = useState("");
+  const [currentDeleteNumber, setCurrentDeleteNumber] = useState(null);
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [confirmMessage, setConfirmMessage] = useState("");
+  const [customAlert, setCustomAlert] = useState(false);
+  const [modalMessage, setModalMessage] = useState("");
 
   // Reset to iRoamer when no project is selected (post-logout)
   useEffect(() => {
@@ -124,6 +125,12 @@ function Sidebar({
     }
   };
 
+  const handleMoveToSavedView = (view) => {
+    if (view) {
+      navigate("/global-model/open", { state: { view: view } });
+    }
+  };
+
   const [openMenus, setOpenMenus] = useState({
     documents: false,
     tags: false,
@@ -136,7 +143,9 @@ function Sidebar({
 
   const handleItemClick = (item) => {
     setActiveItem(item.name);
-    setActiveLink(item.activeLink || item.name.toLowerCase().replace(/\s+/g, ""));
+    setActiveLink(
+      item.activeLink || item.name.toLowerCase().replace(/\s+/g, "")
+    );
 
     if (item.toggleMenu) {
       const newOpenMenus = { ...openMenus };
@@ -148,7 +157,11 @@ function Sidebar({
         }
       });
 
-      if (!openMenus[item.toggleMenu] && item.subItems && item.subItems.length > 0) {
+      if (
+        !openMenus[item.toggleMenu] &&
+        item.subItems &&
+        item.subItems.length > 0
+      ) {
         const firstSubItem = item.subItems[0];
         setActiveItem(firstSubItem.name);
         setActiveTab(firstSubItem.name);
@@ -204,23 +217,23 @@ function Sidebar({
   }, []);
 
   const menuItems = [
-    { 
-      icon: faFighterJet, 
-      name: "iRoamer", 
+    {
+      icon: faFighterJet,
+      name: "iRoamer",
       path: "/iroamer",
-      activeLink: "three"
+      activeLink: "three",
     },
-    { 
-      icon: faArchive, 
-      name: "Bulk Model Import", 
+    {
+      icon: faArchive,
+      name: "Bulk Model Import",
       path: "/bulk-model-import",
-      activeLink: "bulk"
+      activeLink: "bulk",
     },
-    { 
-      icon: faBoxesStacked, 
-      name: "Assign Tags Model", 
+    {
+      icon: faBoxesStacked,
+      name: "Unassigned Tags",
       path: "/assign-tag-models",
-      activeLink: "Model"
+      activeLink: "Model",
     },
     {
       icon: faSliders,
@@ -289,29 +302,29 @@ function Sidebar({
         { name: "Register", path: "/documents/register" },
       ],
     },
-    { 
-      icon: faListUl, 
-      name: "Line List", 
+    {
+      icon: faListUl,
+      name: "Line List",
       path: "/line-list",
-      activeLink: "linelist"
+      activeLink: "linelist",
     },
-    { 
-      icon: faListUl, 
-      name: "Equipment List", 
+    {
+      icon: faListUl,
+      name: "Equipment List",
       path: "/equipment-list",
-      activeLink: "equipmentlist"
+      activeLink: "equipmentlist",
     },
-    { 
-      icon: faListUl, 
-      name: "Valve List", 
+    {
+      icon: faListUl,
+      name: "Valve List",
       path: "/valve-list",
-      activeLink: "valvelist"
+      activeLink: "valvelist",
     },
-    { 
-      icon: faPenSquare, 
-      name: "Smart P&ID", 
+    {
+      icon: faPenSquare,
+      name: "Smart P&ID",
       path: "/spid",
-      activeLink: "spid"
+      activeLink: "spid",
     },
     {
       icon: faListUl,
@@ -350,28 +363,107 @@ function Sidebar({
         { name: "Comment Status Table", path: "/comment-status" },
       ],
     },
-    { 
-      icon: faSuitcase, 
-      name: "Color Management", 
+    {
+      icon: faSuitcase,
+      name: "Color Management",
       path: "/color-management",
-      activeLink: "color"
+      activeLink: "color",
     },
-    { 
-      icon: faSuitcase, 
-      name: "Work Package", 
+    {
+      icon: faSuitcase,
+      name: "Work Package",
       path: "/work-package",
-      activeLink: "package"
+      activeLink: "package",
     },
-    { 
-      icon: faLineChart, 
-      name: "4D Plan", 
+    {
+      icon: faLineChart,
+      name: "4D Plan",
       path: "/4d-plan",
-      activeLink: "4dplan"
+      activeLink: "4dplan",
     },
   ];
 
   const handleShowContents = () => {
     setShowCOntents(!showContents);
+  };
+  const getAllSavedViews = async (projectId) => {
+    try {
+      const response = await AllSavedView(projectId);
+      if (response.status === 200) {
+        setAllSavedViews(response.data);
+      }
+    } catch (error) {
+      console.error("Failed to fetch all saved views table data:", error);
+    }
+  };
+
+  useEffect(() => {
+    getAllSavedViews(projectId);
+  }, [updateProject]);
+
+  const handleEditClick = (view) => {
+    setEditingView(view);
+    setEditViewName(view.name);
+    setEditViewDialog(true);
+  };
+
+  const handleCloseEditView = () => {
+    setEditViewDialog(false);
+    setEditingView(null);
+    setEditViewName("");
+  };
+  const handleDeleteView = (saveViewMenu) => {
+    setCurrentDeleteNumber(saveViewMenu);
+    setConfirmMessage("Are you sure you want to delete?");
+    setShowConfirm(true);
+  };
+  const handleUpdateView = async () => {
+    if (!editViewName.trim()) {
+      return;
+    }
+    // Check if a view with the same name already exists
+    const trimmedName = editViewName.trim();
+    const viewExists = allSavedViews.some(
+      (view) => view.name.trim().toLowerCase() === trimmedName.toLowerCase()
+    );
+    console.log("viewExists", viewExists);
+    if (viewExists) {
+      setCustomAlert(true);
+      setModalMessage("A view with this name already exists");
+      return;
+    }
+
+    const data = {
+      projectId: projectId,
+      oldName: editingView.name,
+      newName: editViewName,
+    };
+    console.log(data);
+    const response = await UpdateSavedView(data);
+    if (response.status === 200) {
+      setCustomAlert(true);
+      setModalMessage("View updated..");
+      getAllSavedViews(projectId);
+      handleCloseEditView();
+    } else {
+      setCustomAlert(true);
+      setModalMessage("Something went wrong on updatio.Please try again..");
+      handleCloseEditView();
+    }
+  };
+  const handleCancelDelete = () => {
+    setShowConfirm(false);
+  };
+  const handleConfirmDelete = async () => {
+    const response = await DeleteSavedView(projectId, currentDeleteNumber);
+
+    if (response.status === 200) {
+      setCustomAlert(true);
+      setModalMessage("View deleted successfully..");
+      getAllSavedViews(projectId);
+      setShowConfirm(false);
+      setCurrentDeleteNumber(null);
+    }
   };
 
   return (
@@ -386,8 +478,8 @@ function Sidebar({
             <i class="fa fa-folder-open"></i>Open Project
             <div class="dropdown-content"></div>
           </div>
-          {showProjectName && (
-            showContents ? (
+          {showProjectName &&
+            (showContents ? (
               <div
                 style={{
                   width: "100%",
@@ -428,14 +520,15 @@ function Sidebar({
                   ></i>
                 </div>
               </>
-            )
-          )}
+            ))}
         </li>
         {menuItems.map((item, index) => (
           <li key={index}>
             <div
               className={
-                activeLink === item.activeLink ? "sideLnkActive" : "sideLnkInactive"
+                activeLink === item.activeLink
+                  ? "sideLnkActive"
+                  : "sideLnkInactive"
               }
               onClick={() => handleItemClick(item)}
               style={{ cursor: "pointer" }}
@@ -470,6 +563,87 @@ function Sidebar({
           </li>
         ))}
       </ul>
+      <div id="viewsDiv" className="panelBox">
+        {allSavedViews.length > 0 ? (
+          <div>
+            <div className="lbHead">Views</div>
+            <div
+              id="viewsList"
+              className="lbList"
+              style={{ paddingLeft: "10px", paddingRight: "10px" }}
+            >
+              {allSavedViews.map((view, index) => (
+                <div key={view.id} className="lbLi">
+                  <p>{index + 1}</p>
+                  <a
+                    style={{ cursor: "pointer" }}
+                    onClick={() => handleMoveToSavedView(view)}
+                  >
+                    {view.name}
+                  </a>
+                  <i
+                    className="fa-solid fa-pencil"
+                    title="Edite"
+                    onClick={() => handleEditClick(view)}
+                  ></i>
+                  <img
+                    className="lbLiDelBut"
+                    src="/images/delete.png"
+                    title="Delete"
+                    alt="Delete"
+                    onClick={() => handleDeleteView(view.name)}
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <div id="viewsList" className="lbList">
+            <span>(Empty)</span>
+          </div>
+        )}
+      </div>
+
+      {/* Edit View Modal */}
+      <Modal
+        onHide={handleCloseEditView}
+        show={editViewDialog}
+        backdrop="static"
+        keyboard={false}
+        dialogClassName="custom-modal"
+      >
+        <div className="save-dialog">
+          <div className="title-dialog">
+            <p className="text-light">Edit view</p>
+            <p className="text-light cross" onClick={handleCloseEditView}>
+              &times;
+            </p>
+          </div>
+          <div className="dialog-input">
+            <label>Name*</label>
+            <input
+              type="text"
+              value={editViewName}
+              onChange={(e) => setEditViewName(e.target.value)}
+            />
+          </div>
+          <div
+            className="dialog-button"
+            style={{
+              display: "flex",
+              justifyContent: "flex-end",
+              gap: "10px",
+            }}
+          >
+            <button className="btn btn-secondary" onClick={handleCloseEditView}>
+              Cancel
+            </button>
+            <button className="btn btn-dark" onClick={handleUpdateView}>
+              Save
+            </button>
+          </div>
+        </div>
+      </Modal>
 
       {openModal.areaRegister && (
         <Arearegister
@@ -491,6 +665,20 @@ function Sidebar({
       )}
 
       {showProjectDetails && <ProjectDetails />}
+
+      {showConfirm && (
+        <DeleteConfirm
+          message="Are you sure you want to delete?"
+          onConfirm={handleConfirmDelete}
+          onCancel={handleCancelDelete}
+        />
+      )}
+      {customAlert && (
+        <Alert
+          message={modalMessage}
+          onAlertClose={() => setCustomAlert(false)}
+        />
+      )}
     </>
   );
 }

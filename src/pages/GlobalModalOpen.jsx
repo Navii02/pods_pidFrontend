@@ -9,8 +9,11 @@ import {
 } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { Axis3d } from "lucide-react";
+import { useLocation } from "react-router-dom";
+import { useEffect } from "react";
 
-function GlobalModalOpen({leftNavVisible}) {
+function GlobalModalOpen({leftNavVisible,
+  }) {
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   const mockContent = {
@@ -49,6 +52,9 @@ function GlobalModalOpen({leftNavVisible}) {
   const [backgroundTheme, setBackgroundTheme] = useState("DEFAULT");
   const [groundSettingsVisible, setGroundSettingsVisible] = useState(false);
   const [waterSettingsVisible, setWaterSettingsVisible] = useState(false);
+  const [waterSettingParameter, setWaterSettingParameter] = useState(null);
+  const [baseSettingParameter, setBaseSettingParameter] = useState(null);
+  const [groundSettingParameter, setGroundSettingParameter] = useState(null);
 
   const [clippingSetting, setClippingSetting] = useState(false);
 
@@ -147,6 +153,8 @@ function GlobalModalOpen({leftNavVisible}) {
     setActiveButton(buttonName);
     setSavedViewDialog(true);
   };
+   const location = useLocation();
+   let modalData = location.state?.view || [];
 
   return (
     <div>
@@ -166,6 +174,18 @@ function GlobalModalOpen({leftNavVisible}) {
             showComment={showComment}
             savedViewDialog={savedViewDialog}
             setSavedViewDialog={setSavedViewDialog}
+            modalData={modalData}
+            backgroundTheme={backgroundTheme}
+            setBackgroundTheme={setBackgroundTheme}
+            setGroundSettingParameter={setGroundSettingParameter}
+            setWaterSettingParameter={setWaterSettingParameter}
+            waterSettingParameter={waterSettingParameter}
+            baseSettingParameter={baseSettingParameter}
+            groundSettingParameter={groundSettingParameter}
+            groundSettingsVisible={groundSettingsVisible}
+                setGroundSettingsVisible={setGroundSettingsVisible}
+                waterSettingsVisible={waterSettingsVisible}
+                setWaterSettingsVisible={setWaterSettingsVisible}
           />
         </div>
 

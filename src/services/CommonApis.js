@@ -88,14 +88,11 @@ export const deleteProject = async (projectId) => {
 };
 
 export const getDocumentsdetails = async (projectId) => {
- // console.log(projectId);
-
   try {
     const response = await commonApi(
       "GET",
       `${url}/api/getdocumentsdetails?projectId=${projectId}`
     );
-   // console.log(response);
     
     return response;
   } catch (error) {
@@ -103,3 +100,57 @@ export const getDocumentsdetails = async (projectId) => {
     throw error;
   }
 };
+
+// saved view
+export const SaveSavedView = async(data)=>{
+   try {
+    const response = await commonApi(
+      "POST",
+      `${url}/api/save-saved-view`,
+      data
+      
+    );
+    return response;
+  } catch (error) {
+    throw error;
+  }
+}
+
+// allSaved view
+
+export const AllSavedView = async(projectId)=>{
+   try {
+    const response = await commonApi(
+      "GET",
+      `${url}/api/all-saved-view/${projectId}`     
+    );
+    return response;
+  } catch (error) {
+    throw error;
+  }
+}
+
+export const DeleteSavedView = async(projectId,viewid)=>{
+   try {
+    const response = await commonApi(
+      "DELETE",
+      `${url}/api/delete-saved-view/${projectId}/${viewid}`     
+    );
+    return response;
+  } catch (error) {
+    throw error;
+  }
+}
+
+export const UpdateSavedView = async(data)=>{
+   try {
+    const response = await commonApi(
+      "PUT",
+      `${url}/api/update-saved-view` ,data    
+    );
+    console.log(response)
+    return response;
+  } catch (error) {
+    throw error;
+  }
+}

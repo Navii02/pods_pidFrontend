@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState,useEffect,useContext } from 'react';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
 import Sidebar from '../components/Sidebar';
 import ProjectModal from '../components/ProjectModal';
 import { Outlet } from 'react-router-dom';
-import { getProjects, saveProject, updateProject, deleteProject } from '../services/CommonApis';
+import { getProjects, saveProject, updateProject, deleteProject, AllSavedView } from '../services/CommonApis';
+import { updateProjectContext } from '../context/ContextShare';
 
 const Home = () => {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
@@ -13,7 +14,13 @@ const Home = () => {
   const [projects, setProjects] = useState([]);
   const [projectDetails, setProjectDetails] = useState([]);
   const [error, setError] = useState('');
+  const { updateProject } = useContext(updateProjectContext);
 
+   const [allSavedViews, setAllSavedViews] = useState([]);
+  
+    const projectString = sessionStorage.getItem("selectedProject");
+    const project = projectString ? JSON.parse(projectString) : null;
+    const projectId = project?.projectId;
   const handleSidebarToggle = (collapsed) => {
     setIsSidebarCollapsed(collapsed);
   };
@@ -40,6 +47,20 @@ const Home = () => {
   const handleCloseProjectModal = () => {
     setIsProjectModalOpen(false);
   };
+    const getAllSavedViews = async (projectId) => {
+      try {
+        const response = await AllSavedView(projectId);
+        if (response.status === 200) {
+          setAllSavedViews(response.data);
+        }
+      } catch (error) {
+        console.error("Failed to fetch all saved views table data:", error);
+      }
+    };
+  
+    useEffect(() => {
+      getAllSavedViews(projectId);
+    }, [updateProject]);
 
   return (
     <div className="d-flex flex-column min-vh-100">
@@ -62,6 +83,8 @@ const Home = () => {
             setProjectname={setProjectname}
             projectName={projectName}
             onOpenProjectModal={handleOpenProjectModal}
+            allSavedViews={allSavedViews}
+          
           />
         </aside>
 

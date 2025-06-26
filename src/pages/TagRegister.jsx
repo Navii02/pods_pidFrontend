@@ -242,122 +242,123 @@ const TagRegister = () => {
   }
 
   return (
-    <div className='w-100'>
-      <div id="bulkImportDiv">
-        <div className="page">
-          <section className="page-section">
-            <div className="row">
-              <h4>Tag Registration</h4>
-            </div>
-          </section>
-          <hr />
-          <section className="page-section">
-            <Form onSubmit={handleSubmit} className="dialog-input" style={{ fontSize: "13px", lineHeight: "30px" }}>
+   
+     <div
+      style={{
+        zIndex: "1",
+        position: "absolute",
+        width: "100%",
+        backgroundColor: "#33334c",
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "center",
+        }}
+      >
+        <div id="bulkImportDiv">
+          <div className="page">
+            <section className="page-section">
+              <div className="row">
+                <h4>Tag Registration</h4>
+              </div>
+            </section>
+            <hr />
+            <section className="page-section">
               <div className="row">
                 <div className="col-md-6">
-                  <Form.Group className="mb-3" controlId="tagNumber">
-                    <Form.Label>
+                  <div
+                    className="dialog-input"
+                    style={{ fontSize: "13px", lineHeight: "30px" }}
+                  >
+                    <label>
                       Tag number<span style={{ fontSize: "11px" }}>*</span>
-                    </Form.Label>
-                    <Form.Control
+                    </label>
+                    <input
                       type="text"
-                      className='bg-white'
-                      name="tagNumber"
+                     name="tagNumber"
                       value={formData.tagNumber}
                       onChange={handleChange}
                       required
-                      pattern="[A-Za-z0-9\-]+"
-                      title="Only letters, numbers, and hyphens are allowed"
                     />
-                  </Form.Group>
-
-                  <Form.Group className="mb-3" controlId="parentTag">
-                    <Form.Label>Parent Tag:</Form.Label>
-                    {isLoadingParentTags ? (
-                      <Spinner animation="border" size="sm" />
-                    ) : (
-                      <Form.Select
-                        name="parentTag"
-                        className='bg-white text-dark'
-                        value={formData.parentTag}
-                        onChange={handleChange}
-                        style={{ width: "100%" }}
-                      >
-                        <option value="">Select Parent Tag</option>
-                        {parentTagOptions.map(tag => (
-                          <option key={tag.id} value={tag.tagNumber}>
-                            {tag.tagNumber} - {tag.name}
-                          </option>
-                        ))}
-                      </Form.Select>
-                    )}
-                  </Form.Group>
-
-                  <Form.Group className="mb-3" controlId="name">
-                    <Form.Label>Name</Form.Label>
-                    <Form.Control
+                    <label>Parent Tag:</label>
+    
+                    <select
+                    name="parentTag"
+                      value={formData.parentTag}
+                      onChange={handleChange}
+                      style={{ width: "100%" }}
+                    >
+                      <option value="">Select Parent Tag</option>
+                      {parentTagOptions.map((tag, index) => (
+                        <option key={index} value={tag.name}>
+                          {tag.number}
+                        </option>
+                      ))}
+                    </select>
+                    <label>Name</label>
+                    <input
                       type="text"
                       name="name"
-                      className='bg-white'
                       value={formData.name}
                       onChange={handleChange}
                     />
-                  </Form.Group>
-
-                  <Form.Group className="mb-3" controlId="type">
-                    <Form.Label>
+                    <label>
                       Type<span style={{ fontSize: "11px" }}>*</span>
-                    </Form.Label>
-                    <Form.Select
-                      name="type"
-                      value={formData.type}
-                      onChange={handleChange}
-                      className='bg-white text-dark'
-                      required
+                    </label>
+    
+                    <select
+                     name="type"
+                       value={formData.type}
+                       onChange={handleChange}
+                         required
                       style={{ width: "100%" }}
                     >
-                      <option value="" disabled>Choose type</option>
+                      <option value="" disabled>
+                        Choose type
+                      </option>
                       <option value="Line">Line</option>
                       <option value="Equipment">Equipment</option>
                       <option value="Valve">Valve</option>
                       <option value="Structural">Structural</option>
                       <option value="Other">Other</option>
-                    </Form.Select>
-                  </Form.Group>
+                    </select>
+                    <label>Model</label>
 
-                  <Form.Group className="mb-3" controlId="model">
-                    <Form.Label>Model</Form.Label>
                     <br />
-                    <Button
-                      variant="light"
-                      className="mt-1"
+                    <button
                       style={{ fontSize: "13px" }}
+                      className="btn mt-1 btn-light"
                       onClick={OpenModalFloatingWindow}
                     >
                       Choose File
-                    </Button>
+                    </button>
                     <br />
                     <p style={{ fontSize: "13px" }}>
+                      {" "}
                       {file || "No file selected"}
                     </p>
-                  </Form.Group>
+
+                    {/* <div className="row z-up" style={{ paddingTop: "20px" }}>
+                      <div className="col">
+                        {fileName && <FileUploadProgress progress={progress} />}
+                      </div>
+                    </div> */}
+                  </div>
                 </div>
               </div>
               <hr />
-              <Button
-                variant="light"
-                type="submit"
+              <button
+                onClick={handleSubmit}
+                className="btn btn-light"
                 style={{ fontSize: "12px" }}
-                disabled={isLoading}
               >
-                {isLoading ? (
-                  <>
-                    <Spinner as="span" animation="border" size="sm" /> Registering...
-                  </>
-                ) : 'Register'}
-              </Button>
-            </Form>
-          </section>
+                Register
+              </button>
+            </section>
+          </div>
         </div>
       </div>
 

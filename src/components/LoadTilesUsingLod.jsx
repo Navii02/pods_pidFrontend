@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState, useCallback } from "react";
 import * as BABYLON from "@babylonjs/core";
 import "@babylonjs/loaders";
 import "@babylonjs/gui";
-import {Modal} from 'react-bootstrap';
+import { Modal } from "react-bootstrap";
 import { FreeCameraMouseInput } from "../Utils/FlyControls";
 import { FreeCameraTouchInput } from "../Utils/TouchControls";
 import * as GUI from "@babylonjs/gui";
@@ -29,6 +29,8 @@ import { useContext } from "react";
 import { getStatustableData } from "../services/CommentApi";
 import DeleteConfirm from "../components/DeleteConfirm";
 import Alert from "./Alert";
+import { AllSavedView, SaveSavedView } from "../services/CommonApis";
+import { WaterMaterial } from "@babylonjs/materials";
 
 class WebWorkerTilesetLODManager {
   constructor(scene, camera, highlightRefs = null) {
@@ -1863,275 +1865,285 @@ class WebWorkerTilesetLODManager {
     });
   }
 
-findAllMeshesByTag(tagName) {
-  const results = [];
-  
-  // Search through all active LOD meshes
-  for (const [nodeNumber, lodMesh] of this.activeMeshes.entries()) {
-    if (!lodMesh.metadata || !lodMesh.metadata.vertexMappings) {
-      continue;
+  findAllMeshesByTag(tagName) {
+    const results = [];
+
+    // Search through all active LOD meshes
+    for (const [nodeNumber, lodMesh] of this.activeMeshes.entries()) {
+      if (!lodMesh.metadata || !lodMesh.metadata.vertexMappings) {
+        continue;
+      }
+
+      // Find all mappings in this mesh that match the tag
+      const matchingMappings = lodMesh.metadata.vertexMappings.filter(
+        (mapping) => {
+          return (
+            mapping.name === tagName ||
+            mapping.fileName === tagName ||
+            mapping.meshId === tagName ||
+            mapping.metadataId === tagName ||
+            (mapping.parentFileName && mapping.parentFileName === tagName) ||
+            // Also check for tag-based identifiers
+            (mapping.tag && mapping.tag === tagName) ||
+            (mapping.tagId && mapping.tagId === tagName)
+          );
+        }
+      );
+
+      // Add each matching mapping as a separate result
+      matchingMappings.forEach((mapping) => {
+        results.push({
+          lodMesh,
+          mapping,
+          nodeNumber,
+          depth: lodMesh.metadata.depth,
+        });
+      });
     }
 
-    // Find all mappings in this mesh that match the tag
-    const matchingMappings = lodMesh.metadata.vertexMappings.filter(mapping => {
-      return (
-        mapping.name === tagName ||
-        mapping.fileName === tagName ||
-        mapping.meshId === tagName ||
-        mapping.metadataId === tagName ||
-        (mapping.parentFileName && mapping.parentFileName === tagName) ||
-        // Also check for tag-based identifiers
-        (mapping.tag && mapping.tag === tagName) ||
-        (mapping.tagId && mapping.tagId === tagName)
+    return results;
+  }
+
+  // UPDATED: Select tag that may span multiple nodes
+  selectTagInLOD(tagName) {
+    console.log("🔍 Searching for tag across all LOD meshes:", tagName);
+
+    const results = this.findAllMeshesByTag(tagName);
+
+    if (results.length === 0) {
+      console.warn("❌ Tag not found in any LOD mesh:", tagName);
+      return null;
+    }
+
+    console.log(`✅ Found tag in ${results.length} LOD mesh(es):`, {
+      tagName,
+      meshCount: results.length,
+      nodes: results.map((r) => r.nodeNumber),
+      depths: results.map((r) => r.depth),
+    });
+
+    // Clear any existing highlights
+    this.clearAllHighlights();
+
+    // Highlight ALL occurrences of the tag
+    let totalHighlighted = 0;
+    results.forEach((result, index) => {
+      const { lodMesh, mapping, nodeNumber, depth } = result;
+
+      console.log(
+        `🎯 Highlighting tag part ${index + 1}/${
+          results.length
+        } in node ${nodeNumber}:`,
+        {
+          meshName: lodMesh.name,
+          mapping: {
+            meshId: mapping.meshId,
+            name: mapping.name,
+            startVertex: mapping.startVertex,
+            vertexCount: mapping.vertexCount,
+          },
+        }
       );
-    });
 
-    // Add each matching mapping as a separate result
-    matchingMappings.forEach(mapping => {
-      results.push({
-        lodMesh,
-        mapping,
-        nodeNumber,
-        depth: lodMesh.metadata.depth
-      });
-    });
-  }
-
-  return results;
-}
-
-// UPDATED: Select tag that may span multiple nodes
-selectTagInLOD(tagName) {
-  console.log("🔍 Searching for tag across all LOD meshes:", tagName);
-
-  const results = this.findAllMeshesByTag(tagName);
-  
-  if (results.length === 0) {
-    console.warn("❌ Tag not found in any LOD mesh:", tagName);
-    return null;
-  }
-
-  console.log(`✅ Found tag in ${results.length} LOD mesh(es):`, {
-    tagName,
-    meshCount: results.length,
-    nodes: results.map(r => r.nodeNumber),
-    depths: results.map(r => r.depth)
-  });
-
-  // Clear any existing highlights
-  this.clearAllHighlights();
-
-  // Highlight ALL occurrences of the tag
-  let totalHighlighted = 0;
-  results.forEach((result, index) => {
-    const { lodMesh, mapping, nodeNumber, depth } = result;
-    
-    console.log(`🎯 Highlighting tag part ${index + 1}/${results.length} in node ${nodeNumber}:`, {
-      meshName: lodMesh.name,
-      mapping: {
-        meshId: mapping.meshId,
-        name: mapping.name,
-        startVertex: mapping.startVertex,
-        vertexCount: mapping.vertexCount
+      if (lodMesh.highlightOriginalMesh) {
+        lodMesh.highlightOriginalMesh(mapping.meshId);
+        totalHighlighted++;
       }
     });
 
-    if (lodMesh.highlightOriginalMesh) {
-      lodMesh.highlightOriginalMesh(mapping.meshId);
-      totalHighlighted++;
+    // Store multi-node selection state
+    if (this.highlightRefs) {
+      this.highlightRefs.currentHighlightedMeshRef.current = results[0].lodMesh; // Primary mesh
+      this.highlightRefs.currentHighlightedMeshIdRef.current = tagName;
+      this.highlightRefs.multiNodeSelection = results; // Store all highlighted parts
     }
-  });
 
-  // Store multi-node selection state
-  if (this.highlightRefs) {
-    this.highlightRefs.currentHighlightedMeshRef.current = results[0].lodMesh; // Primary mesh
-    this.highlightRefs.currentHighlightedMeshIdRef.current = tagName;
-    this.highlightRefs.multiNodeSelection = results; // Store all highlighted parts
+    console.log(
+      `✅ Successfully highlighted ${totalHighlighted} parts of tag "${tagName}"`
+    );
+
+    return {
+      tagName,
+      results,
+      totalParts: results.length,
+      highlightedParts: totalHighlighted,
+      nodes: results.map((r) => r.nodeNumber),
+      isMultiNode: results.length > 1,
+    };
   }
 
-  console.log(`✅ Successfully highlighted ${totalHighlighted} parts of tag "${tagName}"`);
-  
-  return {
-    tagName,
-    results,
-    totalParts: results.length,
-    highlightedParts: totalHighlighted,
-    nodes: results.map(r => r.nodeNumber),
-    isMultiNode: results.length > 1
-  };
-}
+  // UPDATED: Enhanced focus method for multi-node tags
+  selectAndFocusTag(tagName, shouldFocus = false) {
+    const result = this.selectTagInLOD(tagName);
 
-// UPDATED: Enhanced focus method for multi-node tags
-selectAndFocusTag(tagName, shouldFocus = false) {
-  const result = this.selectTagInLOD(tagName);
-  
-  if (!result || !shouldFocus) {
+    if (!result || !shouldFocus) {
+      return result;
+    }
+
+    // Calculate combined bounding box for all parts of the tag
+    try {
+      let minX = Infinity,
+        minY = Infinity,
+        minZ = Infinity;
+      let maxX = -Infinity,
+        maxY = -Infinity,
+        maxZ = -Infinity;
+      let hasValidBounds = false;
+
+      result.results.forEach(({ lodMesh, mapping }) => {
+        const meshData = lodMesh.extractIndividualMeshData(mapping.meshIndex);
+        if (meshData && meshData.positions) {
+          // Calculate bounds for this part
+          for (let i = 0; i < meshData.positions.length; i += 3) {
+            const x = meshData.positions[i];
+            const y = meshData.positions[i + 1];
+            const z = meshData.positions[i + 2];
+
+            minX = Math.min(minX, x);
+            minY = Math.min(minY, y);
+            minZ = Math.min(minZ, z);
+            maxX = Math.max(maxX, x);
+            maxY = Math.max(maxY, y);
+            maxZ = Math.max(maxZ, z);
+            hasValidBounds = true;
+          }
+        }
+      });
+
+      if (hasValidBounds) {
+        // Calculate center and size of combined bounding box
+        const center = new BABYLON.Vector3(
+          (minX + maxX) / 2,
+          (minY + maxY) / 2,
+          (minZ + maxZ) / 2
+        );
+
+        const size = Math.max(maxX - minX, maxY - minY, maxZ - minZ);
+
+        console.log(`🎯 Focusing on multi-node tag "${tagName}":`, {
+          center: { x: center.x, y: center.y, z: center.z },
+          size,
+          totalParts: result.totalParts,
+        });
+
+        // Focus camera on the combined bounds
+        this.focusCameraOnPoint(center, size);
+      }
+    } catch (error) {
+      console.error("Error focusing on multi-node tag:", error);
+    }
+
     return result;
   }
 
-  // Calculate combined bounding box for all parts of the tag
-  try {
-    let minX = Infinity, minY = Infinity, minZ = Infinity;
-    let maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
-    let hasValidBounds = false;
+  // UPDATED: Enhanced clear highlights to handle multi-node selections
+  clearAllHighlights() {
+    console.log("🧹 Clearing all highlights (including multi-node selections)");
 
-    result.results.forEach(({ lodMesh, mapping }) => {
-      const meshData = lodMesh.extractIndividualMeshData(mapping.meshIndex);
-      if (meshData && meshData.positions) {
-        // Calculate bounds for this part
-        for (let i = 0; i < meshData.positions.length; i += 3) {
-          const x = meshData.positions[i];
-          const y = meshData.positions[i + 1];
-          const z = meshData.positions[i + 2];
-
-          minX = Math.min(minX, x);
-          minY = Math.min(minY, y);
-          minZ = Math.min(minZ, z);
-          maxX = Math.max(maxX, x);
-          maxY = Math.max(maxY, y);
-          maxZ = Math.max(maxZ, z);
-          hasValidBounds = true;
-        }
+    // Clear highlights from all LOD meshes
+    for (const [nodeNumber, lodMesh] of this.activeMeshes.entries()) {
+      if (lodMesh.removeHighlight) {
+        lodMesh.removeHighlight();
       }
-    });
-
-    if (hasValidBounds) {
-      // Calculate center and size of combined bounding box
-      const center = new BABYLON.Vector3(
-        (minX + maxX) / 2,
-        (minY + maxY) / 2,
-        (minZ + maxZ) / 2
-      );
-
-      const size = Math.max(maxX - minX, maxY - minY, maxZ - minZ);
-
-      console.log(`🎯 Focusing on multi-node tag "${tagName}":`, {
-        center: { x: center.x, y: center.y, z: center.z },
-        size,
-        totalParts: result.totalParts
-      });
-
-      // Focus camera on the combined bounds
-      this.focusCameraOnPoint(center, size);
     }
-  } catch (error) {
-    console.error("Error focusing on multi-node tag:", error);
+
+    // Clear any manager-level highlight references
+    if (this.highlightRefs) {
+      if (this.highlightRefs.currentHighlightedMeshRef) {
+        this.highlightRefs.currentHighlightedMeshRef.current = null;
+      }
+      if (this.highlightRefs.currentHighlightedMeshIdRef) {
+        this.highlightRefs.currentHighlightedMeshIdRef.current = null;
+      }
+      // Clear multi-node selection state
+      if (this.highlightRefs.multiNodeSelection) {
+        this.highlightRefs.multiNodeSelection = null;
+      }
+    }
+
+    // Clear traditional highlight
+    this.unhighlightMesh();
+
+    console.log("✅ All highlights cleared");
   }
 
-  return result;
-}
-
-// UPDATED: Enhanced clear highlights to handle multi-node selections
-clearAllHighlights() {
-  console.log("🧹 Clearing all highlights (including multi-node selections)");
-  
-  // Clear highlights from all LOD meshes
-  for (const [nodeNumber, lodMesh] of this.activeMeshes.entries()) {
-    if (lodMesh.removeHighlight) {
-      lodMesh.removeHighlight();
+  // NEW: Get information about current multi-node selection
+  getCurrentMultiNodeSelection() {
+    if (this.highlightRefs && this.highlightRefs.multiNodeSelection) {
+      const selection = this.highlightRefs.multiNodeSelection;
+      return {
+        tagName: this.highlightRefs.currentHighlightedMeshIdRef.current,
+        totalParts: selection.length,
+        nodes: selection.map((r) => r.nodeNumber),
+        depths: selection.map((r) => r.depth),
+        meshNames: selection.map((r) => r.lodMesh.name),
+        isMultiNode: selection.length > 1,
+      };
     }
+    return null;
   }
 
-  // Clear any manager-level highlight references
-  if (this.highlightRefs) {
-    if (this.highlightRefs.currentHighlightedMeshRef) {
-      this.highlightRefs.currentHighlightedMeshRef.current = null;
-    }
-    if (this.highlightRefs.currentHighlightedMeshIdRef) {
-      this.highlightRefs.currentHighlightedMeshIdRef.current = null;
-    }
-    // Clear multi-node selection state
-    if (this.highlightRefs.multiNodeSelection) {
-      this.highlightRefs.multiNodeSelection = null;
-    }
-  }
-
-  // Clear traditional highlight
-  this.unhighlightMesh();
-  
-  console.log("✅ All highlights cleared");
-}
-
-// NEW: Get information about current multi-node selection
-getCurrentMultiNodeSelection() {
-  if (this.highlightRefs && this.highlightRefs.multiNodeSelection) {
-    const selection = this.highlightRefs.multiNodeSelection;
+  // NEW: Utility to find which nodes contain parts of a specific tag
+  getNodesContainingTag(tagName) {
+    const results = this.findAllMeshesByTag(tagName);
     return {
-      tagName: this.highlightRefs.currentHighlightedMeshIdRef.current,
-      totalParts: selection.length,
-      nodes: selection.map(r => r.nodeNumber),
-      depths: selection.map(r => r.depth),
-      meshNames: selection.map(r => r.lodMesh.name),
-      isMultiNode: selection.length > 1
+      tagName,
+      nodeNumbers: [...new Set(results.map((r) => r.nodeNumber))],
+      totalParts: results.length,
+      isMultiNode: results.length > 1,
+      details: results.map((r) => ({
+        nodeNumber: r.nodeNumber,
+        depth: r.depth,
+        meshName: r.lodMesh.name,
+        partName: r.mapping.name || r.mapping.meshId,
+      })),
     };
   }
-  return null;
-}
 
-// NEW: Utility to find which nodes contain parts of a specific tag
-getNodesContainingTag(tagName) {
-  const results = this.findAllMeshesByTag(tagName);
-  return {
-    tagName,
-    nodeNumbers: [...new Set(results.map(r => r.nodeNumber))],
-    totalParts: results.length,
-    isMultiNode: results.length > 1,
-    details: results.map(r => ({
-      nodeNumber: r.nodeNumber,
-      depth: r.depth,
-      meshName: r.lodMesh.name,
-      partName: r.mapping.name || r.mapping.meshId
-    }))
-  };
-}
+  // NEW: Enhanced method to check if a tag spans multiple nodes
+  isTagMultiNode(tagName) {
+    const results = this.findAllMeshesByTag(tagName);
+    const uniqueNodes = new Set(results.map((r) => r.nodeNumber));
+    return {
+      isMultiNode: uniqueNodes.size > 1,
+      nodeCount: uniqueNodes.size,
+      partCount: results.length,
+      nodes: Array.from(uniqueNodes),
+    };
+  }
 
-// NEW: Enhanced method to check if a tag spans multiple nodes
-isTagMultiNode(tagName) {
-  const results = this.findAllMeshesByTag(tagName);
-  const uniqueNodes = new Set(results.map(r => r.nodeNumber));
-  return {
-    isMultiNode: uniqueNodes.size > 1,
-    nodeCount: uniqueNodes.size,
-    partCount: results.length,
-    nodes: Array.from(uniqueNodes)
-  };
-}
+  // Helper method to focus camera
+  focusCameraOnPoint(center, size) {
+    if (!this.camera) return;
 
+    const distance = size * 2; // Adjust multiplier as needed
+    const direction = this.camera.position.subtract(center).normalize();
+    const newPosition = center.add(direction.scale(distance));
 
+    // Animate camera to new position
+    BABYLON.Animation.CreateAndStartAnimation(
+      "cameraFocus",
+      this.camera,
+      "position",
+      30, // fps
+      30, // duration frames
+      this.camera.position,
+      newPosition,
+      BABYLON.Animation.ANIMATIONLOOPMODE_CONSTANT
+    );
 
-// Helper method to focus camera
-focusCameraOnPoint(center, size) {
-  if (!this.camera) return;
-
-  const distance = size * 2; // Adjust multiplier as needed
-  const direction = this.camera.position.subtract(center).normalize();
-  const newPosition = center.add(direction.scale(distance));
-
-  // Animate camera to new position
-  BABYLON.Animation.CreateAndStartAnimation(
-    "cameraFocus",
-    this.camera,
-    "position",
-    30, // fps
-    30, // duration frames
-    this.camera.position,
-    newPosition,
-    BABYLON.Animation.ANIMATIONLOOPMODE_CONSTANT
-  );
-
-  // Update camera target
-  BABYLON.Animation.CreateAndStartAnimation(
-    "cameraTarget",
-    this.camera,
-    "target", 
-    30,
-    30,
-    this.camera.getTarget(),
-    center,
-    BABYLON.Animation.ANIMATIONLOOPMODE_CONSTANT
-  );
-}
-
+    // Update camera target
+    BABYLON.Animation.CreateAndStartAnimation(
+      "cameraTarget",
+      this.camera,
+      "target",
+      30,
+      30,
+      this.camera.getTarget(),
+      center,
+      BABYLON.Animation.ANIMATIONLOOPMODE_CONSTANT
+    );
+  }
 
   // MODIFIED: Update method with priority scheduling
   update() {
@@ -2869,8 +2881,18 @@ const BabylonLODManager = ({
   setSelectedItem,
   setActiveButton,
   showComment,
-   savedViewDialog,
-    setSavedViewDialog
+  savedViewDialog,
+  setSavedViewDialog,
+  modalData,
+  backgroundTheme,
+  setGroundSettingParameter,
+  setWaterSettingParameter,
+  waterSettingParameter,
+  baseSettingParameter,
+  groundSettingParameter,
+  setWaterSettingsVisible,
+  setGroundSettingsVisible,
+  
 }) => {
   const currentHighlightedMeshRef = useRef(null);
   const currentHighlightedMeshIdRef = useRef(null);
@@ -2901,7 +2923,7 @@ const BabylonLODManager = ({
   const [commentEdit, setCommentEdit] = useState("");
   const [editedCommentData, setEditedCommentData] = useState({});
   const [generalTagInfoFields, setGeneralTagInfoFields] = useState([]);
-
+  const [allSavedViews, setAllSavedViews] = useState([]);
   // Camera and LOD state
   const [cameraType, setCameraType] = useState("orbit");
   const [cameraSpeed, setCameraSpeed] = useState(1.0);
@@ -2919,7 +2941,6 @@ const BabylonLODManager = ({
     queuedDisposals: 0,
     hiddenMeshes: 0,
   });
-
 
   const MAX_DEPTH = 4;
   const dbConnectionRef = useRef(null);
@@ -3008,7 +3029,7 @@ const BabylonLODManager = ({
     getStatusTable(projectId);
   }, [updateProject]);
 
-    const getGeneralTagInfoField = async (projectId) => {
+  const getGeneralTagInfoField = async (projectId) => {
     try {
       const response = await fetchFromGentagInfoFields(projectId);
       if (response.status === 200) {
@@ -3021,6 +3042,21 @@ const BabylonLODManager = ({
 
   useEffect(() => {
     getGeneralTagInfoField(projectId);
+  }, [updateProject]);
+
+  const getAllSavedViews = async (projectId) => {
+    try {
+      const response = await AllSavedView(projectId);
+      if (response.status === 200) {
+        setAllSavedViews(response.data);
+      }
+    } catch (error) {
+      console.error("Failed to fetch all saved views table data:", error);
+    }
+  };
+
+  useEffect(() => {
+    getAllSavedViews(projectId);
   }, [updateProject]);
 
   const [performanceStats, setPerformanceStats] = useState({
@@ -3060,6 +3096,51 @@ const BabylonLODManager = ({
     text: null,
     markers: [],
   });
+
+  const [groundFormValues, setGroundFormValues] = useState({
+    level: groundSettingParameter?.level ?? 0,
+    color: groundSettingParameter?.color ?? "#cccccc",
+    opacity:
+      groundSettingParameter?.opacity != null
+        ? groundSettingParameter.opacity * 100
+        : 100,
+  });
+  const [baseFormValues, setBaseFormValues] = useState({
+    measureUnit: "m",
+    customUnitFactor: 1,
+    fov: 45,
+    nearClip: 0.01,
+    farClip: 1000,
+    angularSensibility: 2000,
+    wheelSensibility: 1,
+    cameraSpeed: 1,
+    inertia: 0.4,
+    lightIntensity: 1.0,
+    specularColor: "#ffffff",
+    shadowsEnabled: true,
+    metallic: 0.5,
+    roughness: 0.5,
+    reflectionIntensity: 1.0,
+  });
+  const [waterFormValues, setWaterFormValues] = useState({
+    level: waterSettingParameter?.level ?? 0,
+    opacity:
+      waterSettingParameter?.opacity != null
+        ? waterSettingParameter.opacity * 100
+        : 100,
+    color: waterSettingParameter?.color ?? "#1ca3ec",
+    colorBlendFactor: waterSettingParameter?.colorBlendFactor ?? 0.5,
+    bumpHeight: waterSettingParameter?.bumpHeight ?? 1.0,
+    waveLength: waterSettingParameter?.waveLength ?? 1.0,
+    windForce: waterSettingParameter?.windForce ?? 20,
+  });
+
+  const groundLevelRef = useRef();
+  const groundColorRef = useRef();
+  const groundOpacityRef = useRef();
+  const groundRef = useRef(null);
+  const waterMeshRef = useRef(null);
+  const skyboxRef = useRef(null);
   // Update the tracking variables to match Fbxload.js structure
   let nodesAtDepth = new Array(MAX_DEPTH + 1).fill(0);
   let nodeNumbersByDepth = Array.from({ length: MAX_DEPTH + 1 }, () => []);
@@ -4618,7 +4699,7 @@ const BabylonLODManager = ({
   // Apply view (top, front, side etc.)
   const applyView = (viewName) => {
     if (!sceneRef.current) return;
-
+console.log(viewName);
     const scene = sceneRef.current;
     const activeCamera = scene.activeCamera;
 
@@ -4667,6 +4748,7 @@ const BabylonLODManager = ({
     modelInfoRef.current.modelRadius = distanceToFit;
 
     const targetPoint = center.clone();
+console.log(modelInfoRef.current);
 
     // If in fly camera mode (UniversalCamera)
     if (
@@ -5295,8 +5377,6 @@ const BabylonLODManager = ({
 
   // 4. UPDATE THE clearSelection FUNCTION
   const clearSelection = () => {
-
-    
     // Remove highlighting from currently selected mesh
     if (
       currentHighlightedMeshRef.current &&
@@ -5593,8 +5673,7 @@ const BabylonLODManager = ({
         // Based on tag type, fetch corresponding details
         let additionalDetails = null;
         let extraTableData = null;
-             const userDefinedDisplay = new Map();
-
+        const userDefinedDisplay = new Map();
 
         switch (matchingTag.type?.toLowerCase()) {
           case "line":
@@ -5606,32 +5685,37 @@ const BabylonLODManager = ({
           case "valve":
             additionalDetails = await fetchValveDetails(matchingTag.tagId);
             break;
-    
+
           default:
             console.log("❓ Unknown tag type:", matchingTag.type);
             return;
         }
-         try {
-        extraTableData = await fetchFromGentagInfo(matchingTag.tagId, projectId);
-        if(response.status===200){
-        console.log("🗂️ Additional table data fetched:", extraTableData);
+        try {
+          extraTableData = await fetchFromGentagInfo(
+            matchingTag.tagId,
+            projectId
+          );
+          if (response.status === 200) {
+            console.log("🗂️ Additional table data fetched:", extraTableData);
 
-                  if (extraTableData.data) {
-                    generalTagInfoFields.forEach(({ id, field, unit }) => {
-                      const taginfoKey = `taginfo${id}`;
-                      const value = extraTableData.data[taginfoKey];
+            if (extraTableData.data) {
+              generalTagInfoFields.forEach(({ id, field, unit }) => {
+                const taginfoKey = `taginfo${id}`;
+                const value = extraTableData.data[taginfoKey];
 
-                      // Insert into Map to guarantee order
-                      userDefinedDisplay.set(`${field} (${unit})`, value);
-                    });
-                  }
-                  console.log("userDefinedDisplay",userDefinedDisplay);
+                // Insert into Map to guarantee order
+                userDefinedDisplay.set(`${field} (${unit})`, value);
+              });
+            }
+            console.log("userDefinedDisplay", userDefinedDisplay);
+          }
+        } catch (extraError) {
+          console.error(
+            "⚠️ Failed to fetch additional table data:",
+            extraError
+          );
+          // Continue execution even if additional table fetch fails
         }
-        
-      } catch (extraError) {
-        console.error("⚠️ Failed to fetch additional table data:", extraError);
-        // Continue execution even if additional table fetch fails
-      }
         if (additionalDetails) {
           // Update the selected mesh info with additional details
           setSelectedMeshInfo((prev) => ({
@@ -5640,7 +5724,7 @@ const BabylonLODManager = ({
             additionalDetails: additionalDetails,
             detailsType: matchingTag.type,
             fileMetadata: fileMetadata,
-            extraTableData:extraTableData,
+            extraTableData: extraTableData,
             UsertagInfoDetails: Object.fromEntries(userDefinedDisplay),
             originalUsertagInfoDetails: extraTableData.data || null,
           }));
@@ -6342,83 +6426,83 @@ const BabylonLODManager = ({
     }
   }, []);
 
+  const handleSelectTag = () => {
+    if (!selectedItemName || !selectedItemName.name) {
+      console.warn("No tag selected");
+      return;
+    }
 
-const handleSelectTag = () => {
-  if (!selectedItemName || !selectedItemName.name) {
-    console.warn("No tag selected");
-    return;
-  }
+    // Get the tag name from your tag info
+    const tagName = selectedMeshInfo.parentFileName || selectedItemName.name;
+    console.log("🏷️ Selecting tag (multi-node aware):", tagName);
 
-  // Get the tag name from your tag info
-  const tagName = selectedMeshInfo.parentFileName || selectedItemName.name;
-  console.log("🏷️ Selecting tag (multi-node aware):", tagName);
+    // Use the LOD manager to select the tag
+    if (lodManagerRef.current) {
+      const result = lodManagerRef.current.selectTagInLOD(tagName);
 
-  // Use the LOD manager to select the tag
-  if (lodManagerRef.current) {
-    const result = lodManagerRef.current.selectTagInLOD(tagName);
-    
-    if (result) {
-      console.log("✅ Tag selected successfully:", {
-        tagName: result.tagName,
-        totalParts: result.totalParts,
-        isMultiNode: result.isMultiNode,
-        nodes: result.nodes,
-        highlightedParts: result.highlightedParts
-      });
-      
-      // Update your selected mesh reference to the primary mesh
-      if (selectedMeshRef) {
-        selectedMeshRef.current = result.results[0].lodMesh;
-      }
+      if (result) {
+        console.log("✅ Tag selected successfully:", {
+          tagName: result.tagName,
+          totalParts: result.totalParts,
+          isMultiNode: result.isMultiNode,
+          nodes: result.nodes,
+          highlightedParts: result.highlightedParts,
+        });
 
-      // Show user feedback for multi-node tags
-      if (result.isMultiNode) {
-        console.log(`📍 Multi-node tag: "${tagName}" spans ${result.totalParts} parts across ${result.nodes.length} nodes`);
-        
-        // Optional: Show notification to user
-        // showNotification(`Tag "${tagName}" spans multiple nodes (${result.nodes.length} nodes, ${result.totalParts} parts)`);
-      }
-    } else {
-      console.warn("❌ Tag not found in LOD system");
-      
-      // Fallback to traditional mesh search if LOD search fails
-      if (sceneRef.current) {
-        const scene = sceneRef.current;
-        const parentMesh = scene.meshes.find(
-          (mesh) =>
-            mesh.name === tagName || 
-            mesh.metadata?.tagNo?.tag === tagName
-        );
-        
-        if (parentMesh) {
-          console.log("📦 Found tag in traditional meshes");
-          const meshesToSelect = [parentMesh, ...parentMesh.getChildMeshes()];
-          dehighlightMesh();
-          highlightMesh(meshesToSelect);
+        // Update your selected mesh reference to the primary mesh
+        if (selectedMeshRef) {
+          selectedMeshRef.current = result.results[0].lodMesh;
+        }
+
+        // Show user feedback for multi-node tags
+        if (result.isMultiNode) {
+          console.log(
+            `📍 Multi-node tag: "${tagName}" spans ${result.totalParts} parts across ${result.nodes.length} nodes`
+          );
+
+          // Optional: Show notification to user
+          // showNotification(`Tag "${tagName}" spans multiple nodes (${result.nodes.length} nodes, ${result.totalParts} parts)`);
+        }
+      } else {
+        console.warn("❌ Tag not found in LOD system");
+
+        // Fallback to traditional mesh search if LOD search fails
+        if (sceneRef.current) {
+          const scene = sceneRef.current;
+          const parentMesh = scene.meshes.find(
+            (mesh) =>
+              mesh.name === tagName || mesh.metadata?.tagNo?.tag === tagName
+          );
+
+          if (parentMesh) {
+            console.log("📦 Found tag in traditional meshes");
+            const meshesToSelect = [parentMesh, ...parentMesh.getChildMeshes()];
+            dehighlightMesh();
+            highlightMesh(meshesToSelect);
+          }
         }
       }
     }
-  }
-  
-  // Close menu
-  setIsMenuOpen(false);
-};
-// Enhanced version with focus option
-const handleSelectAndFocusTag = () => {
-  if (!selectedItemName || !selectedItemName.name) {
-    console.warn("No tag selected");
-    return;
-  }
 
-  const tagName = selectedMeshInfo.filename || selectedItemName.name;
-  console.log("🎯 Selecting and focusing tag:", tagName);
+    // Close menu
+    setIsMenuOpen(false);
+  };
+  // Enhanced version with focus option
+  const handleSelectAndFocusTag = () => {
+    if (!selectedItemName || !selectedItemName.name) {
+      console.warn("No tag selected");
+      return;
+    }
 
-  if (lodManagerRef.current) {
-    lodManagerRef.current.selectAndFocusTag(tagName, true);
-  }
-  
-  setIsMenuOpen(false);
-};
+    const tagName = selectedMeshInfo.filename || selectedItemName.name;
+    console.log("🎯 Selecting and focusing tag:", tagName);
+
+    if (lodManagerRef.current) {
+      lodManagerRef.current.selectAndFocusTag(tagName, true);
+    }
+
+    setIsMenuOpen(false);
+  };
   // 4. DEBUGGING FUNCTION: Check mesh states
   const debugMeshStates = useCallback(() => {
     if (lodManagerRef.current && lodManagerRef.current.activeMeshes) {
@@ -6456,16 +6540,16 @@ const handleSelectAndFocusTag = () => {
       setIsMenuOpen(false);
     }
   };
- const handleShowFileInfo = () => {
-        if (selectedMeshInfo.additionalDetails) {
-          setShowFileInfo(true);
-          setIsMenuOpen(false);
-        } else {
-             setCustomAlert(true);
-          setModalMessage("No Info availible, please select item!!!!");
-          setIsMenuOpen(false);
-        }
-      };
+  const handleShowFileInfo = () => {
+    if (selectedMeshInfo.additionalDetails) {
+      setShowFileInfo(true);
+      setIsMenuOpen(false);
+    } else {
+      setCustomAlert(true);
+      setModalMessage("No Info availible, please select item!!!!");
+      setIsMenuOpen(false);
+    }
+  };
   const handleCloselineEqpInfo = () => {
     setLineEqpInfo(false);
   };
@@ -6543,8 +6627,8 @@ const handleSelectAndFocusTag = () => {
             setModalMessage("Please select a mesh first");
           }
           setIsMenuOpen(false);
-         break;
-          case "File info":
+          break;
+        case "File info":
           if (selectedMeshInfo) {
             handleShowFileInfo();
           } else {
@@ -6552,8 +6636,8 @@ const handleSelectAndFocusTag = () => {
             setModalMessage("Please select a mesh first");
           }
           setIsMenuOpen(false);
-         break;
-          case "Select tag":
+          break;
+        case "Select tag":
           if (selectedMeshInfo) {
             handleSelectTag();
           } else {
@@ -6561,8 +6645,8 @@ const handleSelectAndFocusTag = () => {
             setModalMessage("Please select a mesh first");
           }
           setIsMenuOpen(false);
-         break;
-            case "Tag GenInfo":
+          break;
+        case "Tag GenInfo":
           if (selectedMeshInfo) {
             handleTagInfo();
           } else {
@@ -6570,9 +6654,8 @@ const handleSelectAndFocusTag = () => {
             setModalMessage("Please select a mesh first");
           }
           setIsMenuOpen(false);
-         break;
-         
-         
+          break;
+
         default:
           setIsMenuOpen(false);
       }
@@ -6604,15 +6687,24 @@ const handleSelectAndFocusTag = () => {
           label: "Tag info",
           action: () => handleMenuOptionClick({ label: "Tag info" }),
         },
-        { label: "Tag GenInfo", action: () => handleMenuOptionClick({ label: "Tag GenInfo" }) },
-        { label: "File Info", action: () => handleMenuOptionClick({ label: "File info" }) },
+        {
+          label: "Tag GenInfo",
+          action: () => handleMenuOptionClick({ label: "Tag GenInfo" }),
+        },
+        {
+          label: "File Info",
+          action: () => handleMenuOptionClick({ label: "File info" }),
+        },
       ],
     },
     {
       label: "Deselect",
       action: () => handleMenuOptionClick({ label: "Deselect" }),
     },
-    { label: "Select tag", action: () => handleMenuOptionClick({ label: "Select tag" }), },
+    {
+      label: "Select tag",
+      action: () => handleMenuOptionClick({ label: "Select tag" }),
+    },
     {
       label: "Visibility",
       children: [
@@ -6646,92 +6738,6 @@ const handleSelectAndFocusTag = () => {
     // { label: "Debug States", action: () => { debugMeshStates(); setIsMenuOpen(false); } },
   ];
 
-  // const createCommentLabel = (comment, index, scene) => {
-  //   // Create a simple position mesh (invisible) to anchor the label
-  //   const position = BABYLON.MeshBuilder.CreateBox(
-  //     `marker-position-${comment.number}`,
-  //     { size: 0.1 }, // Small invisible box
-  //     scene
-  //   );
-  //   position.position = new BABYLON.Vector3(
-  //     comment.coOrdinateX,
-  //     comment.coOrdinateY,
-  //     comment.coOrdinateZ
-  //   );
-
-  //   // Make the position mesh invisible
-  //   position.isVisible = false;
-
-  //   // Create the fullscreen UI
-  //   const advancedTexture = GUI.AdvancedDynamicTexture.CreateFullscreenUI(
-  //     `UI-${comment.number}`,
-  //     true,
-  //     scene
-  //   );
-
-  //   // Get the status color from comment status
-  //   const statusColor =
-  //     allCommentStatus.find((status) => status.statusname === comment.status)
-  //       ?.color || "gray";
-
-  //   // Create the main label (number)
-  //   const label = new GUI.Rectangle("label");
-  //   label.background = statusColor || "red"; // Use status color or default to red
-  //   label.height = "20px";
-  //   label.alpha = 0.8;
-  //   label.width = "20px";
-  //   label.thickness = 1;
-  //   label.linkOffsetY = -10;
-  //   label.isPointerBlocker = true; // Make sure it can be clicked
-  //   label.onPointerClickObservable.add(() => {
-  //     handleCommentInfo(comment); // Pass the comment object to the handler
-  //   });
-
-  //   const text = new GUI.TextBlock();
-  //   text.text = index; // Fixed typo from 'numbber' to 'number'
-  //   text.color = "white";
-  //   text.fontSize = 10;
-
-  //   label.addControl(text);
-  //   advancedTexture.addControl(label);
-  //   // Add hover behavior to the mesh
-  //   position.actionManager = new BABYLON.ActionManager(scene);
-
-  //   // Show tooltip on hover
-  //   position.actionManager.registerAction(
-  //     new BABYLON.ExecuteCodeAction(
-  //       BABYLON.ActionManager.OnPointerOverTrigger,
-  //       () => {
-  //         label.isVisible = true;
-  //       }
-  //     )
-  //   );
-
-  //   // Hide tooltip when not hovering
-  //   position.actionManager.registerAction(
-  //     new BABYLON.ExecuteCodeAction(
-  //       BABYLON.ActionManager.OnPointerOutTrigger,
-  //       () => {
-  //         label.isVisible = false;
-  //       }
-  //     )
-  //   );
-
-  //   // Link the main label to the 3D position
-  //   label.linkWithMesh(position);
-
-  //   // Return the label and position for future reference
-  //   return {
-  //     label: label,
-  //     position: position,
-  //     show: () => {
-  //       label.isVisible = true;
-  //     },
-  //     hide: () => {
-  //       label.isVisible = false;
-  //     },
-  //   };
-  // };
   const handleCommentInfo = (item) => {
     setcommentinfo(item);
     setcommentinfotable(true);
@@ -6782,177 +6788,190 @@ const handleSelectAndFocusTag = () => {
   const handlePriorityChange = (priority) => {
     setEditedCommentData({ ...editedCommentData, priority });
   };
-// 1. Move createCommentLabel outside of component or make it stable
-const createCommentLabel = useCallback((comment, index, scene, commentStatusArray, onCommentClick) => {
-  // Create a simple position mesh (invisible) to anchor the label
-  const position = BABYLON.MeshBuilder.CreateBox(
-    `marker-position-${comment.number}`,
-    { size: 0.1 },
-    scene
-  );
-  position.position = new BABYLON.Vector3(
-    comment.coOrdinateX,
-    comment.coOrdinateY,
-    comment.coOrdinateZ
-  );
+  // 1. Move createCommentLabel outside of component or make it stable
+  const createCommentLabel = useCallback(
+    (comment, index, scene, commentStatusArray, onCommentClick) => {
+      // Create a simple position mesh (invisible) to anchor the label
+      const position = BABYLON.MeshBuilder.CreateBox(
+        `marker-position-${comment.number}`,
+        { size: 0.1 },
+        scene
+      );
+      position.position = new BABYLON.Vector3(
+        comment.coOrdinateX,
+        comment.coOrdinateY,
+        comment.coOrdinateZ
+      );
 
-  // Make the position mesh invisible
-  position.isVisible = false;
+      // Make the position mesh invisible
+      position.isVisible = false;
 
-  // Create the fullscreen UI
-  const advancedTexture = GUI.AdvancedDynamicTexture.CreateFullscreenUI(
-    `UI-${comment.number}`,
-    true,
-    scene
-  );
+      // Create the fullscreen UI
+      const advancedTexture = GUI.AdvancedDynamicTexture.CreateFullscreenUI(
+        `UI-${comment.number}`,
+        true,
+        scene
+      );
 
-  // Get the status color from comment status
-  const statusColor =
-    commentStatusArray.find((status) => status.statusname === comment.status)
-      ?.color || "gray";
+      // Get the status color from comment status
+      const statusColor =
+        commentStatusArray.find(
+          (status) => status.statusname === comment.status
+        )?.color || "gray";
 
-  // Create the main label (number)
-  const label = new GUI.Rectangle("label");
-  label.background = statusColor || "red";
-  label.height = "20px";
-  label.alpha = 0.8;
-  label.width = "20px";
-  label.thickness = 1;
-  label.linkOffsetY = -10;
-  label.isPointerBlocker = true;
-  label.onPointerClickObservable.add(() => {
-    onCommentClick(comment);
-  });
+      // Create the main label (number)
+      const label = new GUI.Rectangle("label");
+      label.background = statusColor || "red";
+      label.height = "20px";
+      label.alpha = 0.8;
+      label.width = "20px";
+      label.thickness = 1;
+      label.linkOffsetY = -10;
+      label.isPointerBlocker = true;
+      label.onPointerClickObservable.add(() => {
+        onCommentClick(comment);
+      });
 
-  const text = new GUI.TextBlock();
-  text.text = index.toString();
-  text.color = "white";
-  text.fontSize = 10;
+      const text = new GUI.TextBlock();
+      text.text = index.toString();
+      text.color = "white";
+      text.fontSize = 10;
 
-  label.addControl(text);
-  advancedTexture.addControl(label);
+      label.addControl(text);
+      advancedTexture.addControl(label);
 
-  // Add hover behavior
-  position.actionManager = new BABYLON.ActionManager(scene);
-  position.actionManager.registerAction(
-    new BABYLON.ExecuteCodeAction(
-      BABYLON.ActionManager.OnPointerOverTrigger,
-      () => {
-        label.isVisible = true;
-      }
-    )
-  );
+      // Add hover behavior
+      position.actionManager = new BABYLON.ActionManager(scene);
+      position.actionManager.registerAction(
+        new BABYLON.ExecuteCodeAction(
+          BABYLON.ActionManager.OnPointerOverTrigger,
+          () => {
+            label.isVisible = true;
+          }
+        )
+      );
 
-  position.actionManager.registerAction(
-    new BABYLON.ExecuteCodeAction(
-      BABYLON.ActionManager.OnPointerOutTrigger,
-      () => {
-        label.isVisible = false;
-      }
-    )
-  );
+      position.actionManager.registerAction(
+        new BABYLON.ExecuteCodeAction(
+          BABYLON.ActionManager.OnPointerOutTrigger,
+          () => {
+            label.isVisible = false;
+          }
+        )
+      );
 
-  // Link the main label to the 3D position
-  label.linkWithMesh(position);
+      // Link the main label to the 3D position
+      label.linkWithMesh(position);
 
-  return {
-    label: label,
-    position: position,
-    commentId: comment.number,
-    advancedTexture: advancedTexture,
-    show: () => {
-      label.isVisible = true;
+      return {
+        label: label,
+        position: position,
+        commentId: comment.number,
+        advancedTexture: advancedTexture,
+        show: () => {
+          label.isVisible = true;
+        },
+        hide: () => {
+          label.isVisible = false;
+        },
+        dispose: () => {
+          try {
+            if (label?.dispose) label.dispose();
+            if (position?.dispose) position.dispose();
+            if (advancedTexture?.dispose) advancedTexture.dispose();
+          } catch (error) {
+            console.warn("Error disposing label:", error);
+          }
+        },
+      };
     },
-    hide: () => {
-      label.isVisible = false;
+    []
+  ); // Empty dependency array since we pass everything as parameters
+
+  // 2. Use refs to track previous values and prevent unnecessary updates
+  const prevCommentsRef = useRef([]);
+  const prevStatusRef = useRef([]);
+  const prevShowCommentRef = useRef(showComment);
+
+  // 3. Stable handler function
+  const handleCommentClick = useCallback(
+    (comment) => {
+      handleCommentInfo(comment);
     },
-    dispose: () => {
-      try {
-        if (label?.dispose) label.dispose();
-        if (position?.dispose) position.dispose();
-        if (advancedTexture?.dispose) advancedTexture.dispose();
-      } catch (error) {
-        console.warn("Error disposing label:", error);
+    [handleCommentInfo]
+  );
+
+  // 4. Fixed useEffect with proper dependency management
+  useEffect(() => {
+    if (!sceneRef.current) return;
+
+    const scene = sceneRef.current;
+
+    // Check if we actually need to update
+    const commentsChanged =
+      JSON.stringify(allComments) !== JSON.stringify(prevCommentsRef.current);
+    const statusChanged =
+      JSON.stringify(allCommentStatus) !==
+      JSON.stringify(prevStatusRef.current);
+    const showCommentChanged = showComment !== prevShowCommentRef.current;
+
+    if (!commentsChanged && !statusChanged && !showCommentChanged) {
+      return; // No changes, skip update
+    }
+
+    // Update refs
+    prevCommentsRef.current = allComments;
+    prevStatusRef.current = allCommentStatus;
+    prevShowCommentRef.current = showComment;
+
+    // Clear existing labels
+    allLabels.forEach((labelElement) => {
+      if (labelElement.dispose) {
+        labelElement.dispose();
       }
+    });
+
+    // Create new labels only if we have comments
+    if (allComments.length === 0) {
+      setAllLabels([]);
+      return;
     }
-  };
-}, []); // Empty dependency array since we pass everything as parameters
 
-// 2. Use refs to track previous values and prevent unnecessary updates
-const prevCommentsRef = useRef([]);
-const prevStatusRef = useRef([]);
-const prevShowCommentRef = useRef(showComment);
+    const newLabels = allComments.map((comment, index) => {
+      const labelElement = createCommentLabel(
+        comment,
+        index + 1,
+        scene,
+        allCommentStatus,
+        handleCommentClick
+      );
 
-// 3. Stable handler function
-const handleCommentClick = useCallback((comment) => {
-  handleCommentInfo(comment);
-}, [handleCommentInfo]);
-
-// 4. Fixed useEffect with proper dependency management
-useEffect(() => {
-  if (!sceneRef.current) return;
-  
-  const scene = sceneRef.current;
-  
-  // Check if we actually need to update
-  const commentsChanged = JSON.stringify(allComments) !== JSON.stringify(prevCommentsRef.current);
-  const statusChanged = JSON.stringify(allCommentStatus) !== JSON.stringify(prevStatusRef.current);
-  const showCommentChanged = showComment !== prevShowCommentRef.current;
-  
-  if (!commentsChanged && !statusChanged && !showCommentChanged) {
-    return; // No changes, skip update
-  }
-
-  // Update refs
-  prevCommentsRef.current = allComments;
-  prevStatusRef.current = allCommentStatus;
-  prevShowCommentRef.current = showComment;
-
-  // Clear existing labels
-  allLabels.forEach((labelElement) => {
-    if (labelElement.dispose) {
-      labelElement.dispose();
-    }
-  });
-
-  // Create new labels only if we have comments
-  if (allComments.length === 0) {
-    setAllLabels([]);
-    return;
-  }
-
-  const newLabels = allComments.map((comment, index) => {
-    const labelElement = createCommentLabel(
-      comment, 
-      index + 1, 
-      scene, 
-      allCommentStatus, 
-      handleCommentClick
-    );
-
-    // Set visibility based on showComment state
-    labelElement.label.isVisible = showComment;
-
-    return labelElement;
-  });
-
-  setAllLabels(newLabels);
-}, [allComments, allCommentStatus, showComment, createCommentLabel, handleCommentClick]);
-
-
-
-// 6. Separate useEffect for visibility updates only
-useEffect(() => {
-  allLabels.forEach((labelElement) => {
-    if (labelElement.label) {
+      // Set visibility based on showComment state
       labelElement.label.isVisible = showComment;
-    }
-    if (labelElement.tooltip) {
-      labelElement.tooltip.isVisible = showComment;
-    }
-  });
-}, [showComment, allLabels]);
 
+      return labelElement;
+    });
+
+    setAllLabels(newLabels);
+  }, [
+    allComments,
+    allCommentStatus,
+    showComment,
+    createCommentLabel,
+    handleCommentClick,
+  ]);
+
+  // 6. Separate useEffect for visibility updates only
+  useEffect(() => {
+    allLabels.forEach((labelElement) => {
+      if (labelElement.label) {
+        labelElement.label.isVisible = showComment;
+      }
+      if (labelElement.tooltip) {
+        labelElement.tooltip.isVisible = showComment;
+      }
+    });
+  }, [showComment, allLabels]);
 
   const handleDeleteComment = (commentId) => {
     setCurrentDeleteNumber(commentId);
@@ -6984,83 +7003,531 @@ useEffect(() => {
     setCurrentDeleteNumber(null);
   };
 
-    const handleCloseFileInfo = () => {
-        setShowFileInfo(false);
-      };
-      const handleSaveView = () => {
-        if (!saveViewName.trim()) {
-          setCustomAlert(true);
-          setModalMessage("Please enter a view name");
-          return;
-        }
+  const handleCloseFileInfo = () => {
+    setShowFileInfo(false);
+  };
+  const handleSaveView = async () => {
+    if (!saveViewName.trim()) {
+      setCustomAlert(true);
+      setModalMessage("Please enter a view name");
+      return;
+    }
+    // Check if a view with the same name already exists
+    const trimmedName = saveViewName.trim();
+    const viewExists = allSavedViews.some(
+      (view) => view.name.trim().toLowerCase() === trimmedName.toLowerCase()
+    );
+    console.log("viewExists", viewExists);
+    if (viewExists) {
+      setCustomAlert(true);
+      setModalMessage("A view with this name already exists");
+      return;
+    }
 
-        // Check if a view with the same name already exists
-        // const viewExists = allViews.some(
-        //   (view) => view.name === saveViewName.trim()
-        // );
-        // if (viewExists) {
-        //   setCustomAlert(true);
-        //   setModalMessage("A view with this name already exists");
-        //   return;
-        // }
+    // Get current camera data
+    if (!sceneRef.current || !sceneRef.current.activeCamera) {
+      setCustomAlert(true);
+      setModalMessage("Cannot save view - camera not initialized");
+      return;
+    }
 
-        // Get current camera data
-        if (!sceneRef.current || !sceneRef.current.activeCamera) {
-          setCustomAlert(true);
-          setModalMessage("Cannot save view - camera not initialized");
-          return;
-        }
+    const camera = sceneRef.current.activeCamera;
 
-        const camera = sceneRef.current.activeCamera;
+    const viewData = {
+      name: saveViewName.trim(),
+      projectId: projectId,
+      posX: camera.position.x,
+      posY: camera.position.y,
+      posZ: camera.position.z,
+      targX:
+        camera instanceof BABYLON.ArcRotateCamera
+          ? camera.target.x
+          : camera.getTarget().x,
+      targY:
+        camera instanceof BABYLON.ArcRotateCamera
+          ? camera.target.y
+          : camera.getTarget().y,
+      targZ:
+        camera instanceof BABYLON.ArcRotateCamera
+          ? camera.target.z
+          : camera.getTarget().z,
+      // Store additional camera properties if needed
+      cameraType: camera instanceof BABYLON.ArcRotateCamera ? "arc" : "free",
+      // For ArcRotate camera, store specific properties
+      ...(camera instanceof BABYLON.ArcRotateCamera && {
+        alpha: camera.alpha,
+        beta: camera.beta,
+        radius: camera.radius,
+      }),
+    };
 
-        const viewData = {
-          name: saveViewName.trim(),
-          posX: camera.position.x,
-          posY: camera.position.y,
-          posZ: camera.position.z,
-          targX:
-            camera instanceof BABYLON.ArcRotateCamera
-              ? camera.target.x
-              : camera.getTarget().x,
-          targY:
-            camera instanceof BABYLON.ArcRotateCamera
-              ? camera.target.y
-              : camera.getTarget().y,
-          targZ:
-            camera instanceof BABYLON.ArcRotateCamera
-              ? camera.target.z
-              : camera.getTarget().z,
-          // Store additional camera properties if needed
-          cameraType:
-            camera instanceof BABYLON.ArcRotateCamera ? "arc" : "free",
-          // For ArcRotate camera, store specific properties
-          ...(camera instanceof BABYLON.ArcRotateCamera && {
-            alpha: camera.alpha,
-            beta: camera.beta,
-            radius: camera.radius,
-          }),
-        };
+    try {
+      const response = await SaveSavedView(viewData);
 
-       
-
-        // Show success message
+      if (response.status === 200) {
         setCustomAlert(true);
-        setModalMessage(`View "${saveViewName}" saved successfully`);
-
-        // Close dialog and reset name
+        setModalMessage(`${saveViewName}" saved successfully`);
         setSavedViewDialog(false);
         setSaveViewName("");
+        getAllSavedViews(projectId);
 
-        // Hide message after a delay
         setTimeout(() => {
           setCustomAlert(false);
         }, 2000);
-      };
+      }
+    } catch (error) {
+      if (error.response && error.response.status === 409) {
+        setCustomAlert(true);
+        setModalMessage(error.response.data.message || "Duplicate view name");
 
-      const handleCloseSavedView = () => {
-        setSavedViewDialog(false);
-        setSaveViewName("");
-      };
+        setTimeout(() => {
+          setCustomAlert(false);
+        }, 2000);
+      } else {
+        console.error("Unexpected error:", error);
+        setCustomAlert(true);
+        setModalMessage("Something went wrong while saving the view.");
+      }
+    }
+  };
+
+  const handleCloseSavedView = () => {
+    setSavedViewDialog(false);
+    setSaveViewName("");
+  };
+
+  const applySavedView = (view) => {
+    if (!view) return;
+    // setSaveViewMenu(view.name);
+
+    // Check if the camera references exist
+    if (!sceneRef.current || !sceneRef.current.activeCamera) return;
+
+    const camera = sceneRef.current.activeCamera;
+    try {
+      // Create target position vector
+      const targetPosition = new BABYLON.Vector3(
+        view.posX,
+        view.posY,
+        view.posZ
+      );
+
+      // Create target point vector
+      const targetPoint = new BABYLON.Vector3(
+        view.targX,
+        view.targY,
+        view.targZ
+      );
+
+      // For ArcRotateCamera
+      if (camera instanceof BABYLON.ArcRotateCamera) {
+        // Set position and target directly without animation
+        camera.position = targetPosition;
+        camera.target = targetPoint;
+      }
+      // For UniversalCamera
+      else if (camera instanceof BABYLON.UniversalCamera) {
+        // Set position and target directly without animation
+        camera.position = targetPosition;
+        camera.setTarget(targetPoint);
+      }
+    } catch (error) {
+      console.error("Error applying saved view:", error);
+      setCustomAlert(true);
+      setModalMessage("Error applying view");
+    }
+  };
+
+  useEffect(() => {
+    if (modalData) {
+      // applySavedView(modalData);
+    }
+  }, [modalData]);
+
+  useEffect(() => {
+    if (baseSettingParameter) {
+      setBaseFormValues({
+        measureUnit: baseSettingParameter?.measure?.unit ?? "m",
+        customUnitFactor:
+          Number(baseSettingParameter?.measure?.scaleValue) || 1,
+        fov: baseSettingParameter?.camera?.fov ?? 45,
+        nearClip: baseSettingParameter?.camera?.nearClip ?? 0.01,
+        farClip: baseSettingParameter?.camera?.farClip ?? 1000,
+        angularSensibility:
+          baseSettingParameter?.camera?.angularSensibility ?? 2000,
+        wheelSensibility: baseSettingParameter?.camera?.wheelSensibility ?? 1,
+        cameraSpeed: baseSettingParameter?.camera?.cameraSpeed ?? 1,
+        inertia: baseSettingParameter?.camera?.inertia ?? 0.4,
+        lightIntensity: baseSettingParameter?.light?.intensity ?? 1.0,
+        specularColor: baseSettingParameter?.light?.specularColor ?? "#ffffff",
+        shadowsEnabled: baseSettingParameter?.light?.shadowsEnabled ?? true,
+        metallic: baseSettingParameter?.material?.metallic ?? 0.5,
+        roughness: baseSettingParameter?.material?.roughness ?? 0.5,
+        reflectionIntensity:
+          baseSettingParameter?.material?.reflectionIntensity ?? 1.0,
+      });
+    }
+  }, [baseSettingParameter]);
+
+  useEffect(() => {
+    if (groundSettingParameter) {
+      setGroundFormValues({
+        level: groundSettingParameter.level ?? 0,
+        color: groundSettingParameter.color ?? "#cccccc",
+        opacity:
+          groundSettingParameter.opacity != null
+            ? groundSettingParameter.opacity * 100
+            : 100,
+      });
+    }
+  }, [groundSettingParameter]);
+
+  useEffect(() => {
+    setWaterFormValues({
+      level: waterSettingParameter?.level ?? 0,
+      opacity:
+        waterSettingParameter?.opacity != null
+          ? waterSettingParameter.opacity * 100
+          : 100,
+      color: waterSettingParameter?.color ?? "#1ca3ec",
+      colorBlendFactor: waterSettingParameter?.colorBlendFactor ?? 0.5,
+      bumpHeight: waterSettingParameter?.bumpHeight ?? 1.0,
+      waveLength: waterSettingParameter?.waveLength ?? 1.0,
+      windForce: waterSettingParameter?.windForce ?? 20,
+    });
+  }, [waterSettingParameter]);
+
+  // Background theme change effect
+  useEffect(() => {
+    if (sceneRef.current) {
+      applyBackgroundTheme(backgroundTheme);
+    }
+  }, [backgroundTheme]);
+
+  // Apply background theme
+  const applyBackgroundTheme = (themeName) => {
+    if (!sceneRef.current) return;
+
+    const scene = sceneRef.current;
+
+    switch (themeName) {
+      case "DEFAULT":
+        // Set default background (dark blue)
+        scene.clearColor = new BABYLON.Color4(0.2, 0.2, 0.2, 1);
+
+        // Remove ground if it exists
+        if (groundRef.current) {
+          groundRef.current.dispose();
+          groundRef.current = null;
+        }
+
+        // Remove skybox if it exists
+        if (skyboxRef.current) {
+          skyboxRef.current.dispose();
+          skyboxRef.current = null;
+        }
+
+        // Remove water if it exists
+        if (waterMeshRef.current) {
+          waterMeshRef.current.dispose();
+          waterMeshRef.current = null;
+        }
+
+        setWaterSettingsVisible(false);
+        setGroundSettingsVisible(false);
+        break;
+
+      case "WHITE":
+        // Set white background
+        scene.clearColor = new BABYLON.Color4(1, 1, 1, 1);
+
+        // Remove ground if it exists
+        if (groundRef.current) {
+          groundRef.current.dispose();
+          groundRef.current = null;
+        }
+
+        // Remove skybox if it exists
+        if (skyboxRef.current) {
+          skyboxRef.current.dispose();
+          skyboxRef.current = null;
+        }
+
+        // Remove water if it exists
+        if (waterMeshRef.current) {
+          waterMeshRef.current.dispose();
+          waterMeshRef.current = null;
+        }
+
+        setWaterSettingsVisible(false);
+        setGroundSettingsVisible(false);
+        break;
+
+      case "GROUND_SKY":
+        // Calculate environment size based on model size - make it larger to avoid flickering
+        const environmentSize = calculateEnvironmentSize() * 1.5;
+
+        // Setup skybox
+        if (skyboxRef.current) {
+          skyboxRef.current.dispose();
+          skyboxRef.current = null;
+        }
+
+        skyboxRef.current = BABYLON.MeshBuilder.CreateBox(
+          "skyBox",
+          { size: environmentSize },
+          scene
+        );
+
+        // Make skybox unselectable and not pickable to avoid issues in fly mode
+        skyboxRef.current.isPickable = false;
+
+        const skyboxMaterial = new BABYLON.StandardMaterial(
+          "skyBoxMaterial",
+          scene
+        );
+        skyboxMaterial.backFaceCulling = false;
+        skyboxMaterial.reflectionTexture = new BABYLON.CubeTexture(
+          "https://playground.babylonjs.com/textures/TropicalSunnyDay",
+          scene
+        );
+        skyboxMaterial.reflectionTexture.coordinatesMode =
+          BABYLON.Texture.SKYBOX_MODE;
+        skyboxMaterial.diffuseColor = new BABYLON.Color3(0, 0, 0);
+        skyboxMaterial.specularColor = new BABYLON.Color3(0, 0, 0);
+        skyboxRef.current.material = skyboxMaterial;
+        skyboxRef.current.infiniteDistance = true; // Fix for fly mode
+
+        // Setup ground
+        if (groundRef.current) {
+          groundRef.current.dispose();
+          groundRef.current = null;
+        }
+
+        groundRef.current = BABYLON.MeshBuilder.CreateGround(
+          "ground",
+          {
+            width: 1000,
+            height: 1000,
+            subdivisions: 2, // Reduce subdivisions to avoid flickering
+          },
+          scene
+        );
+
+        const groundMaterial = new BABYLON.StandardMaterial(
+          "groundMaterial",
+          scene
+        );
+        if (groundSettingParameter) {
+          const groundColor = hexToColor3(
+            groundSettingParameter?.color || "#018C01"
+          );
+          groundMaterial.diffuseColor = groundColor || "#018C01";
+          groundMaterial.alpha = groundSettingParameter?.opacity;
+        } else {
+          groundMaterial.diffuseColor = new BABYLON.Color3(0.01, 0.49, 0.01);
+          groundMaterial.alpha = 1.0;
+        }
+
+        groundMaterial.backFaceCulling = false;
+        groundMaterial.isPickable = false;
+
+        if (groundRef.current) {
+          groundRef.current.material = groundMaterial;
+          groundRef.current.isPickable = false;
+
+          if (modelInfoRef.current.boundingBoxMin) {
+            const baseY = modelInfoRef.current.boundingBoxMin.y - 0.1;
+            const level = groundSettingParameter?.level;
+            groundRef.current.position.y = baseY + level;
+          } else {
+            groundRef.current.position.y = -1.0;
+          }
+        } else {
+          // Default ground color if no settings
+          groundMaterial.diffuseColor = new BABYLON.Color3(0.01, 0.49, 0.01);
+          groundMaterial.alpha = 1.0;
+        }
+        groundMaterial.backFaceCulling = false;
+        groundMaterial.isPickable = false;
+        groundRef.current.material = groundMaterial;
+        groundRef.current.isPickable = false;
+
+        // Remove water if it exists
+        if (waterMeshRef.current) {
+          waterMeshRef.current.dispose();
+          waterMeshRef.current = null;
+        }
+
+        setWaterSettingsVisible(false);
+        break;
+
+      case "SEA_SKY":
+        // Calculate environment size based on model size
+        const seaEnvironmentSize = calculateEnvironmentSize() * 1.5;
+
+        // Setup skybox
+        if (skyboxRef.current) {
+          skyboxRef.current.dispose();
+          skyboxRef.current = null;
+        }
+
+        skyboxRef.current = BABYLON.MeshBuilder.CreateBox(
+          "skyBox",
+          { size: seaEnvironmentSize },
+          scene
+        );
+
+        // Make skybox unselectable and not pickable
+        skyboxRef.current.isPickable = false;
+
+        const seaSkyboxMaterial = new BABYLON.StandardMaterial(
+          "skyBoxMaterial",
+          scene
+        );
+        seaSkyboxMaterial.backFaceCulling = false;
+        seaSkyboxMaterial.reflectionTexture = new BABYLON.CubeTexture(
+          "https://playground.babylonjs.com/textures/TropicalSunnyDay",
+          scene
+        );
+        seaSkyboxMaterial.reflectionTexture.coordinatesMode =
+          BABYLON.Texture.SKYBOX_MODE;
+        seaSkyboxMaterial.diffuseColor = new BABYLON.Color3(0, 0, 0);
+        seaSkyboxMaterial.specularColor = new BABYLON.Color3(0, 0, 0);
+        skyboxRef.current.material = seaSkyboxMaterial;
+        skyboxRef.current.infiniteDistance = true; // Fix for fly mode
+
+        // Remove ground if it exists
+        if (groundRef.current) {
+          groundRef.current.dispose();
+          groundRef.current = null;
+        }
+
+        // Setup water
+        if (waterMeshRef.current) {
+          waterMeshRef.current.dispose();
+          waterMeshRef.current = null;
+        }
+
+        waterMeshRef.current = BABYLON.MeshBuilder.CreateGround(
+          "waterMesh",
+          {
+            width: seaEnvironmentSize,
+            height: seaEnvironmentSize,
+            subdivisions: 2, // Reduce subdivisions
+          },
+          scene
+        );
+
+        // Make water unselectable and not pickable
+        waterMeshRef.current.isPickable = false;
+
+        // Water material
+        const waterMaterial = new WaterMaterial("water", scene);
+        waterMaterial.bumpTexture = new BABYLON.Texture(
+          "babylon/textures/waterbump.png",
+          scene
+        );
+        waterMaterial.backFaceCulling = true;
+
+        if (waterSettingParameter) {
+          // Convert hex color to Babylon Color3
+          const waterColor = hexToColor3(
+            waterSettingParameter.color || "#000000"
+          );
+          waterMaterial.waterColor = waterColor;
+
+          // Apply other water parameters
+          waterMaterial.opacity =
+            waterSettingParameter.opacity !== undefined
+              ? waterSettingParameter.opacity
+              : 0.9;
+          waterMaterial.colorBlendFactor =
+            waterSettingParameter.colorBlendFactor !== undefined
+              ? waterSettingParameter.colorBlendFactor
+              : 0.3;
+          waterMaterial.bumpHeight =
+            waterSettingParameter.bumpHeight !== undefined
+              ? waterSettingParameter.bumpHeight
+              : 0.5;
+
+          if (waterSettingParameter.waveLength !== undefined) {
+            waterMaterial.waveHeight = waterSettingParameter.waveLength;
+          }
+
+          if (waterSettingParameter.windForce !== undefined) {
+            waterMaterial.windForce = waterSettingParameter.windForce;
+          }
+          waterMaterial.windDirection = new BABYLON.Vector2(1, 1);
+        } else {
+          // Default water properties
+          waterMaterial.diffuseColor = new BABYLON.Color3(0, 0, 0);
+          waterMaterial.waveHeight = 0.2;
+          waterMaterial.colorBlendFactor = 0.25;
+          waterMaterial.opacity = 0.8;
+          waterMaterial.windForce = 10;
+        }
+
+        sceneRef.current.meshes?.forEach((mesh) => {
+          if (mesh.isVisible && mesh.isPickable)
+            waterMaterial.addToRenderList(mesh);
+        });
+        // Add skybox to water reflections
+        waterMaterial.addToRenderList(skyboxRef.current);
+
+        // Apply water material
+        waterMeshRef.current.material = waterMaterial;
+
+        if (modelInfoRef.current.boundingBoxMin) {
+          const baseY = modelInfoRef.current.boundingBoxMin.y - 0.1;
+          const level = waterSettingParameter?.level ?? 0; // use default 0 if not provided
+          waterMeshRef.current.position.y = baseY + level;
+        } else {
+          const level = waterSettingParameter?.level ?? 0;
+          waterMeshRef.current.position.y = level; // fallback if bounding box is unavailable
+        }
+
+        setGroundSettingsVisible(false);
+        break;
+
+      default:
+        break;
+    }
+  };
+
+  const hexToColor3 = (hex) => {
+    hex = hex.replace("#", "");
+    const r = parseInt(hex.substring(0, 2), 16) / 255;
+    const g = parseInt(hex.substring(2, 4), 16) / 255;
+    const b = parseInt(hex.substring(4, 6), 16) / 255;
+    return new BABYLON.Color3(r, g, b);
+  };
+
+  // Calculate environment size
+  const calculateEnvironmentSize = () => {
+    if (! modelInfoRef.current.boundingBoxMin ||! modelInfoRef.current.boundingBoxMax ) {
+      return 1000; // Default size if no models loaded
+    }
+
+    // Get model dimensions
+    const min = modelInfoRef.current.boundingBoxMin;
+    const max = modelInfoRef.current.boundingBoxMax;
+
+    // If model info isn't available yet
+    if (!min || !max) {
+      return 1000; // Default size
+    }
+
+    // Calculate size based on model dimensions
+    const size = max.subtract(min);
+    const maxDimension = Math.max(size.x, size.y, size.z);
+
+    // Environment should be at least 10x larger than model
+    // but not too small or too large
+    const environmentSize = Math.max(1000, maxDimension * 20);
+
+    return environmentSize;
+  };
   return (
     <div>
       {/* Canvas */}
@@ -7558,8 +8025,8 @@ useEffect(() => {
                 <strong>Tag Name:</strong> {selectedMeshInfo.parentFileName}
               </p>
               {selectedMeshInfo.tagDetails && (
-                <>           
-                   <p>
+                <>
+                  <p>
                     <strong>Type:</strong> {selectedMeshInfo.tagDetails.type}
                   </p>
                   {selectedMeshInfo.tagDetails.parenttag && (
@@ -7823,174 +8290,184 @@ useEffect(() => {
         </div>
       )}
 
-           {/* file info */}
-            {showFileInfo && (
-              <div
-                style={{
-                  position: "absolute",
-                  top: 0,
-                  right: 0,
-                  height: "100vh",
-                  backgroundColor: "#272626",
-                  padding: "20px",
-                  boxShadow: "0px 0px 5px 0px rgba(0,0,0,0.75)",
-                  zIndex: 1000,
-                  display: "flex",
-                  flexDirection: "column",
-                  color: "#fff",
-                }}
-              >
-                <div style={{ display: "flex", justifyContent: "flex-end" }}>
-                  <button
-                    className="btn btn-light"
-                    onClick={handleCloseFileInfo}
-                  >
-                    <i className="fa-solid fa-xmark"></i>
-                  </button>
-                </div>
+      {/* file info */}
+      {showFileInfo && (
+        <div
+          style={{
+            position: "absolute",
+            top: 0,
+            right: 0,
+            height: "100vh",
+            backgroundColor: "#272626",
+            padding: "20px",
+            boxShadow: "0px 0px 5px 0px rgba(0,0,0,0.75)",
+            zIndex: 1000,
+            display: "flex",
+            flexDirection: "column",
+            color: "#fff",
+          }}
+        >
+          <div style={{ display: "flex", justifyContent: "flex-end" }}>
+            <button className="btn btn-light" onClick={handleCloseFileInfo}>
+              <i className="fa-solid fa-xmark"></i>
+            </button>
+          </div>
 
-                <div>
-                  {/* Display your tag information here */}
-                  <h5 className="text-center fw-bold ">File Info </h5>
-                  {/* <p>{taginfo.fileid}</p> */}
-                  <p>
-                    <strong>Filename:</strong>
-                    {selectedMeshInfo.parentFileName}
-                  </p>
-                  <p>
-                    <strong>Created:</strong>{" "}
-                    {new Date(selectedMeshInfo.fileMetadata.createdDate).toLocaleDateString()}
-                  </p>
-                  <p>
-                    <strong>Modified:</strong>{" "}
-                    {new Date(selectedMeshInfo.fileMetadata.modifiedDate).toLocaleDateString()}
-                  </p>
-                  <p>
-                    <strong>Accessed:</strong>{" "}
-                    {new Date(selectedMeshInfo.fileMetadata.accessedDate).toLocaleDateString()}
-                  </p>
-                  <p>
-                    <strong>Size:</strong>{" "}
-                    {(selectedMeshInfo.fileMetadata.fileSize / (1024 * 1024)).toFixed(2)} MB
-                  </p>
-                </div>
-              </div>
+          <div>
+            {/* Display your tag information here */}
+            <h5 className="text-center fw-bold ">File Info </h5>
+            {/* <p>{taginfo.fileid}</p> */}
+            <p>
+              <strong>Filename:</strong>
+              {selectedMeshInfo.parentFileName}
+            </p>
+            <p>
+              <strong>Created:</strong>{" "}
+              {new Date(
+                selectedMeshInfo.fileMetadata.createdDate
+              ).toLocaleDateString()}
+            </p>
+            <p>
+              <strong>Modified:</strong>{" "}
+              {new Date(
+                selectedMeshInfo.fileMetadata.modifiedDate
+              ).toLocaleDateString()}
+            </p>
+            <p>
+              <strong>Accessed:</strong>{" "}
+              {new Date(
+                selectedMeshInfo.fileMetadata.accessedDate
+              ).toLocaleDateString()}
+            </p>
+            <p>
+              <strong>Size:</strong>{" "}
+              {(selectedMeshInfo.fileMetadata.fileSize / (1024 * 1024)).toFixed(
+                2
+              )}{" "}
+              MB
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* user tag info */}
+      {tagInfoVisible && (
+        <div
+          style={{
+            position: "absolute",
+            top: 0,
+            right: 0,
+            height: "90vh",
+            backgroundColor: "#272626",
+            padding: "20px",
+            boxShadow: "0px 0px 5px 0px rgba(0,0,0,0.75)",
+            zIndex: 1000,
+            display: "flex",
+            flexDirection: "column",
+            color: "#fff",
+            overflowY: "auto",
+          }}
+        >
+          <div style={{ display: "flex", justifyContent: "flex-end" }}>
+            <button className="btn btn-light" onClick={handleCloseTagInfo}>
+              <i className="fa-solid fa-xmark"></i>
+            </button>
+          </div>
+          <div>
+            <h5 className="text-center fw-bold">General Tag Info</h5>
+            <p>Filename: {selectedMeshInfo.parentFileName}</p>
+
+            {selectedMeshInfo.extraTableData ? (
+              <>
+                {generalTagInfoFields.slice(0, 16).map(({ id, field }) => {
+                  const key = `taginfo${id}`;
+                  const originalValue =
+                    selectedMeshInfo.originalUsertagInfoDetails?.[key];
+
+                  // Display the field with unit if the value exists, otherwise show "N/A"
+                  const label =
+                    originalValue !== null && originalValue !== undefined
+                      ? `${field} `
+                      : `${field}`; // Still show the field and unit even if the value is null or undefined
+
+                  return (
+                    <p key={key}>
+                      {label}:{" "}
+                      {originalValue !== null && originalValue !== undefined
+                        ? originalValue
+                        : "N/A"}
+                    </p>
+                  );
+                })}
+              </>
+            ) : (
+              <p>No additional information available.</p>
             )}
-
-            {/* user tag info */}
-             {tagInfoVisible && (
-              <div
-                style={{
-                  position: "absolute",
-                  top: 0,
-                  right: 0,
-                  height: "90vh",
-                  backgroundColor: "#272626",
-                  padding: "20px",
-                  boxShadow: "0px 0px 5px 0px rgba(0,0,0,0.75)",
-                  zIndex: 1000,
-                  display: "flex",
-                  flexDirection: "column",
-                  color: "#fff",
-                  overflowY: "auto",
-                }}
-              >
-                <div style={{ display: "flex", justifyContent: "flex-end" }}>
-                  <button
-                    className="btn btn-light"
-                    onClick={handleCloseTagInfo}
-                  >
-                    <i className="fa-solid fa-xmark"></i>
-                  </button>
-                </div>
-                <div>
-                  <h5 className="text-center fw-bold">General Tag Info</h5>
-                  <p>Filename: {selectedMeshInfo.parentFileName}</p>
-
-                  {selectedMeshInfo.extraTableData ? (
-                    <>
-                      {generalTagInfoFields
-                        .slice(0, 16)
-                        .map(({ id, field }) => {
-                          const key = `taginfo${id}`;
-                          const originalValue =
-                            selectedMeshInfo.originalUsertagInfoDetails?.[key];
-
-                          // Display the field with unit if the value exists, otherwise show "N/A"
-                          const label =
-                            originalValue !== null &&
-                            originalValue !== undefined
-                              ? `${field} `
-                              : `${field}`; // Still show the field and unit even if the value is null or undefined
-
-                          return (
-                            <p key={key}>
-                              {label}:{" "}
-                              {originalValue !== null &&
-                              originalValue !== undefined
-                                ? originalValue
-                                : "N/A"}
-                            </p>
-                          );
-                        })}
-                    </>
-                  ) : (
-                    <p>No additional information available.</p>
-                  )}
-                </div>
-              </div>
-            )} 
-
+          </div>
+        </div>
+      )}
 
       {speedBar}
 
-          {/*saved view modal box */}
+      {/*saved view modal box */}
 
-            <Modal
-              onHide={handleCloseSavedView}
-              show={savedViewDialog}
-              backdrop="static"
-              keyboard={false}
-              dialogClassName="custom-modal"
+      <Modal
+        onHide={handleCloseSavedView}
+        show={savedViewDialog}
+        backdrop="static"
+        keyboard={false}
+        dialogClassName="custom-modal"
+      >
+        <div className="save-dialog">
+          <div className="title-dialog">
+            <p className="text-light">Save view</p>
+            <p className="text-light cross" onClick={handleCloseSavedView}>
+              &times;
+            </p>
+          </div>
+          <div className="dialog-input">
+            <label>Name*</label>
+            <input
+              type="text"
+              value={saveViewName}
+              onChange={(e) => setSaveViewName(e.target.value)}
+            />
+          </div>
+          <div
+            className="dialog-button"
+            style={{
+              display: "flex",
+              justifyContent: "flex-end",
+              gap: "10px",
+            }}
+          >
+            <button
+              className="btn btn-secondary"
+              onClick={handleCloseSavedView}
             >
-              <div className="save-dialog">
-                <div className="title-dialog">
-                  <p className="text-light">Save view</p>
-                  <p
-                    className="text-light cross"
-                    onClick={handleCloseSavedView}
-                  >
-                    &times;
-                  </p>
-                </div>
-                <div className="dialog-input">
-                  <label>Name*</label>
-                  <input
-                    type="text"
-                    value={saveViewName}
-                    onChange={(e) => setSaveViewName(e.target.value)}
-                  />
-                </div>
-                <div
-                  className="dialog-button"
-                  style={{
-                    display: "flex",
-                    justifyContent: "flex-end",
-                    gap: "10px",
-                  }}
-                >
-                  <button
-                    className="btn btn-secondary"
-                    onClick={handleCloseSavedView}
-                  >
-                    Cancel
-                  </button>
-                  <button className="btn btn-dark" onClick={handleSaveView}>
-                    Save
-                  </button>
-                </div>
-              </div>
-            </Modal>
+              Cancel
+            </button>
+            <button className="btn btn-dark" onClick={handleSaveView}>
+              Save
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* All Saved view */}
+      <div className="circle-containerthree">
+        {allSavedViews.length > 0 &&
+          allSavedViews.map((view, index) => (
+            <div
+              key={view.name}
+              className="circle"
+              onClick={() => applySavedView(view)}
+              title={view.name}
+            >
+              {index + 1}
+            </div>
+          ))}
+      </div>
 
       {customAlert && (
         <Alert
