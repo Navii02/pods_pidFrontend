@@ -16,7 +16,7 @@ function LineList() {
   const [importTag, setImportTag] = useState(false);
   const [selectedFile, setSelectedFile] = useState(null);
    const [allLineList,setAllLinelist]=useState([])
-
+//console.log(allLineList)
 
         const projectString = sessionStorage.getItem("selectedProject");
       const project = projectString ? JSON.parse(projectString) : null;
@@ -56,6 +56,7 @@ function LineList() {
  if(response.status===200){
   setEditedRowIndex(-1);
     setEditedLineData({});
+    fetchLineList(projectId)
  }
   
 
@@ -69,11 +70,12 @@ function LineList() {
   };
 
   const handleConfirm = async() => {
-     const response = await deletelineList(currentDeleteNumber)
+     const response = await deletelineList(projectId,currentDeleteNumber)
      if(response.status===200){
    
     setShowConfirm(false);
     setCurrentDeleteNumber(null);
+    fetchLineList(projectId)
      }
 
   };

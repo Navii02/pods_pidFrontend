@@ -11,6 +11,7 @@ function ContextShare({ children }) {
     const [backgroundColorTag, setBackgroundColorTag] = useState({});
   const [highlightedTagKey, setHighlightedTagKey] = useState(null);
   const [tagsToRemove, setTagsToRemove ] = useState({})
+  const  [iroamerfieldEmpty,setIroamerfieldEmpty]= useState(false)
     //console.log(modalData)
   return (
   
@@ -18,7 +19,7 @@ function ContextShare({ children }) {
     <>
       <TreeresponseContext.Provider value={{ updateTree, setUpdatetree }}>
         <updateProjectContext.Provider value={{ updateProject, setUpdateProject }}>
-          <iroamerContext.Provider value={{viewHideThree, setViewHideThree,highlightedTagKey, setHighlightedTagKey,backgroundColorTag, setBackgroundColorTag,tagsToRemove, setTagsToRemove }}>
+          <iroamerContext.Provider value={{viewHideThree, setViewHideThree,highlightedTagKey, setHighlightedTagKey,backgroundColorTag, setBackgroundColorTag,tagsToRemove, setTagsToRemove,iroamerfieldEmpty,setIroamerfieldEmpty }}>
             {children}
           </iroamerContext.Provider>
         </updateProjectContext.Provider>

@@ -132,11 +132,11 @@ export const EditLinelist = async (data) => {
     throw error;
   }
 };
-export const deletelineList = async (tagId) => {
+export const deletelineList = async (projectId,tagId) => {
   try {
     const response = await commonApi(
-      "DELETE",
-      `${url}/api/delete-line-list/${tagId}`
+      "PUT",
+      `${url}/api/delete-line-list`,{projectId,tagId}
     );
     return response;
   } catch (error) {
@@ -179,11 +179,11 @@ export const EditEquipmentlist = async (data) => {
     throw error;
   }
 };
-export const deleteequipmentList = async (tagId) => {
+export const deleteequipmentList = async (projectId,tagId) => {
   try {
     const response = await commonApi(
-      "DELETE",
-      `${url}/api/delete-equipment-list/${tagId}`
+      "PUT",
+      `${url}/api/delete-equipment-list`,{projectId,tagId}
     );
     return response;
   } catch (error) {

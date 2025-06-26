@@ -35,7 +35,7 @@ const ProjectDetails = ({
   activeTab,
 }) => {
   const { updateTree } = useContext(TreeresponseContext);
-  const { viewHideThree,backgroundColorTag, setHighlightedTagKey, setTagsToRemove, setViewHideThree } =
+  const { viewHideThree,backgroundColorTag, setHighlightedTagKey, setTagsToRemove, setViewHideThree,iroamerfieldEmpty} =
     useContext(iroamerContext);
   const { updateProject } = useContext(updateProjectContext);
   const selectedProject = JSON.parse(sessionStorage.getItem("selectedProject"));
@@ -52,7 +52,7 @@ const ProjectDetails = ({
   const [expandedSystem, setExpandedSystem] = useState(null);
   const [eyeState, setEyeState] = useState({});
   const navigate = useNavigate();
-
+ 
   const entityTypes = {
     areas: "Area",
     systems: "System",
@@ -285,7 +285,7 @@ const ProjectDetails = ({
         ids.systemIds,
         ids.tagIds )
         if (response.status === 200) {
-          console.log(response.data)
+          //console.log(response.data)
           navigate("/iroamer", { state: { modalData: response.data.data, timestamp: Date.now() } });
         } else if (response.status === 400) {
           alert("No Records Found");
@@ -392,7 +392,7 @@ const ProjectDetails = ({
 
   const shouldHighlightTag = (area, disc, sys, tag) => {
     const tagPath = `${area}-${disc}-${sys}-${tag}`.trim();
-    console.log(tagPath);
+    //console.log(tagPath);
     
     return highlightedTagPaths.includes(tagPath);
   };

@@ -37,10 +37,11 @@ fetchEquipmentlist(projectId)
   };
 
   const handleConfirmDelete = async() => {
- const response = await deleteequipmentList(currentDeleteEqup) 
+ const response = await deleteequipmentList(projectId,currentDeleteEqup) 
   if(response.status===200)
 { setShowConfirm(false);
     setCurrentDeleteEqup(null);
+    fetchEquipmentlist(projectId)
 
 }   
   };
@@ -69,6 +70,7 @@ fetchEquipmentlist(projectId)
       setallEquipementList(updatedEquipmentList);
       setEditedRowIndex(-1);
       seteditedEquipmentData({});
+      fetchEquipmentlist(projectId)
     }
   } catch (error) {
     console.error("Error saving equipment:", error);
