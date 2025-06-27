@@ -59,6 +59,9 @@ function TagFileRegisterModal({ setLoading, setFile, file, setOpenModalBox }) {
     boundingBoxCenter: null,
     modelRadius: 10,
   });
+   const projectString = sessionStorage.getItem("selectedProject");
+    const project = projectString ? JSON.parse(projectString) : null;
+    const projectId = project?.projectId;
   // State for transformations (applied to all files or selected file)
   const [transformations, setTransformations] = useState({
     translateX: 0,
@@ -844,7 +847,7 @@ function TagFileRegisterModal({ setLoading, setFile, file, setOpenModalBox }) {
         // Create array of URLs where the files are saved
         const savedFileUrls = files.map((file) => ({
           name: file.name,
-          path: `${url}/models/${file.name}`,
+          path: `${url}/models/${projectId}/${file.name}`,
         }));
 
         console.log("Saved file URLs:", savedFileUrls);

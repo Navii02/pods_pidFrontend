@@ -24,9 +24,12 @@ import { WaterMaterial } from "@babylonjs/materials";
 import { FreeCameraMouseInput } from "../Utils/FlyControls";
 import DeleteConfirm from "../components/DeleteConfirm";
 import {
-  getAllTags,
-  getAllTagsDetails,
-  GetAllUnAssignedPath,
+  getBaseSettings,
+  getGroundSettings,
+  getWaterSettings,
+  updateBaseSettings,
+  updateGroundSettings,
+  updateWaterSettings,
 } from "../services/iroamer";
 import {
   faArrowsToDot,
@@ -39,14 +42,21 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { Axis3d } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { url } from "../services/Url";
-import { iroamerContext } from "../context/ContextShare";
+import { iroamerContext, updateProjectContext } from "../context/ContextShare";
 import {
   fetchAllGentagInfo,
   fetchFromGentagInfoFields,
   getequipmentList,
   getLineList,
 } from "../services/TagApi";
-import { deleteComment, getAllcomments, GetStatusComment, updateComment, updateCommentField } from "../services/CommentApi";
+import {
+  deleteComment,
+  getAllcomments,
+  GetStatusComment,
+  updateComment,
+  updateCommentField,
+} from "../services/CommentApi";
+import { AllSavedView, SaveSavedView } from "../services/CommonApis";
 
 const Iroamer = forwardRef(
   (
@@ -56,16 +66,13 @@ const Iroamer = forwardRef(
       viewHideThreeunassigned,
       leftNavVisible,
 
-
       allViews,
 
       setViewHideThreeunassigned,
 
       currentProjectId,
 
-      setWaterSettingParameter,
-      waterSettingParameter,
-      baseSettingParameter,
+    
 
       applyViewSaved,
 
@@ -75,6 +82,7 @@ const Iroamer = forwardRef(
     },
     ref
   ) => {
+    const { updateProject } = useContext(updateProjectContext);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const {
       highlightedTagKey,
@@ -83,10 +91,13 @@ const Iroamer = forwardRef(
       tagsToRemove,
       setTagsToRemove,
       viewHideThree,
-      setViewHideThree, iroamerfieldEmpty
+      setViewHideThree,
+      iroamerfieldEmpty,
+      modalData,
     } = useContext(iroamerContext);
     const location = useLocation();
-    let modalData = location.state?.modalData || [];
+
+    // let modalData = location.state?.modalData || [];
 
     const navigate = useNavigate();
 
@@ -96,7 +107,7 @@ const Iroamer = forwardRef(
     const [allComments, setAllComments] = useState([]);
     const [allCommentStatus, setAllCommentStatus] = useState([]);
     const [allEquipementList, setallEquipementList] = useState([]);
-    const [userTagInfotable, setUserTagInfotable] = useState({})
+    const [userTagInfotable, setUserTagInfotable] = useState({});
     const [mode, setMode] = useState("");
     const [orthoviewmode, setOrthoviewmode] = useState("perspective");
     const [showComment, setShowComment] = useState(false);
@@ -107,6 +118,10 @@ const Iroamer = forwardRef(
     const [showWireFrame, setShowWireFrame] = useState(false);
     const [savedViewDialog, setSavedViewDialog] = useState(false);
     const [enableClipping, setEnableClipping] = useState(false);
+    const [allSavedViews, setAllSavedViews] = useState([]);
+     const [waterSettingParameter, setWaterSettingParameter] = useState(null);
+  const [baseSettingParameter, setBaseSettingParameter] = useState(null);
+  const [groundSettingParameter, setGroundSettingParameter] = useState(null);
 
     // ------------------------------------PID--------------------------
 
@@ -118,6 +133,10 @@ const Iroamer = forwardRef(
 
     console.log(allComments);
     console.log(allCommentStatus);
+    let view = location.state?.view;
+    console.log(view);
+
+  
 
     // handel orbit control
     const handleOrbitClick = (buttonName) => {
@@ -296,7 +315,6 @@ const Iroamer = forwardRef(
     const [resetTheme, setResetTheme] = useState(false);
     const [reload, setReload] = useState(false);
     const [FileInfoDetails, setFileInfoDetails] = useState({});
-    const [groundSettingParameter, setGroundSettingParameter] = useState(null);
     //console.log("filedetails", FileInfoDetails);
 
     const [groundFormValues, setGroundFormValues] = useState({
@@ -486,7 +504,7 @@ const Iroamer = forwardRef(
       const formattedData = fileDataArray?.map((file) => ({
         tag: file.tag,
         tagId: file.tagId,
-        filePath: ` ${url}/tags/${file.filename}`,
+        filePath: ` ${url}/tags/${projectId}/${file.filename}`,
         filename: file.filename,
         area: file.area,
         disc: file.disc,
@@ -498,7 +516,7 @@ const Iroamer = forwardRef(
         // Create a new array to avoid duplicates
         const newTags = formattedData?.filter(
           (newTag) =>
-            !prevTags.some(
+            !prevTags?.some(
               (prevTag) =>
                 prevTag.tag === newTag.tag &&
                 prevTag.filename === newTag.filename &&
@@ -514,14 +532,15 @@ const Iroamer = forwardRef(
             highlightTagInScene(tag.filename);
           }
         });
-        navigate(location.pathname, { replace: true, state: {} });
+
         return [...prevTags, ...newTags];
       });
     };
 
     useEffect(() => {
       AllTags();
-    }, [location.state?.timestamp]);
+
+    }, [modalData]);
 
     // useEffect for reciecve all tag  from p &ID
     const AlltagsPID = async () => {
@@ -530,7 +549,7 @@ const Iroamer = forwardRef(
       const fileDataArray = Array.isArray(data) ? data : [data];
       const formattedData = fileDataArray?.map((file) => ({
         tag: file.tag,
-        filePath: ` ${url}/tags/${file.filePath}`,
+        filePath: ` ${url}/tags/${projectId}/${file.filePath}`,
         filename: file.filename,
         area: file.area,
         disc: file.disc,
@@ -541,7 +560,7 @@ const Iroamer = forwardRef(
       setSelectedTags((prevTags) => {
         // Iterate through each file in formattedData
         formattedData?.forEach((newTag) => {
-          const isPresent = prevTags.some(
+          const isPresent = prevTags?.some(
             (prevTag) =>
               prevTag.tag === newTag.tag &&
               prevTag.filename === newTag.filename &&
@@ -600,7 +619,7 @@ const Iroamer = forwardRef(
         // Create a new array to avoid duplicates
         const newTags = formattedData?.filter(
           (newTag) =>
-            !prevTags.some(
+            !prevTags?.some(
               (prevTag) =>
                 prevTag.tag === newTag.tag &&
                 prevTag.filename === newTag.filename
@@ -1081,6 +1100,8 @@ const Iroamer = forwardRef(
       const scene = createScene(engine, canvasRef.current);
       scene.clearColor = new BABYLON.Color4(0.2, 0.2, 0.3, 1); // RGBA format
       sceneRef.current = scene;
+
+      canvas.addEventListener("contextmenu", (e) => e.preventDefault());
       canvas.addEventListener("dblclick", handleDoubleClick);
 
       // Engine resize handler
@@ -1166,6 +1187,11 @@ const Iroamer = forwardRef(
         applySavedView(applyViewSaved);
       }
     }, [applyViewSaved]);
+       useEffect(() => {
+      if (view) {
+              applySavedView(view);
+      }
+    }, [view]);
     const removeMeshesFromScene = (scene, tagList) => {
       tagList?.forEach((tag) => {
         const mesh = scene.meshes?.find(
@@ -1189,7 +1215,7 @@ const Iroamer = forwardRef(
     const filterSelectedTags = (modelNames, mode) =>
       setSelectedTags((prevTags) =>
         prevTags?.filter((tag) => {
-          return !modelNames.some((model) => {
+          return !modelNames?.some((model) => {
             const match =
               tag.filename === model.filename &&
               tag.tag === model.tag &&
@@ -1236,7 +1262,7 @@ const Iroamer = forwardRef(
         setSelectedTags((prev) =>
           prev?.filter(
             (tag) =>
-              !modelNames.some(
+              !modelNames?.some(
                 (m) => m.filename === tag.filename && m.number === tag.tag
               )
           )
@@ -1491,17 +1517,17 @@ const Iroamer = forwardRef(
         const tagKey = `${tag.areaTag}-${tag.discTag}-${tag.sysTag}-${tag.tagTag}`;
         if (
           viewHideThree?.[tagKey] === false ||
-          tagsToRemove.includes(tag.tagTag)
+          tagsToRemove?.includes(tag.tagTag)
         ) {
           setLoadedFiles((prevFiles) =>
             prevFiles.filter((filename) => filename !== tag.filename)
           );
         }
       });
-      if (tagsToRemove.length > 0) {
+      if (tagsToRemove?.length > 0) {
         setTagsToRemove([]);
       }
-    }, [selectedTags, loadedFiles]);
+    }, [selectedTags, loadedFiles,iroamerfieldEmpty,modalData]);
 
     //useEffect Camera mode change effects
     useEffect(() => {
@@ -1650,16 +1676,18 @@ const Iroamer = forwardRef(
     //   }
     // }, [selectedItem]);
     const getGeneralTagInfoField = async (projectId) => {
-      try {
+
         const response = await fetchFromGentagInfoFields(projectId);
         if (response.status === 200) {
           console.log(response);
 
           setGeneralTagInfoFields(response.data);
         }
-      } catch (error) {
-        console.error("Failed to fetch status table data:", error);
-      }
+        if(response.status ===404){
+          console.log(response.data.message);
+          
+        }
+    
     };
     //console.log(generalTagInfoFields);
 
@@ -1687,16 +1715,32 @@ const Iroamer = forwardRef(
         //console.log(response);
 
         setUserTagInfotable(response.data);
-      }
+      }else if(response.status===404){
+      console.log(response)
+    }
     };
     useEffect(() => {
-      if (sessionStorage.getItem("selectedProject")) {
+      if (projectId) {
         getGeneralTagInfoField(projectId);
         getAllLinelist(projectId);
         getAllEquipmentList(projectId);
-        getusertaginfo(projectId)
+        getusertaginfo(projectId);
       }
-    }, [projectId]);
+    }, [modalData]);
+    const getAllSavedViews = async (projectId) => {
+      try {
+        const response = await AllSavedView(projectId);
+        if (response.status === 200) {
+          setAllSavedViews(response.data);
+        }
+      } catch (error) {
+        console.error("Failed to fetch all saved views table data:", error);
+      }
+    };
+
+    useEffect(() => {
+      getAllSavedViews(projectId);
+    }, [updateProject]);
 
     useEffect(() => {
       let observer = null;
@@ -1899,7 +1943,6 @@ const Iroamer = forwardRef(
       };
     }, [showMeasure]);
 
-
     const FetchAllcommentStatus = async (projectId) => {
       const response = await GetStatusComment(projectId);
 
@@ -1917,33 +1960,69 @@ const Iroamer = forwardRef(
         setAllComments(response.data.data);
       }
     };
-   const fetchAllCommentData = async () => {
-  try {
-    const [commentsResponse, statusResponse] = await Promise.all([
-      getAllcomments(projectId),
-      GetStatusComment(projectId),
-    ]);
+    const fetchAllCommentData = async () => {
+      try {
+        const [commentsResponse, statusResponse] = await Promise.all([
+          getAllcomments(projectId),
+          GetStatusComment(projectId),
+        ]);
 
-    if (commentsResponse.status === 200) {
-      setAllComments(commentsResponse.data.data);
-    }
-    if (statusResponse.status === 200) {
-      setAllCommentStatus(statusResponse.data.data);
-    }
-  } catch (error) {
-    console.error("Failed to fetch comment data:", error);
-    setCustomAlert(true);
-    setModalMessage("Failed to fetch comments. Please try again.");
-  }
-};useEffect(() => {
-  if (projectId) {
-    fetchAllCommentData();
-    getGeneralTagInfoField(projectId);
-    getAllLinelist(projectId);
-    getAllEquipmentList(projectId);
-    getusertaginfo(projectId);
-  }
-}, [projectId,isCommentOpen]);
+        if (commentsResponse.status === 200) {
+          setAllComments(commentsResponse.data.data);
+        }
+        if (statusResponse.status === 200) {
+          setAllCommentStatus(statusResponse.data.data);
+        }
+      } catch (error) {
+        console.error("Failed to fetch comment data:", error);
+        setCustomAlert(true);
+        setModalMessage("Failed to fetch comments. Please try again.");
+      }
+    };
+     const fetchwatersettings = async(projectId)=>{
+      const response = await getWaterSettings(projectId)
+      if(response.status===200){
+            //console.log(response.data);
+        setWaterSettingParameter(response.data)
+      }
+     }
+
+       const fetchBaseSettinngs = async(projectId)=>{
+      const response = await getBaseSettings(projectId)
+      if(response.status===200){
+            //console.log(response.data);
+        setBaseSettingParameter(response.data)
+      }
+     }
+
+       const fetchGroundsettings = async(projectId)=>{
+      const response = await getGroundSettings(projectId)
+      if(response.status===200){
+        //console.log(response.data);
+        
+        setGroundSettingParameter(response.data)
+      }
+     }
+      useEffect(()=>{
+        if(projectId){
+          fetchBaseSettinngs(projectId)
+          fetchGroundsettings(projectId)
+            fetchwatersettings(projectId)
+          
+        }
+
+      },projectId,modalData)
+
+
+    useEffect(() => {
+      if (projectId) {
+        fetchAllCommentData();
+        getGeneralTagInfoField(projectId);
+        getAllLinelist(projectId);
+        getAllEquipmentList(projectId);
+        getusertaginfo(projectId);
+      }
+    }, [projectId, isCommentOpen]);
     // useEffect for showAll comments functionality
     useEffect(() => {
       if (!sceneRef.current) return;
@@ -2043,7 +2122,7 @@ const Iroamer = forwardRef(
 
       // Update state with combined labels
       setAllLabels([...updatedLabels, ...newLabels]);
-    }, [allComments, showComment, allCommentStatus,isCommentOpen]);
+    }, [allComments, showComment, allCommentStatus, isCommentOpen]);
 
     useEffect(() => {
       if (baseSettingParameter) {
@@ -2111,13 +2190,12 @@ const Iroamer = forwardRef(
       if (!sceneRef.current) return;
 
       const scene = sceneRef.current;
- //console.log(themeName);
- 
+      //console.log(themeName);
+
       switch (themeName) {
         case "DEFAULT":
           // Set default background (dark blue)
-       scene.clearColor = new BABYLON.Color4(0.2, 0.2, 0.298, 1);
-
+          scene.clearColor = new BABYLON.Color4(0.2, 0.2, 0.298, 1);
 
           // Remove ground if it exists
           if (groundRef.current) {
@@ -2395,7 +2473,7 @@ const Iroamer = forwardRef(
           break;
 
         default:
-              scene.clearColor = new BABYLON.Color4(0.2, 0.2, 0.2, 1);
+          scene.clearColor = new BABYLON.Color4(0.2, 0.2, 0.2, 1);
 
           // Remove ground if it exists
           if (groundRef.current) {
@@ -2985,9 +3063,9 @@ const Iroamer = forwardRef(
     };
 
     const deletecomment = async (commentNumber) => {
-      const response = await deleteComment(commentNumber)
+      const response = await deleteComment(commentNumber);
       if (response.status === 200) {
-         fetchAllCommentData();
+        fetchAllCommentData();
         setcommentinfotable(false);
         setcommentinfo(null);
       }
@@ -3009,17 +3087,16 @@ const Iroamer = forwardRef(
         priority: priority,
       };
 
-      const response = await updateCommentField(data)
+      const response = await updateCommentField(data);
       if (response.status === 200) {
         console.log(response);
-        
+
         setCustomAlert(true);
         setModalMessage("Status updated");
-      fetchAllCommentData();
+        fetchAllCommentData();
         handleclosecommentinfo();
       }
     };
-
 
     const showContextMenu = (x, y, mesh) => {
       const windowHeight = window.innerHeight;
@@ -3107,14 +3184,17 @@ const Iroamer = forwardRef(
       }
 
       const tagName = taginfo.filename;
-      //console.log(tagName);
+      console.log(tagName);
 
       if (!sceneRef.current) return;
       const scene = sceneRef.current;
 
       // 1. Find the parent mesh by tag name
       const parentMesh = scene.meshes?.find(
-        (mesh) => mesh.name === tagName || mesh.metadata?.tagNo?.tag === tagName
+        (mesh) =>
+          mesh.name === tagName ||
+          mesh.metadata?.tagNo?.tag === tagName ||
+          mesh.metadata?.tagNo?.tagId === tagName
       );
       //console.log(parentMesh);
 
@@ -3950,7 +4030,7 @@ const Iroamer = forwardRef(
       setItemToDelete(null);
     };
 
-    const handleConfirm = () => {
+    const handleConfirm = async() => {
       if (
         itemToDelete?.type === "save-water-settings" &&
         waterMeshRef.current
@@ -3966,7 +4046,7 @@ const Iroamer = forwardRef(
         } = waterFormValues;
 
         const waterSettings = {
-          projectId: currentProjectId,
+          projectId,
           level,
           opacity: opacity / 100,
           color,
@@ -3976,31 +4056,36 @@ const Iroamer = forwardRef(
           windForce: parseInt(windForce),
         };
 
-        window.api.send("save-water-settings", waterSettings);
-        setWaterSettingParameter({ ...waterSettings });
-        setModalMessage("Water settings saved successfully!");
+         const response = await updateWaterSettings(waterSettings)
+    if(response.status ===2000){
+ setModalMessage("Water settings saved successfully!");
         setCustomAlert(true);
+    }
+       
       }
 
       if (itemToDelete?.type === "save-ground-settings" && groundRef.current) {
         const { level, color, opacity } = groundFormValues;
 
         const groundSettings = {
-          projectId: currentProjectId,
+          projectId,
           level,
           color,
           opacity: opacity / 100,
         };
 
-        window.api.send("save-ground-settings", groundSettings);
+        const response = await updateGroundSettings(groundSettings)
+        if(response.status===200){
         setGroundSettingParameter({ ...groundSettings });
         setModalMessage("Ground settings saved successfully!");
         setCustomAlert(true);
+        }
+
       }
 
       if (itemToDelete?.type === "save-base-settings") {
         const settingsToSave = {
-          projectId: currentProjectId,
+          projectId,
           camera: {
             fov,
             nearClip,
@@ -4027,7 +4112,12 @@ const Iroamer = forwardRef(
           },
         };
         //console.log("settingsToSave", settingsToSave);
-        window.api.send("save-base-setting", settingsToSave);
+        // window.api.send("save-base-setting", settingsToSave);
+         const response = await updateBaseSettings(settingsToSave)
+         if(response.status===200){
+          alert("updated")
+          fetchBaseSettinngs(projectId)
+         }
       }
 
       // Close the confirmation modal and reset state
@@ -4602,7 +4692,7 @@ const Iroamer = forwardRef(
       setMultiplier(validValue); // Store only multiplier
     };
 
-    const handleSaveView = () => {
+    const handleSaveView = async () => {
       if (!saveViewName.trim()) {
         setCustomAlert(true);
         setModalMessage("Please enter a view name");
@@ -4610,7 +4700,7 @@ const Iroamer = forwardRef(
       }
 
       // Check if a view with the same name already exists
-      const viewExists = allViews.some(
+      const viewExists = allViews?.some(
         (view) => view.name === saveViewName.trim()
       );
       if (viewExists) {
@@ -4630,6 +4720,7 @@ const Iroamer = forwardRef(
 
       const viewData = {
         name: saveViewName.trim(),
+        projectId,
         posX: camera.position.x,
         posY: camera.position.y,
         posZ: camera.position.z,
@@ -4656,15 +4747,16 @@ const Iroamer = forwardRef(
       };
 
       // Send the view data to be saved
-      window.api.send("save-camera-view", viewData);
+      const response = await SaveSavedView(viewData);
+      if (response.status === 200) {
+        // Show success message
+        setCustomAlert(true);
+        setModalMessage(`View "${saveViewName}" saved successfully`);
 
-      // Show success message
-      setCustomAlert(true);
-      setModalMessage(`View "${saveViewName}" saved successfully`);
-
-      // Close dialog and reset name
-      setSavedViewDialog(false);
-      setSaveViewName("");
+        // Close dialog and reset name
+        setSavedViewDialog(false);
+        setSaveViewName("");
+      }
 
       // Hide message after a delay
       setTimeout(() => {
@@ -6044,7 +6136,7 @@ const Iroamer = forwardRef(
                     fontWeight:
                       (selectedItemName &&
                         option.label === selectedItemName.name) ||
-                        option.label === taginfo.filename
+                      option.label === taginfo.filename
                         ? "bold"
                         : "normal",
                   }}
@@ -6271,8 +6363,9 @@ const Iroamer = forwardRef(
                       </>
                     )}
                     <label
-                      className={`gray ${activeSection === "camera" ? "bold" : ""
-                        }`}
+                      className={`gray ${
+                        activeSection === "camera" ? "bold" : ""
+                      }`}
                       for="seaLevel"
                       className="gray"
                     >
@@ -6437,10 +6530,10 @@ const Iroamer = forwardRef(
                     )}
 
                     <label
-                      className={`gray ${activeSection === "light" ? "bold" : ""
-                        }`}
+                      className={`gray ${
+                        activeSection === "light" ? "bold" : ""
+                      }`}
                       for="seaLevel"
-                      className="gray"
                     >
                       light Settings
                     </label>
@@ -6448,7 +6541,7 @@ const Iroamer = forwardRef(
                     {activeSection === "light" && (
                       <>
                         <div className="row-narrow">
-                          <label className="gray">Intensity</label>
+                          <label>Intensity</label>
                           <br />
 
                           <input
@@ -6462,7 +6555,7 @@ const Iroamer = forwardRef(
                         </div>
 
                         <div className="row-narrow">
-                          <label className="gray">Color</label>
+                          <label>Color</label>
                           <br />
 
                           <input
@@ -6473,7 +6566,7 @@ const Iroamer = forwardRef(
                         </div>
 
                         <div className="row-narrow">
-                          <label className="gray">Specular Color</label>
+                          <label>Specular Color</label>
                           <br />
 
                           <input
@@ -6484,7 +6577,7 @@ const Iroamer = forwardRef(
                         </div>
 
                         <div className="row-narrow">
-                          <label className="gray">Enable Shadow</label>{" "}
+                          <label>Enable Shadow</label>{" "}
                           <input
                             type="checkbox"
                             checked={lightShadowsEnabled}
@@ -6515,8 +6608,9 @@ const Iroamer = forwardRef(
                     )}
 
                     <label
-                      className={`gray ${activeSection === "material" ? "bold" : ""
-                        }`}
+                      className={`gray ${
+                        activeSection === "material" ? "bold" : ""
+                      }`}
                       for="seaLevel"
                       className="gray"
                     >
@@ -6590,8 +6684,9 @@ const Iroamer = forwardRef(
                     )}
 
                     <label
-                      className={`gray ${activeSection === "measure" ? "bold" : ""
-                        }`}
+                      className={`gray ${
+                        activeSection === "measure" ? "bold" : ""
+                      }`}
                       for="seaLevel"
                       className="gray"
                     >
@@ -6697,6 +6792,21 @@ const Iroamer = forwardRef(
               </div>
             </div>
           </Modal>
+          {/* All Saved view */}
+          <div className="circle-containerthree">
+            {allSavedViews.length > 0 &&
+              allSavedViews.map((view, index) => (
+                <div
+                  key={view.name}
+                  className="circle"
+                  onClick={() => applySavedView(view)}
+                  title={view.name}
+                >
+                  {index + 1}
+                </div>
+              ))}
+          </div>
+
           {/*Confirmation modal */}
           {showConfirm && (
             <DeleteConfirm
@@ -6707,7 +6817,7 @@ const Iroamer = forwardRef(
           )}
         </div>
 
-        <div className="right-sidenav" style={{ zIndex: '1' }}>
+        <div className="right-sidenav" style={{ zIndex: "1" }}>
           <div className="rightSideNav">
             <ul>
               <li className={activeButton === "axis" ? "active" : ""}>
@@ -6785,7 +6895,6 @@ const Iroamer = forwardRef(
                   onClick={() => handlezoomfit("fitview")}
                 >
                   <span className="icon-tooltip" title="Fit View">
-
                     <FontAwesomeIcon icon={faArrowsToDot} size="lg" />
                   </span>
                 </div>

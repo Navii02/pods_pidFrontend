@@ -3922,7 +3922,9 @@ function BulkModelImport({ setLoading }) {
 const loadFiles = async (selectedFiles) => {
   console.log("Loading files:", selectedFiles);
   if (!selectedFiles || selectedFiles.length === 0) return;
-
+   const projectString = sessionStorage.getItem("selectedProject");
+  const project = projectString ? JSON.parse(projectString) : null;
+  const projectId = project?.projectId;
   setProgress(0);
   setIsConverting(true);
   setConversionsInProgress(selectedFiles.length);
@@ -3931,6 +3933,7 @@ const loadFiles = async (selectedFiles) => {
   selectedFiles.forEach((file) => {
     formData.append("files", file);
   });
+  formData.append("projectId", projectId);
 
   try {
     let responseReceived = false;
@@ -3960,7 +3963,7 @@ const loadFiles = async (selectedFiles) => {
       // Create array of URLs where the files are saved
       const savedFileUrls = files.map((file) => ({
         name: file.name,
-        path: `${url}/models/${file.name}`, 
+        path: `${url}/models/${projectId}/${file.name}`, 
       }));
 
       console.log("Saved file URLs:", savedFileUrls);

@@ -27,16 +27,26 @@ import {
   updateProjectContext,
 } from "../context/ContextShare";
 import { GetAllmodals } from "../services/iroamer";
+import DeleteConfirm from "./DeleteConfirm";
+import Alert from "./Alert";
 import { useNavigate } from "react-router-dom";
 
 const ProjectDetails = ({
   showProjectDetails,
   setShowProjectDetails,
   activeTab,
+  setActiveItem,setActiveLink
 }) => {
   const { updateTree } = useContext(TreeresponseContext);
-  const { viewHideThree,backgroundColorTag, setHighlightedTagKey, setTagsToRemove, setViewHideThree,iroamerfieldEmpty} =
-    useContext(iroamerContext);
+  const {
+    viewHideThree,
+    backgroundColorTag,
+    setHighlightedTagKey,
+    setTagsToRemove,
+    setViewHideThree,
+    iroamerfieldEmpty,
+    setModaldata
+  } = useContext(iroamerContext);
   const { updateProject } = useContext(updateProjectContext);
   const selectedProject = JSON.parse(sessionStorage.getItem("selectedProject"));
   const [showEntityModal, setShowEntityModal] = useState(false);
@@ -51,8 +61,13 @@ const ProjectDetails = ({
   const [expandedDiscipline, setExpandedDiscipline] = useState(null);
   const [expandedSystem, setExpandedSystem] = useState(null);
   const [eyeState, setEyeState] = useState({});
+ const [customAlert, setCustomAlert] = useState(false);
+  const [modalMessage, setModalMessage] = useState("");
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [confirmData, setConfirmData] = useState({ type: "", id: "", code: "" });
+
   const navigate = useNavigate();
- 
+
   const entityTypes = {
     areas: "Area",
     systems: "System",
@@ -153,38 +168,41 @@ const ProjectDetails = ({
     const newViewHideThree = {};
 
     switch (entityType) {
- case "Project":
-  areas.forEach((area) => {
-    ids.areaIds.push(area.area);
-    newEyeState[`area_${area.area}`] = !isOpen;
-    newViewHideThree[`${area.area}`] = !isOpen;
-    const disciplines = disciplinesMap[area.area] || [];
-    disciplines.forEach((disc) => {
-      ids.discIds.push(disc.disc);
-      const discKey = `disc_${area.area}_${disc.disc}`;
-      newEyeState[discKey] = !isOpen;
-      newViewHideThree[`${area.area}-${disc.disc}`] = !isOpen;
-      const systemKey = `${area.area}_${disc.disc}`;
-      const systems = systemsMap[systemKey] || [];
-      systems.forEach((sys) => {
-        ids.systemIds.push(sys.sys);
-        const sysKey = `sys_${area.area}_${disc.disc}_${sys.sys}`;
-        newEyeState[sysKey] = !isOpen;
-        newViewHideThree[`${area.area}-${disc.disc}-${sys.sys}`] = !isOpen;
-        const tagKey = `${area.area}_${disc.disc}_${sys.sys}`;
-        const tags = tagsMap[tagKey] || [];
-        tags.forEach((tag) => {
-          ids.tagIds.push(tag.tag);
-          newEyeState[
-            `tag_${area.area}_${disc.disc}_${sys.sys}_${tag.tag}`
-          ] = !isOpen;
-          newViewHideThree[`${area.area}-${disc.disc}-${sys.sys}-${tag.tag}`] = !isOpen;
+      case "Project":
+        areas.forEach((area) => {
+          ids.areaIds.push(area.area);
+          newEyeState[`area_${area.area}`] = !isOpen;
+          newViewHideThree[`${area.area}`] = !isOpen;
+          const disciplines = disciplinesMap[area.area] || [];
+          disciplines.forEach((disc) => {
+            ids.discIds.push(disc.disc);
+            const discKey = `disc_${area.area}_${disc.disc}`;
+            newEyeState[discKey] = !isOpen;
+            newViewHideThree[`${area.area}-${disc.disc}`] = !isOpen;
+            const systemKey = `${area.area}_${disc.disc}`;
+            const systems = systemsMap[systemKey] || [];
+            systems.forEach((sys) => {
+              ids.systemIds.push(sys.sys);
+              const sysKey = `sys_${area.area}_${disc.disc}_${sys.sys}`;
+              newEyeState[sysKey] = !isOpen;
+              newViewHideThree[`${area.area}-${disc.disc}-${sys.sys}`] =
+                !isOpen;
+              const tagKey = `${area.area}_${disc.disc}_${sys.sys}`;
+              const tags = tagsMap[tagKey] || [];
+              tags.forEach((tag) => {
+                ids.tagIds.push(tag.tag);
+                newEyeState[
+                  `tag_${area.area}_${disc.disc}_${sys.sys}_${tag.tag}`
+                ] = !isOpen;
+                newViewHideThree[
+                  `${area.area}-${disc.disc}-${sys.sys}-${tag.tag}`
+                ] = !isOpen;
+              });
+            });
+          });
         });
-      });
-    });
-  });
-  newEyeState["project"] = !isOpen;
-  break;
+        newEyeState["project"] = !isOpen;
+        break;
 
       case "Area":
         ids.areaIds = [entityData.area];
@@ -202,7 +220,8 @@ const ProjectDetails = ({
             ids.systemIds.push(sys.sys);
             const sysKey = `sys_${entityData.area}_${disc.disc}_${sys.sys}`;
             newEyeState[sysKey] = !isOpen;
-            newViewHideThree[`${entityData.area}-${disc.disc}-${sys.sys}`] = !isOpen;
+            newViewHideThree[`${entityData.area}-${disc.disc}-${sys.sys}`] =
+              !isOpen;
             const tagKey = `${entityData.area}_${disc.disc}_${sys.sys}`;
             const tags = tagsMap[tagKey] || [];
             tags.forEach((tag) => {
@@ -210,7 +229,9 @@ const ProjectDetails = ({
               newEyeState[
                 `tag_${entityData.area}_${disc.disc}_${sys.sys}_${tag.tag}`
               ] = !isOpen;
-              newViewHideThree[`${entityData.area}-${disc.disc}-${sys.sys}-${tag.tag}`] = !isOpen;
+              newViewHideThree[
+                `${entityData.area}-${disc.disc}-${sys.sys}-${tag.tag}`
+              ] = !isOpen;
             });
           });
         });
@@ -227,7 +248,8 @@ const ProjectDetails = ({
           ids.systemIds.push(sys.sys);
           const sysKey = `sys_${entityData.area}_${entityData.disc}_${sys.sys}`;
           newEyeState[sysKey] = !isOpen;
-          newViewHideThree[`${entityData.area}-${entityData.disc}-${sys.sys}`] = !isOpen;
+          newViewHideThree[`${entityData.area}-${entityData.disc}-${sys.sys}`] =
+            !isOpen;
           const tagKey = `${entityData.area}_${entityData.disc}_${sys.sys}`;
           const tags = tagsMap[tagKey] || [];
           tags.forEach((tag) => {
@@ -235,7 +257,9 @@ const ProjectDetails = ({
             newEyeState[
               `tag_${entityData.area}_${entityData.disc}_${sys.sys}_${tag.tag}`
             ] = !isOpen;
-            newViewHideThree[`${entityData.area}-${entityData.disc}-${sys.sys}-${tag.tag}`] = !isOpen;
+            newViewHideThree[
+              `${entityData.area}-${entityData.disc}-${sys.sys}-${tag.tag}`
+            ] = !isOpen;
           });
         });
         break;
@@ -247,7 +271,9 @@ const ProjectDetails = ({
         newEyeState[
           `sys_${entityData.area}_${entityData.disc}_${entityData.sys}`
         ] = !isOpen;
-        newViewHideThree[`${entityData.area}-${entityData.disc}-${entityData.sys}`] = !isOpen;
+        newViewHideThree[
+          `${entityData.area}-${entityData.disc}-${entityData.sys}`
+        ] = !isOpen;
         const tagKey = `${entityData.area}_${entityData.disc}_${entityData.sys}`;
         const tags = tagsMap[tagKey] || [];
         tags.forEach((tag) => {
@@ -255,7 +281,9 @@ const ProjectDetails = ({
           newEyeState[
             `tag_${entityData.area}_${entityData.disc}_${entityData.sys}_${tag.tag}`
           ] = !isOpen;
-          newViewHideThree[`${entityData.area}-${entityData.disc}-${entityData.sys}-${tag.tag}`] = !isOpen;
+          newViewHideThree[
+            `${entityData.area}-${entityData.disc}-${entityData.sys}-${tag.tag}`
+          ] = !isOpen;
         });
         break;
 
@@ -267,7 +295,9 @@ const ProjectDetails = ({
         newEyeState[
           `tag_${entityData.area}_${entityData.disc}_${entityData.sys}_${entityData.tag}`
         ] = !isOpen;
-        newViewHideThree[`${entityData.area}-${entityData.disc}-${entityData.sys}-${entityData.tag}`] = !isOpen;
+        newViewHideThree[
+          `${entityData.area}-${entityData.disc}-${entityData.sys}-${entityData.tag}`
+        ] = !isOpen;
         break;
 
       default:
@@ -280,15 +310,27 @@ const ProjectDetails = ({
     if (!isOpen) {
       try {
         setTagsToRemove([]);
-        const response = await GetAllmodals(selectedProject.projectId,ids.areaIds,
-        ids.discIds,
-        ids.systemIds,
-        ids.tagIds )
+        const response = await GetAllmodals(
+          selectedProject.projectId,
+          ids.areaIds,
+          ids.discIds,
+          ids.systemIds,
+          ids.tagIds
+        );
         if (response.status === 200) {
           //console.log(response.data)
-          navigate("/iroamer", { state: { modalData: response.data.data, timestamp: Date.now() } });
+          //   localStorage.setItem("modalData",JSON.stringify(response.data.data))
+        
+              setModaldata(response.data.data)
+          // navigate("/iroamer", {
+          //   state: { modalData: response.data.data, timestamp: Date.now() },
+          // });
+              setActiveItem("iRoamer");
+      setActiveLink("three");
+          navigate("/iroamer" );
         } else if (response.status === 400) {
-          alert("No Records Found");
+    setModalMessage("No Records Found");
+  setCustomAlert(true);
           setEyeState((prev) => ({
             ...prev,
             [entityKey]: false,
@@ -310,7 +352,8 @@ const ProjectDetails = ({
         }
       } catch (error) {
         console.error("Failed to fetch modal data", error);
-        alert("Failed to fetch data");
+        setModalMessage("Failed to fetch data");
+  setCustomAlert(true);
         setEyeState((prev) => ({
           ...prev,
           [entityKey]: false,
@@ -335,29 +378,39 @@ const ProjectDetails = ({
     }
   };
 
-  const handleDelete = async (type, id, code) => {
-    const confirm = window.confirm(
-      `Delete ${type}: ${code}? All child entities will be deleted.`
-    );
-    if (!confirm) return;
+   const handleConfirmDelete = async () => {
+    setShowConfirm(false);
     try {
-      let deleteCode = code;
-      if (type === "Discipline" || type === "Tag") {
-        deleteCode = `${id}__${code}`;
+      let deleteCode = confirmData.code;
+      if (confirmData.type === "Discipline" || confirmData.type === "Tag") {
+        deleteCode = `${confirmData.id}__${confirmData.code}`;
       }
       const response = await DeleteEntity(
-        type,
+        confirmData.type,
         selectedProject.projectId,
         deleteCode
       );
       if (response.status === 200) {
-        alert(`${type} and children deleted.`);
+        setModalMessage(`${confirmData.type} and children deleted.`);
+        setCustomAlert(true);
         fetchAllProjectData();
       }
     } catch (error) {
-      console.error(`Failed to delete ${type}`, error);
-      alert("Deletion failed");
+      console.error(`Failed to delete ${confirmData.type}`, error);
+      setModalMessage("Deletion failed");
+      setCustomAlert(true);
     }
+  };
+
+  const handleCancelDelete = () => {
+    setShowConfirm(false);
+  };
+
+  const handleDelete = async (type, id, code) => {
+    setConfirmData({ type, id, code });
+    setModalMessage(`Delete ${type}: ${code}? All child entities will be deleted.`);
+    setShowConfirm(true);
+    return;
   };
 
   const handleEntityRegisterClose = () => {
@@ -393,16 +446,16 @@ const ProjectDetails = ({
   const shouldHighlightTag = (area, disc, sys, tag) => {
     const tagPath = `${area}-${disc}-${sys}-${tag}`.trim();
     //console.log(tagPath);
-    
+
     return highlightedTagPaths.includes(tagPath);
   };
 
   const trimText = (text, maxLength = 12) => {
-  if (!text) return '';
-  return text.length > maxLength 
-    ? `${text.substring(0, maxLength)}...` 
-    : text;
-};
+    if (!text) return "";
+    return text.length > maxLength
+      ? `${text.substring(0, maxLength)}...`
+      : text;
+  };
 
   return (
     <div>
@@ -579,7 +632,11 @@ const ProjectDetails = ({
                                         }
                                       />
                                       <FontAwesomeIcon
-                                        icon={isSysExpanded ? faFolderOpen : faFolder}
+                                        icon={
+                                          isSysExpanded
+                                            ? faFolderOpen
+                                            : faFolder
+                                        }
                                         className="folder-icon"
                                       />
                                       {sys.sys} - {sys.name}
@@ -724,6 +781,23 @@ const ProjectDetails = ({
           </>
         )}
       </div>
+      
+      {customAlert && (
+        <Alert
+          message={modalMessage}
+          onAlertClose={() => setCustomAlert(false)}
+          show={customAlert}
+        />
+      )}
+
+      {showConfirm && (
+        <DeleteConfirm
+          message={modalMessage}
+          onConfirm={handleConfirmDelete}
+          onCancel={handleCancelDelete}
+          show={showConfirm}
+        />
+      )}
     </div>
   );
 };

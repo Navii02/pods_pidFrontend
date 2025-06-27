@@ -252,7 +252,7 @@ export const fetchAllGentagInfo = async (id) => {
       "GET",
       `${url}/api/get-allgeneral-taginfo/${id}`
     );
-    console.log(response);
+    //console.log(response);
 
     return response;
   } catch (error) {
