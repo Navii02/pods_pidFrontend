@@ -2447,7 +2447,7 @@ const Iroamer = forwardRef(
           // Water material
           const waterMaterial = new WaterMaterial("water", scene);
           waterMaterial.bumpTexture = new BABYLON.Texture(
-            "babylon/textures/waterbump.png",
+            "/babylon/textures/waterbump.png",
             scene
           );
           waterMaterial.backFaceCulling = true;
