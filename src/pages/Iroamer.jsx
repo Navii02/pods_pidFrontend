@@ -53,7 +53,6 @@ import {
   deleteComment,
   getAllcomments,
   GetStatusComment,
-  updateComment,
   updateCommentField,
 } from "../services/CommentApi";
 import { AllSavedView, SaveSavedView } from "../services/CommonApis";
@@ -70,20 +69,11 @@ const Iroamer = forwardRef(
 
       setViewHideThreeunassigned,
 
-      currentProjectId,
-
-    
-
       applyViewSaved,
-
-      setshowDisc,
-      setShowTag,
-      setshowSys,
     },
     ref
   ) => {
     const { updateProject } = useContext(updateProjectContext);
-    const [isModalOpen, setIsModalOpen] = useState(false);
     const {
       highlightedTagKey,
       setHighlightedTagKey,
@@ -119,9 +109,10 @@ const Iroamer = forwardRef(
     const [savedViewDialog, setSavedViewDialog] = useState(false);
     const [enableClipping, setEnableClipping] = useState(false);
     const [allSavedViews, setAllSavedViews] = useState([]);
-     const [waterSettingParameter, setWaterSettingParameter] = useState(null);
-  const [baseSettingParameter, setBaseSettingParameter] = useState(null);
-  const [groundSettingParameter, setGroundSettingParameter] = useState(null);
+    const [waterSettingParameter, setWaterSettingParameter] = useState(null);
+    const [baseSettingParameter, setBaseSettingParameter] = useState(null);
+    const [groundSettingParameter, setGroundSettingParameter] = useState(null);
+    console.log(baseSettingParameter);
 
     // ------------------------------------PID--------------------------
 
@@ -135,8 +126,6 @@ const Iroamer = forwardRef(
     console.log(allCommentStatus);
     let view = location.state?.view;
     console.log(view);
-
-  
 
     // handel orbit control
     const handleOrbitClick = (buttonName) => {
@@ -260,7 +249,6 @@ const Iroamer = forwardRef(
     const objectVisibilityRef = useRef({});
 
     const [speedControlVisible, setSpeedControlVisible] = useState(false);
-    const [cameraSpeed, setCameraSpeed] = useState(1.0);
     const [multiplier, setMultiplier] = useState(1);
     const loadedMeshesRef = useRef([]);
     const modelInfoRef = useRef({
@@ -289,7 +277,6 @@ const Iroamer = forwardRef(
     const [status, setStatus] = useState("");
     const [priority, setPriority] = useState("");
     const [commentEdit, setCommentEdit] = useState("");
-    const [measureUnit, setMeasureUnit] = useState("m");
     const [unitScaleFactor, setUnitScaleFactor] = useState(1);
     const [customUnitLabel, setCustomUnitLabel] = useState("custom");
 
@@ -326,21 +313,21 @@ const Iroamer = forwardRef(
           : 100,
     });
     const [baseFormValues, setBaseFormValues] = useState({
-      measureUnit: "m",
-      customUnitFactor: 1,
-      fov: 45,
-      nearClip: 0.01,
-      farClip: 1000,
-      angularSensibility: 2000,
-      wheelSensibility: 1,
-      cameraSpeed: 1,
-      inertia: 0.4,
-      lightIntensity: 1.0,
+      measureUnit: "",
+      customUnitFactor: 0,
+      fov: 0,
+      nearClip: 0.0,
+      farClip: 0,
+      angularSensibility: 0,
+      wheelSensibility: 0,
+      cameraSpeed: 0,
+      inertia: 0.0,
+      lightIntensity: 0.0,
       specularColor: "#ffffff",
-      shadowsEnabled: true,
-      metallic: 0.5,
-      roughness: 0.5,
-      reflectionIntensity: 1.0,
+      shadowsEnabled: false,
+      metallic: 0.0,
+      roughness: 0.0,
+      reflectionIntensity: 0.0,
     });
     const [waterFormValues, setWaterFormValues] = useState({
       level: waterSettingParameter?.level ?? 0,
@@ -354,6 +341,51 @@ const Iroamer = forwardRef(
       waveLength: waterSettingParameter?.waveLength ?? 1.0,
       windForce: waterSettingParameter?.windForce ?? 20,
     });
+    useEffect(() => {
+      if (baseSettingParameter) {
+        setBaseFormValues({
+          measureUnit: baseSettingParameter?.measure?.unit ?? "m",
+          customUnitFactor:
+            Number(baseSettingParameter?.measure?.scaleValue) || 1,
+          fov: baseSettingParameter?.camera?.fov ?? 45,
+          nearClip: baseSettingParameter?.camera?.nearClip ?? 0.01,
+          farClip: baseSettingParameter?.camera?.farClip ?? 1000,
+          angularSensibility:
+            baseSettingParameter?.camera?.angularSensibility ?? 2000,
+          wheelSensibility: baseSettingParameter?.camera?.wheelSensibility ?? 1,
+          cameraSpeed: baseSettingParameter?.camera?.cameraSpeed ?? 1,
+          inertia: baseSettingParameter?.camera?.inertia ?? 0.4,
+          lightIntensity: baseSettingParameter?.light?.intensity ?? 1.0,
+          lightColor: baseSettingParameter?.light?.color ?? "#ffffff",
+          specularColor:
+            baseSettingParameter?.light?.specularColor ?? "#ffffff",
+          shadowsEnabled: baseSettingParameter?.light?.shadowsEnabled ?? true,
+          metallic: baseSettingParameter?.material?.metallic ?? 0.5,
+          roughness: baseSettingParameter?.material?.roughness ?? 0.5,
+          reflectionIntensity:
+            baseSettingParameter?.material?.reflectionIntensity ?? 1.0,
+        });
+      }
+    }, [baseSettingParameter]);
+
+    useEffect(() => {
+      setFov(baseFormValues.fov || 60);
+      setNearClip(baseFormValues.nearClip || 0.1);
+      setFarClip(baseFormValues.farClip || 1000);
+      setAngularSensibility(baseFormValues.angularSensibility || 2000);
+      setWheelSensibility(baseFormValues.wheelSensibility || 1);
+      setInertia(baseFormValues.inertia || 0.9);
+      setCameraSpeed(baseFormValues.cameraSpeed || 1.0);
+      setMetallic(baseFormValues.metallic || 0.5);
+      setRoughness(baseFormValues.roughness || 0.5);
+      setUnit(baseFormValues.measureUnit || "");
+      setScaleValue(baseFormValues.customUnitFactor || 1);
+      setLightIntensity(baseFormValues.lightIntensity || 1);
+      setSpecularColor(baseFormValues.specularColor || "#ffffff");
+      setLightColor(baseFormValues.lightColor || "#ffffff");
+
+      setLightShadowsEnabled(baseFormValues.shadowsEnabled || false);
+    }, [baseFormValues]);
 
     const groundLevelRef = useRef();
     const groundColorRef = useRef();
@@ -364,7 +396,7 @@ const Iroamer = forwardRef(
     const pointRef = useRef();
     const [showConfirm, setShowConfirm] = useState(false);
     const [confirmMessage, setConfirmMessage] = useState("");
-    const [itemToDelete, setItemToDelete] = useState(null);
+    const [updateBackground, setupdateBackground] = useState({});
     const isUpdatingFromGizmoRef = useRef(false);
     const currentClippingPlaneRef = useRef(null);
 
@@ -378,25 +410,30 @@ const Iroamer = forwardRef(
     const materialRef = useRef(null); // Assign this when creating material
     const lightRef = useRef(null); // Assign this when creating light
 
-    const [metallic, setMetallic] = useState(0.5);
-    const [roughness, setRoughness] = useState(0.5);
     const [intensity, setIntensity] = useState(1);
     const [loadingProgress, setLoadingProgress] = useState(0);
     const [isLoading, setIsLoading] = useState(false);
+    const [activeSection, setActiveSection] = useState(null);
 
+    //Basesettings
     const [fov, setFov] = useState(60);
     const [nearClip, setNearClip] = useState(0.1);
     const [farClip, setFarClip] = useState(1000);
     const [angularSensibility, setAngularSensibility] = useState(2000);
     const [wheelSensibility, setWheelSensibility] = useState(1);
     const [inertia, setInertia] = useState(0.9);
-    const [activeSection, setActiveSection] = useState(null);
+    const [cameraSpeed, setCameraSpeed] = useState(1.0);
+    const [metallic, setMetallic] = useState(0.5);
+    const [roughness, setRoughness] = useState(0.5);
+    const [unit, setUnit] = useState("");
+    const [scaleValue, setScaleValue] = useState(1);
 
     // Light settings
     const [lightIntensity, setLightIntensity] = useState(1);
     const [lightColor, setLightColor] = useState("#ffffff");
     const [specularColor, setSpecularColor] = useState("#ffffff");
     const [lightShadowsEnabled, setLightShadowsEnabled] = useState(false);
+
     const projectString = sessionStorage.getItem("selectedProject");
     const project = projectString ? JSON.parse(projectString) : null;
     const projectId = project?.projectId;
@@ -539,7 +576,6 @@ const Iroamer = forwardRef(
 
     useEffect(() => {
       AllTags();
-
     }, [modalData]);
 
     // useEffect for reciecve all tag  from p &ID
@@ -874,6 +910,11 @@ const Iroamer = forwardRef(
 
     const isUserInteracting = useRef(false);
 
+    const handleEnableCliping = (buttonName) => {
+      setActiveButton(buttonName);
+      setEnableClipping(!enableClipping);
+    };
+
     const handleEnableSectioning = (scene, positionPercent) => {
       if (!modelInfoRef.current) return;
 
@@ -1187,9 +1228,9 @@ const Iroamer = forwardRef(
         applySavedView(applyViewSaved);
       }
     }, [applyViewSaved]);
-       useEffect(() => {
+    useEffect(() => {
       if (view) {
-              applySavedView(view);
+        applySavedView(view);
       }
     }, [view]);
     const removeMeshesFromScene = (scene, tagList) => {
@@ -1313,7 +1354,6 @@ const Iroamer = forwardRef(
 
         filterLoadedFiles(modelNames);
         filterSelectedTags(modelNames, "sys");
-        setShowTag({});
       },
 
       removeDiscModels: (modelNames) => {
@@ -1346,8 +1386,6 @@ const Iroamer = forwardRef(
 
         filterLoadedFiles(modelNames);
         filterSelectedTags(modelNames, "disc");
-        setShowTag({});
-        setshowSys({});
       },
 
       removeAreaModels: (modelNames) => {
@@ -1380,9 +1418,6 @@ const Iroamer = forwardRef(
 
         filterLoadedFiles(modelNames);
         filterSelectedTags(modelNames, "area");
-        setshowDisc({});
-        setshowSys({});
-        setShowTag({});
       },
     }));
 
@@ -1527,7 +1562,7 @@ const Iroamer = forwardRef(
       if (tagsToRemove?.length > 0) {
         setTagsToRemove([]);
       }
-    }, [selectedTags, loadedFiles,iroamerfieldEmpty,modalData]);
+    }, [selectedTags, loadedFiles, iroamerfieldEmpty, modalData]);
 
     //useEffect Camera mode change effects
     useEffect(() => {
@@ -1676,18 +1711,15 @@ const Iroamer = forwardRef(
     //   }
     // }, [selectedItem]);
     const getGeneralTagInfoField = async (projectId) => {
+      const response = await fetchFromGentagInfoFields(projectId);
+      if (response.status === 200) {
+        console.log(response);
 
-        const response = await fetchFromGentagInfoFields(projectId);
-        if (response.status === 200) {
-          console.log(response);
-
-          setGeneralTagInfoFields(response.data);
-        }
-        if(response.status ===404){
-          console.log(response.data.message);
-          
-        }
-    
+        setGeneralTagInfoFields(response.data);
+      }
+      if (response.status === 404) {
+        console.log(response.data.message);
+      }
     };
     //console.log(generalTagInfoFields);
 
@@ -1715,9 +1747,9 @@ const Iroamer = forwardRef(
         //console.log(response);
 
         setUserTagInfotable(response.data);
-      }else if(response.status===404){
-      console.log(response)
-    }
+      } else if (response.status === 404) {
+        console.log(response);
+      }
     };
     useEffect(() => {
       if (projectId) {
@@ -1979,40 +2011,41 @@ const Iroamer = forwardRef(
         setModalMessage("Failed to fetch comments. Please try again.");
       }
     };
-     const fetchwatersettings = async(projectId)=>{
-      const response = await getWaterSettings(projectId)
-      if(response.status===200){
-            //console.log(response.data);
-        setWaterSettingParameter(response.data)
-      }
-     }
-
-       const fetchBaseSettinngs = async(projectId)=>{
-      const response = await getBaseSettings(projectId)
-      if(response.status===200){
-            //console.log(response.data);
-        setBaseSettingParameter(response.data)
-      }
-     }
-
-       const fetchGroundsettings = async(projectId)=>{
-      const response = await getGroundSettings(projectId)
-      if(response.status===200){
+    const fetchwatersettings = async (projectId) => {
+      const response = await getWaterSettings(projectId);
+      if (response.status === 200) {
         //console.log(response.data);
-        
-        setGroundSettingParameter(response.data)
+        setWaterSettingParameter(response.data);
       }
-     }
-      useEffect(()=>{
-        if(projectId){
-          fetchBaseSettinngs(projectId)
-          fetchGroundsettings(projectId)
-            fetchwatersettings(projectId)
-          
+    };
+
+    const fetchBaseSettinngs = async (projectId) => {
+      const response = await getBaseSettings(projectId);
+      if (response.status === 200) {
+        //console.log(response.data);
+        setBaseSettingParameter(JSON.parse(response.data.settings));
+      }
+    };
+
+    const fetchGroundsettings = async (projectId) => {
+      const response = await getGroundSettings(projectId);
+      if (response.status === 200) {
+        //console.log(response.data);
+
+        setGroundSettingParameter(response.data);
+      }
+    };
+    useEffect(
+      () => {
+        if (projectId) {
+          fetchBaseSettinngs(projectId);
+          fetchGroundsettings(projectId);
+          fetchwatersettings(projectId);
         }
-
-      },projectId,modalData)
-
+      },
+      projectId,
+      modalData
+    );
 
     useEffect(() => {
       if (projectId) {
@@ -2123,32 +2156,6 @@ const Iroamer = forwardRef(
       // Update state with combined labels
       setAllLabels([...updatedLabels, ...newLabels]);
     }, [allComments, showComment, allCommentStatus, isCommentOpen]);
-
-    useEffect(() => {
-      if (baseSettingParameter) {
-        setBaseFormValues({
-          measureUnit: baseSettingParameter?.measure?.unit ?? "m",
-          customUnitFactor:
-            Number(baseSettingParameter?.measure?.scaleValue) || 1,
-          fov: baseSettingParameter?.camera?.fov ?? 45,
-          nearClip: baseSettingParameter?.camera?.nearClip ?? 0.01,
-          farClip: baseSettingParameter?.camera?.farClip ?? 1000,
-          angularSensibility:
-            baseSettingParameter?.camera?.angularSensibility ?? 2000,
-          wheelSensibility: baseSettingParameter?.camera?.wheelSensibility ?? 1,
-          cameraSpeed: baseSettingParameter?.camera?.cameraSpeed ?? 1,
-          inertia: baseSettingParameter?.camera?.inertia ?? 0.4,
-          lightIntensity: baseSettingParameter?.light?.intensity ?? 1.0,
-          specularColor:
-            baseSettingParameter?.light?.specularColor ?? "#ffffff",
-          shadowsEnabled: baseSettingParameter?.light?.shadowsEnabled ?? true,
-          metallic: baseSettingParameter?.material?.metallic ?? 0.5,
-          roughness: baseSettingParameter?.material?.roughness ?? 0.5,
-          reflectionIntensity:
-            baseSettingParameter?.material?.reflectionIntensity ?? 1.0,
-        });
-      }
-    }, [baseSettingParameter]);
 
     useEffect(() => {
       if (groundSettingParameter) {
@@ -2541,7 +2548,7 @@ const Iroamer = forwardRef(
           return distanceInMeters; // Default to meters
       }
     };
-    const handleMeasurementPick = (pickInfo, unit, scaleValue) => {
+    const handleMeasurementPick = (pickInfo) => {
       if (!showMeasure || !pickInfo.hit || !pickInfo.pickedMesh) return;
 
       // Skip measurement markers themselves
@@ -2560,6 +2567,11 @@ const Iroamer = forwardRef(
         return;
       }
 
+      // Get unit settings from baseFormValues
+      const { measureUnit, customUnitFactor } = baseFormValues;
+      const unitToUse = measureUnit || "m";
+      const scaleToUse = customUnitFactor || 1;
+
       // Get the exact position in world space
       const pickedPoint = pickInfo.pickedPoint;
 
@@ -2574,9 +2586,9 @@ const Iroamer = forwardRef(
 
         // Update UI state
         setPoint1({
-          x: pickedPoint.x.toFixed(2),
-          y: pickedPoint.y.toFixed(2),
-          z: pickedPoint.z.toFixed(2),
+          x: (pickedPoint.x * scaleToUse).toFixed(2),
+          y: (pickedPoint.y * scaleToUse).toFixed(2),
+          z: (pickedPoint.z * scaleToUse).toFixed(2),
         });
       }
       // If this is the second point
@@ -2589,9 +2601,9 @@ const Iroamer = forwardRef(
 
         // Update UI state with calculated values
         setPoint2({
-          x: pickedPoint.x.toFixed(2),
-          y: pickedPoint.y.toFixed(2),
-          z: pickedPoint.z.toFixed(2),
+          x: (pickedPoint.x * scaleToUse).toFixed(2),
+          y: (pickedPoint.y * scaleToUse).toFixed(2),
+          z: (pickedPoint.z * scaleToUse).toFixed(2),
         });
 
         // Calculate differences
@@ -2604,21 +2616,20 @@ const Iroamer = forwardRef(
         const rawDiffZ = Math.abs(p2.z - p1.z);
 
         // Apply scale
-        const scaledDiffX = (rawDiffX * parseFloat(scaleValue)).toFixed(2);
-        const scaledDiffY = (rawDiffY * parseFloat(scaleValue)).toFixed(2);
-        const scaledDiffZ = (rawDiffZ * parseFloat(scaleValue)).toFixed(2);
+        const scaledDiffX = (rawDiffX * scaleToUse).toFixed(2);
+        const scaledDiffY = (rawDiffY * scaleToUse).toFixed(2);
+        const scaledDiffZ = (rawDiffZ * scaleToUse).toFixed(2);
 
         setDifferences({
-          diffX: scaledDiffX,
-          diffY: scaledDiffY,
-          diffZ: scaledDiffZ,
+          diffX: `${formatMeasurement(scaledDiffX)}`,
+          diffY: `${formatMeasurement(scaledDiffY)} `,
+          diffZ: `${formatMeasurement(scaledDiffZ)} `,
         });
 
-        const distance = BABYLON.Vector3.Distance(p1, p2).toFixed(2);
-        const rawDistance = BABYLON.Vector3.Distance(p1, p2) * scaleValue;
-        setDistance(`${rawDistance.toFixed(2)} ${unit}`);
+        const distance = BABYLON.Vector3.Distance(p1, p2) * scaleToUse;
+        setDistance(`${formatMeasurement(distance.toFixed(2))}`);
 
-        // Calculate angles similar to the provided code
+        // Calculate angles
         const horizontalAngle = calculatePlanAngle(p1, p2).toFixed(2);
         const verticalAngle = calculateElevationAngle(p1, p2).toFixed(2);
 
@@ -2639,9 +2650,9 @@ const Iroamer = forwardRef(
 
         // Update UI state
         setPoint1({
-          x: pickedPoint.x.toFixed(2),
-          y: pickedPoint.y.toFixed(2),
-          z: pickedPoint.z.toFixed(2),
+          x: (pickedPoint.x * scaleToUse).toFixed(2),
+          y: (pickedPoint.y * scaleToUse).toFixed(2),
+          z: (pickedPoint.z * scaleToUse).toFixed(2),
         });
       }
     };
@@ -4006,123 +4017,132 @@ const Iroamer = forwardRef(
         if (onError) onError(error.toString());
       }
     };
-
     const saveWaterSettings = () => {
-      setItemToDelete({ type: "save-water-settings" }); // You can identify it later
+      setupdateBackground({ type: "save-water-settings" });
       setConfirmMessage("Are you sure you want to save the water settings?");
       setShowConfirm(true);
     };
 
     const saveGroundSettings = () => {
-      setItemToDelete({ type: "save-ground-settings" });
+      setupdateBackground({ type: "save-ground-settings" });
       setConfirmMessage("Are you sure you want to save the ground settings?");
       setShowConfirm(true);
     };
 
     const saveBaseSettings = () => {
-      setItemToDelete({ type: "save-base-settings" });
+      setupdateBackground({ type: "save-base-settings" });
       setConfirmMessage("Are you sure you want to save the settings?");
       setShowConfirm(true);
     };
 
     const handleCancelDelete = () => {
       setShowConfirm(false);
-      setItemToDelete(null);
+      setupdateBackground(null);
     };
 
-    const handleConfirm = async() => {
-      if (
-        itemToDelete?.type === "save-water-settings" &&
-        waterMeshRef.current
-      ) {
-        const {
-          level,
-          opacity,
-          color,
-          colorBlendFactor,
-          bumpHeight,
-          waveLength,
-          windForce,
-        } = waterFormValues;
+    const handleConfirm = async () => {
+      try {
+        if (
+          updateBackground?.type === "save-water-settings" &&
+          waterMeshRef.current
+        ) {
+          const {
+            level,
+            opacity,
+            color,
+            colorBlendFactor,
+            bumpHeight,
+            waveLength,
+            windForce,
+          } = waterFormValues;
 
-        const waterSettings = {
-          projectId,
-          level,
-          opacity: opacity / 100,
-          color,
-          colorBlendFactor,
-          bumpHeight: parseFloat(bumpHeight),
-          waveLength: parseFloat(waveLength),
-          windForce: parseInt(windForce),
-        };
+          const waterSettings = {
+            projectId,
+            level,
+            opacity: opacity / 100,
+            color,
+            colorBlendFactor,
+            bumpHeight: parseFloat(bumpHeight),
+            waveLength: parseFloat(waveLength),
+            windForce: parseInt(windForce),
+          };
 
-         const response = await updateWaterSettings(waterSettings)
-    if(response.status ===2000){
- setModalMessage("Water settings saved successfully!");
-        setCustomAlert(true);
-    }
-       
-      }
-
-      if (itemToDelete?.type === "save-ground-settings" && groundRef.current) {
-        const { level, color, opacity } = groundFormValues;
-
-        const groundSettings = {
-          projectId,
-          level,
-          color,
-          opacity: opacity / 100,
-        };
-
-        const response = await updateGroundSettings(groundSettings)
-        if(response.status===200){
-        setGroundSettingParameter({ ...groundSettings });
-        setModalMessage("Ground settings saved successfully!");
-        setCustomAlert(true);
+          const response = await updateWaterSettings(waterSettings);
+          if (response.status === 200) {
+            setModalMessage("Water settings saved successfully!");
+            setCustomAlert(true);
+          }
         }
 
-      }
+        if (
+          updateBackground?.type === "save-ground-settings" &&
+          groundRef.current
+        ) {
+          const { level, color, opacity } = groundFormValues;
 
-      if (itemToDelete?.type === "save-base-settings") {
-        const settingsToSave = {
-          projectId,
-          camera: {
-            fov,
-            nearClip,
-            farClip,
-            angularSensibility,
-            wheelSensibility,
-            cameraSpeed,
-            inertia,
-          },
-          light: {
-            intensity: lightIntensity,
-            color: lightColor,
-            specularColor,
-            shadowsEnabled: lightShadowsEnabled,
-          },
-          material: {
-            metallic,
-            roughness,
-            reflectionIntensity,
-          },
-          measure: {
-            unit,
-            scaleValue,
-          },
-        };
-        //console.log("settingsToSave", settingsToSave);
-        // window.api.send("save-base-setting", settingsToSave);
-         const response = await updateBaseSettings(settingsToSave)
-         if(response.status===200){
-          alert("updated")
-          fetchBaseSettinngs(projectId)
-         }
-      }
+          const groundSettings = {
+            projectId,
+            level,
+            color,
+            opacity: opacity / 100,
+          };
 
-      // Close the confirmation modal and reset state
-      setShowConfirm(false);
-      setItemToDelete(null);
+          const response = await updateGroundSettings(groundSettings);
+          if (response.status === 200) {
+            setGroundSettingParameter({ ...groundSettings });
+            setModalMessage("Ground settings saved successfully!");
+            setCustomAlert(true);
+          }
+        }
+
+        if (updateBackground?.type === "save-base-settings") {
+          const settingsToSave = {
+            projectId,
+            settings: {
+              camera: {
+                fov: fov,
+                nearClip: nearClip,
+                farClip: farClip,
+                angularSensibility: angularSensibility,
+                wheelSensibility: wheelSensibility,
+                cameraSpeed,
+                inertia: inertia,
+              },
+              light: {
+                intensity: lightIntensity,
+                color: lightColor,
+                specularColor: specularColor,
+                shadowsEnabled: lightShadowsEnabled,
+              },
+              material: {
+                metallic: metallic,
+                roughness: roughness,
+                reflectionIntensity: reflectionIntensity,
+              },
+              measure: {
+                unit,
+                scaleValue,
+              },
+            },
+          };
+
+          const response = await updateBaseSettings(settingsToSave);
+          if (response.status === 200) {
+            setModalMessage("Base settings saved successfully!");
+            setCustomAlert(true);
+            setsettingbox(false);
+            setActiveSection(null);
+            fetchBaseSettinngs(projectId);
+          }
+        }
+      } catch (error) {
+        console.error("Error saving settings:", error);
+        setModalMessage("Failed to save settings!");
+        setCustomAlert(true);
+      } finally {
+        setShowConfirm(false);
+        setupdateBackground(null);
+      }
     };
 
     // Function to reset ground settings
@@ -4822,7 +4842,7 @@ const Iroamer = forwardRef(
       let convertedValue = numValue;
       let unitLabel = "";
 
-      switch (measureUnit) {
+      switch (unit) {
         case "mm":
           convertedValue = numValue * 1000;
           unitLabel = "mm";
@@ -4898,9 +4918,6 @@ const Iroamer = forwardRef(
       setsettingbox(false);
     };
 
-    const handlecontrolsopen = () => {
-      setShowControls(!showControls);
-    };
     const handleWireFrame = () => {
       if (!sceneRef.current) return;
       const scene = sceneRef.current;
@@ -4920,22 +4937,22 @@ const Iroamer = forwardRef(
 
     const handleResetSettings = () => {
       // === Reset State Variables ===
-      setFov(45);
-      setNearClip(0.1);
-      setFarClip(1000);
-      setInertia(0.4);
-      setAngularSensibility(2000);
-      setWheelSensibility(1);
-      setMetallic(0.5);
-      setRoughness(0.5);
-      setIntensity(1.0);
-      setSpecularColor("#ffffff");
-      setReflectionIntensity(1.0);
-      setLightColor("#ffffff");
-      setLightIntensity(1.0);
-      setUnit("m");
-      setScaleValue(1);
+      setFov(baseFormValues.fov || 60);
+      setNearClip(baseFormValues.nearClip || 0.1);
+      setFarClip(baseFormValues.farClip || 1000);
+      setAngularSensibility(baseFormValues.angularSensibility || 2000);
+      setWheelSensibility(baseFormValues.wheelSensibility || 1);
+      setInertia(baseFormValues.inertia || 0.9);
+      setCameraSpeed(baseFormValues.cameraSpeed || 1.0);
+      setMetallic(baseFormValues.metallic || 0.5);
+      setRoughness(baseFormValues.roughness || 0.5);
+      setUnit(baseFormValues.measureUnit || "");
+      setScaleValue(baseFormValues.customUnitFactor || 1);
+      setLightIntensity(baseFormValues.lightIntensity || 1);
+      setSpecularColor(baseFormValues.specularColor || "#ffffff");
+      setLightColor(baseFormValues.lightColor || "#ffffff");
 
+      setLightShadowsEnabled(baseFormValues.shadowsEnabled || false);
       // === Reset 3D Camera ===
       const scene = sceneRef.current;
       const camera = scene?.activeCamera;
@@ -4994,6 +5011,8 @@ const Iroamer = forwardRef(
       setActiveSection((prev) => (prev === "measure" ? null : "measure"));
 
     const handleFovChange = (e) => setFov(Number(e.target.value));
+    const handleCameraSpeedChange = (e) =>
+      setCameraSpeed(Number(e.target.value));
 
     const handleMetallicChange = (e) => {
       const newMetallic = parseFloat(e.target.value);
@@ -5062,9 +5081,6 @@ const Iroamer = forwardRef(
     const handleLightIntensityChange = (e) =>
       setLightIntensity(Number(e.target.value));
     const handleLightColorChange = (e) => setLightColor(e.target.value);
-
-    const [unit, setUnit] = useState("");
-    const [scaleValue, setScaleValue] = useState(1);
 
     const handleUnitChange = (e) => {
       const newUnit = e.target.value;
@@ -5169,7 +5185,6 @@ const Iroamer = forwardRef(
               </div>
             </div>
           )}
-
           {/* CAD Axis */}
 
           {showAxis && sceneRef.current && (
@@ -5178,136 +5193,156 @@ const Iroamer = forwardRef(
 
           {/* Speed bar */}
           {speedBar}
-          {/* 
-          {(enableClipping || enableBoxClipping) && (
-  <div
-    className="clipping-controls"
-    style={{
-      position: "absolute",
-      top: "55vh",
-      right: 0,
-      zIndex: "100",
-      backgroundColor: "rgba(255, 255, 255, 0.9)",
-      padding: "10px",
-      borderRadius: "8px",
-      width: "220px",
-      fontSize: "14px",
-    }}
-  >
-    <div style={{ marginBottom: "15px" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "10px" }}>
-        <label style={{ fontWeight: "bold" }}>Clipping Mode:</label>
-      </div>
-      <div style={{ display: "flex", gap: "10px" }}>
-        <button 
-          onClick={() => { 
-            setEnableClipping(true); 
-            setEnableBoxClipping(false); 
-          }}
-          style={{ 
-            flex: 1, 
-            padding: "5px", 
-            backgroundColor: enableClipping ? "#4285f4" : "#e0e0e0",
-            color: enableClipping ? "white" : "black",
-            border: "none",
-            borderRadius: "4px"
-          }}
-        >
-          Plane
-        </button>
-        <button 
-          onClick={() => { 
-            setEnableBoxClipping(true); 
-            setEnableClipping(false); 
-          }}
-          style={{ 
-            flex: 1, 
-            padding: "5px", 
-            backgroundColor: enableBoxClipping ? "#4285f4" : "#e0e0e0",
-            color: enableBoxClipping ? "white" : "black",
-            border: "none",
-            borderRadius: "4px"
-          }}
-        >
-          Box
-        </button>
-      </div>
-    </div>
-    
-    {enableClipping && (
-      <>
-        <label>Clipping Plane Axis:</label>
-        <select
-          value={clippingAxis}
-          onChange={(e) => setClippingAxis(e.target.value)}
-          style={{ width: "100%", marginBottom: "10px" }}
-        >
-          <option value="X">X - Negative</option>
-          <option value="-X">X - Positive</option>
-          <option value="Z">Z - Negative</option>
-          <option value="-Z">Z - Positive</option>
-          <option value="Y">Y - Negative</option>
-          <option value="-Y">Y - Positive</option>
-        </select>
-        
-        <div style={{ textAlign: "center", margin: "10px 0" }}>
-          <span style={{ fontWeight: "bold" }}>Position: {clippingPosition.toFixed(0)}%</span>
-        </div>
-        
-        <button
-          onClick={() => setClippingPosition(50)}
-          style={{ width: "100%", padding: "5px" }}
-        >
-          Reset Position
-        </button>
-      </>
-    )}
-    
-    {enableBoxClipping && (
-      <div style={{ textAlign: "center", margin: "10px 0" }}>
-        <p>Use the gizmo handles to resize, rotate, and position the clipping box.</p>
-        <button
-          onClick={() => {
-            // Reset box to default position and size
-            if (clippingBoxMeshRef.current && modelInfoRef.current) {
-              const { boundingBoxMin, boundingBoxMax } = modelInfoRef.current;
-              const fullSize = boundingBoxMax.subtract(boundingBoxMin);
-              const center = boundingBoxMin.add(fullSize.scale(0.5));
-              
-              clippingBoxMeshRef.current.position = center;
-              clippingBoxMeshRef.current.scaling = fullSize.scale(0.75);
-              clippingBoxMeshRef.current.rotationQuaternion = BABYLON.Quaternion.Identity();
-              
-              // Re-apply clipping with reset box
-              applyCustomClipping(sceneRef.current, clippingBoxMeshRef.current);
-            }
-          }}
-          style={{ width: "100%", padding: "5px" }}
-        >
-          Reset Box
-        </button>
-      </div>
-    )}
-    
-    <button
-      onClick={() => {
-        setEnableClipping(false);
-        setEnableBoxClipping(false);
-      }}
-      style={{ 
-        width: "100%", 
-        padding: "5px", 
-        marginTop: "10px",
-        backgroundColor: "#f44336",
-        color: "white",
-        border: "none",
-        borderRadius: "4px"
-      }}
-    >
-      Disable Clipping
-    </button>
-  </div>
-)} */}
+
+          {/* {(enableClipping || enableBoxClipping) && (
+            <div
+              className="clipping-controls"
+              style={{
+                position: "absolute",
+                top: "55vh",
+                right: 0,
+                zIndex: "100",
+                backgroundColor: "rgba(255, 255, 255, 0.9)",
+                padding: "10px",
+                borderRadius: "8px",
+                width: "220px",
+                fontSize: "14px",
+              }}
+            >
+              <div style={{ marginBottom: "15px" }}>
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    marginBottom: "10px",
+                  }}
+                >
+                  <label style={{ fontWeight: "bold" }}>Clipping Mode:</label>
+                </div>
+                <div style={{ display: "flex", gap: "10px" }}>
+                  <button
+                    onClick={() => {
+                      setEnableClipping(true);
+                      setEnableBoxClipping(false);
+                    }}
+                    style={{
+                      flex: 1,
+                      padding: "5px",
+                      backgroundColor: enableClipping ? "#4285f4" : "#e0e0e0",
+                      color: enableClipping ? "white" : "black",
+                      border: "none",
+                      borderRadius: "4px",
+                    }}
+                  >
+                    Plane
+                  </button>
+                  <button
+                    onClick={() => {
+                      setEnableBoxClipping(true);
+                      setEnableClipping(false);
+                    }}
+                    style={{
+                      flex: 1,
+                      padding: "5px",
+                      backgroundColor: enableBoxClipping
+                        ? "#4285f4"
+                        : "#e0e0e0",
+                      color: enableBoxClipping ? "white" : "black",
+                      border: "none",
+                      borderRadius: "4px",
+                    }}
+                  >
+                    Box
+                  </button>
+                </div>
+              </div>
+
+              {enableClipping && (
+                <>
+                  <label>Clipping Plane Axis:</label>
+                  <select
+                    value={clippingAxis}
+                    onChange={(e) => setClippingAxis(e.target.value)}
+                    style={{ width: "100%", marginBottom: "10px" }}
+                  >
+                    <option value="X">X - Negative</option>
+                    <option value="-X">X - Positive</option>
+                    <option value="Z">Z - Negative</option>
+                    <option value="-Z">Z - Positive</option>
+                    <option value="Y">Y - Negative</option>
+                    <option value="-Y">Y - Positive</option>
+                  </select>
+
+                  <div style={{ textAlign: "center", margin: "10px 0" }}>
+                    <span style={{ fontWeight: "bold" }}>
+                      Position: {clippingPosition.toFixed(0)}%
+                    </span>
+                  </div>
+
+                  <button
+                    onClick={() => setClippingPosition(50)}
+                    style={{ width: "100%", padding: "5px" }}
+                  >
+                    Reset Position
+                  </button>
+                </>
+              )}
+
+              {enableBoxClipping && (
+                <div style={{ textAlign: "center", margin: "10px 0" }}>
+                  <p>
+                    Use the gizmo handles to resize, rotate, and position the
+                    clipping box.
+                  </p>
+                  <button
+                    onClick={() => {
+                      // Reset box to default position and size
+                      if (clippingBoxMeshRef.current && modelInfoRef.current) {
+                        const { boundingBoxMin, boundingBoxMax } =
+                          modelInfoRef.current;
+                        const fullSize =
+                          boundingBoxMax.subtract(boundingBoxMin);
+                        const center = boundingBoxMin.add(fullSize.scale(0.5));
+
+                        clippingBoxMeshRef.current.position = center;
+                        clippingBoxMeshRef.current.scaling =
+                          fullSize.scale(0.75);
+                        clippingBoxMeshRef.current.rotationQuaternion =
+                          BABYLON.Quaternion.Identity();
+
+                        // Re-apply clipping with reset box
+                        applyCustomClipping(
+                          sceneRef.current,
+                          clippingBoxMeshRef.current
+                        );
+                      }
+                    }}
+                    style={{ width: "100%", padding: "5px" }}
+                  >
+                    Reset Box
+                  </button>
+                </div>
+              )}
+
+              <button
+                onClick={() => {
+                  setEnableClipping(false);
+                  setEnableBoxClipping(false);
+                }}
+                style={{
+                  width: "100%",
+                  padding: "5px",
+                  marginTop: "10px",
+                  backgroundColor: "#f44336",
+                  color: "white",
+                  border: "none",
+                  borderRadius: "4px",
+                }}
+              >
+                Disable Clipping
+              </button>
+            </div>
+          )} */}
 
           {clippingSetting && (
             <div id="groundSettings" className="contextMenu">
@@ -6382,13 +6417,8 @@ const Iroamer = forwardRef(
                           <br />
                           <input
                             type="number"
-                            value={baseFormValues.fov}
-                            onChange={(e) =>
-                              setBaseFormValues({
-                                ...baseFormValues,
-                                fov: Number(e.target.value),
-                              })
-                            }
+                            value={fov}
+                            onChange={handleFovChange}
                             step="1"
                             min="1"
                             max="180"
@@ -6402,13 +6432,8 @@ const Iroamer = forwardRef(
 
                           <input
                             type="number"
-                            value={baseFormValues.nearClip}
-                            onChange={(e) =>
-                              setBaseFormValues({
-                                ...baseFormValues,
-                                nearClip: Number(e.target.value),
-                              })
-                            }
+                            value={nearClip}
+                            onChange={handleNearClipChange}
                             step="0.01"
                             min="0.01"
                           />
@@ -6421,13 +6446,8 @@ const Iroamer = forwardRef(
 
                           <input
                             type="number"
-                            value={baseFormValues.farClip}
-                            onChange={(e) =>
-                              setBaseFormValues({
-                                ...baseFormValues,
-                                farClip: Number(e.target.value),
-                              })
-                            }
+                            value={farClip}
+                            onChange={handleFarClipChange}
                             step="1"
                             min="1"
                           />
@@ -6438,13 +6458,8 @@ const Iroamer = forwardRef(
                           <br />
                           <input
                             type="number"
-                            value={baseFormValues.angularSensibility}
-                            onChange={(e) =>
-                              setBaseFormValues({
-                                ...baseFormValues,
-                                angularSensibility: Number(e.target.value),
-                              })
-                            }
+                            value={angularSensibility}
+                            onChange={handleAngularSensibilityChange}
                             step="1"
                             min="1"
                           />
@@ -6454,13 +6469,8 @@ const Iroamer = forwardRef(
                           <br />
                           <input
                             type="number"
-                            value={baseFormValues.wheelSensibility}
-                            onChange={(e) =>
-                              setBaseFormValues({
-                                ...baseFormValues,
-                                wheelSensibility: Number(e.target.value),
-                              })
-                            }
+                            value={wheelSensibility}
+                            onChange={handleWheelSensibilityChange}
                             step="1"
                             min="1"
                           />
@@ -6477,13 +6487,8 @@ const Iroamer = forwardRef(
                             max="2"
                             step="0.1"
                             className="btn btn-dark"
-                            value={baseFormValues.cameraSpeed}
-                            onChange={(e) =>
-                              setBaseFormValues({
-                                ...baseFormValues,
-                                cameraSpeed: Number(e.target.value),
-                              })
-                            }
+                            value={cameraSpeed}
+                            onChange={handleCameraSpeedChange}
                             style={{ marginLeft: "10px" }}
                           />
                         </div>
@@ -6495,13 +6500,8 @@ const Iroamer = forwardRef(
 
                           <input
                             type="number"
-                            value={baseFormValues.inertia}
-                            onChange={(e) =>
-                              setBaseFormValues({
-                                ...baseFormValues,
-                                inertia: Number(e.target.value),
-                              })
-                            }
+                            value={inertia}
+                            onChange={handleInertiaChange}
                             step="0.01"
                             min="0"
                             max="1"
@@ -6817,7 +6817,7 @@ const Iroamer = forwardRef(
           )}
         </div>
 
-        <div className="right-sidenav" style={{ zIndex: "1" }}>
+        <div className="right-sidenav">
           <div className="rightSideNav">
             <ul>
               <li className={activeButton === "axis" ? "active" : ""}>
@@ -6871,11 +6871,9 @@ const Iroamer = forwardRef(
               <li className={activeButton === "clip" ? "active" : ""}>
                 <div
                   className="tooltip-container"
-                  onContextMenu={(e) => {
-                    e.preventDefault(); // Prevent default right-click menu
-                    setClippingSetting(true);
-                  }}
+                  onContextMenu={(e) => e.preventDefault()} // Still prevent default menu
                   onClick={() => {
+                    handleEnableCliping("clip");
                     if (sceneRef.current) {
                       handleEnableSectioning(
                         sceneRef.current,
@@ -7133,6 +7131,13 @@ const Iroamer = forwardRef(
             </ul>
           </div>
         </div>
+        {customAlert && (
+          <Alert
+            message={modalMessage}
+            onAlertClose={() => setCustomAlert(false)}
+            show={customAlert}
+          />
+        )}
       </div>
     );
   }
