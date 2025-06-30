@@ -1,7 +1,8 @@
 
 import React from 'react'
 
-function Alert({ message, onAlertClose }) {
+function Alert({ message, onAlertClose, show }) {
+  if (!show) return null;
   return (
     <div className="custom-alert">
     <div className="custom-alert-content">

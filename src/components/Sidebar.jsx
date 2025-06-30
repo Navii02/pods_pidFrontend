@@ -125,11 +125,18 @@ function Sidebar({
     }
   };
 
-  const handleMoveToSavedView = (view) => {
-    if (view) {
+const handleMoveToSavedView = (view) => {
+  const activeItem = sessionStorage.getItem("activeItem");
+
+  if (view) {
+    if (activeItem === "Open Global Model") {
       navigate("/global-model/open", { state: { view: view } });
+    } else {
+      navigate("/iroamer", { state: { view: view } });
     }
-  };
+  }
+};
+
 
   const [openMenus, setOpenMenus] = useState({
     documents: false,
@@ -502,6 +509,8 @@ function Sidebar({
                         showProjectDetails={showProjectDetails}
                         setShowProjectDetails={setShowProjectDetails}
                         onAddArea={() => console.log("Add area clicked")}
+                            setActiveItem={setActiveItem}
+                          setActiveLink={setActiveLink}
                       />
                     )}
                   </div>

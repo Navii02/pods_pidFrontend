@@ -3,10 +3,12 @@ import { useNavigate } from "react-router-dom";
 import Logo from "../assets/images/logo-pd.png";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faArrowRightFromBracket } from "@fortawesome/free-solid-svg-icons";
-import { updateProjectContext } from "../context/ContextShare";
+import { iroamerContext, updateProjectContext } from "../context/ContextShare";
 
 const Header = () => {
   const navigate = useNavigate();
+    const {setIroamerfieldEmpty,setModaldata} =
+      useContext(iroamerContext);
   const { setUpdateProject } = useContext(updateProjectContext);
   const projectString = sessionStorage.getItem("selectedProject");
   const project = projectString ? JSON.parse(projectString) : null;
@@ -16,6 +18,8 @@ const Header = () => {
     sessionStorage.clear();
 
     setUpdateProject("No data");
+    setIroamerfieldEmpty(false)
+    setModaldata([])
     navigate("/iroamer");
   };
 

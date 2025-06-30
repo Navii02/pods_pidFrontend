@@ -39,6 +39,8 @@ function GeneralTagInfoTable({}) {
     if (response.status === 200) {
       console.log(response.data);
       setUserTagInfotable(response.data);
+    }else if(response.status===404){
+      console.log(response)
     }
   };
   useEffect(() => {

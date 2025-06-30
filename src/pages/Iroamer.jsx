@@ -24,11 +24,15 @@ import { WaterMaterial } from "@babylonjs/materials";
 import { FreeCameraMouseInput } from "../Utils/FlyControls";
 import DeleteConfirm from "../components/DeleteConfirm";
 import {
-  getAllTags,
-  getAllTagsDetails,
-  GetAllUnAssignedPath,
+  getBaseSettings,
+  getGroundSettings,
+  getWaterSettings,
+  updateBaseSettings,
+  updateGroundSettings,
+  updateWaterSettings,
 } from "../services/iroamer";
 import {
+  faArrowsToDot,
   faGear,
   faMousePointer,
   faPlane,
@@ -38,7 +42,21 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { Axis3d } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { url } from "../services/Url";
-import { iroamerContext } from "../context/ContextShare";
+import { iroamerContext, updateProjectContext } from "../context/ContextShare";
+import {
+  fetchAllGentagInfo,
+  fetchFromGentagInfoFields,
+  getequipmentList,
+  getLineList,
+} from "../services/TagApi";
+import {
+  deleteComment,
+  getAllcomments,
+  GetStatusComment,
+  updateComment,
+  updateCommentField,
+} from "../services/CommentApi";
+import { AllSavedView, SaveSavedView } from "../services/CommonApis";
 
 const Iroamer = forwardRef(
   (
@@ -48,23 +66,14 @@ const Iroamer = forwardRef(
       viewHideThreeunassigned,
       leftNavVisible,
 
-      allComments,
-      allEquipementList,
-      allLineList,
-      userTagInfotable,
-      generalTagInfoFields,
-      allCommentStatus,
-
       allViews,
 
       setViewHideThreeunassigned,
 
       currentProjectId,
-      setGroundSettingParameter,
-      setWaterSettingParameter,
-      waterSettingParameter,
-      baseSettingParameter,
-      groundSettingParameter,
+
+    
+
       applyViewSaved,
 
       setshowDisc,
@@ -73,6 +82,7 @@ const Iroamer = forwardRef(
     },
     ref
   ) => {
+    const { updateProject } = useContext(updateProjectContext);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const {
       highlightedTagKey,
@@ -82,28 +92,36 @@ const Iroamer = forwardRef(
       setTagsToRemove,
       viewHideThree,
       setViewHideThree,
+      iroamerfieldEmpty,
+      modalData,
     } = useContext(iroamerContext);
     const location = useLocation();
-    const modalData = location.state?.modalData || [];
+
+    // let modalData = location.state?.modalData || [];
 
     const navigate = useNavigate();
 
     const [viewMode, setViewMode] = useState("Top View");
-
+    const [generalTagInfoFields, setGeneralTagInfoFields] = useState([]);
+    const [allLineList, setallLineList] = useState([]);
+    const [allComments, setAllComments] = useState([]);
+    const [allCommentStatus, setAllCommentStatus] = useState([]);
+    const [allEquipementList, setallEquipementList] = useState([]);
+    const [userTagInfotable, setUserTagInfotable] = useState({});
     const [mode, setMode] = useState("");
     const [orthoviewmode, setOrthoviewmode] = useState("perspective");
     const [showComment, setShowComment] = useState(false);
     const [selectedItem, setselectedItem] = useState(false);
     const [activeButton, setActiveButton] = useState(null);
-
     const [settingbox, setsettingbox] = useState(false);
-
     const [showMeasure, setShowMeasure] = useState(false);
     const [showWireFrame, setShowWireFrame] = useState(false);
-
     const [savedViewDialog, setSavedViewDialog] = useState(false);
-
     const [enableClipping, setEnableClipping] = useState(false);
+    const [allSavedViews, setAllSavedViews] = useState([]);
+     const [waterSettingParameter, setWaterSettingParameter] = useState(null);
+  const [baseSettingParameter, setBaseSettingParameter] = useState(null);
+  const [groundSettingParameter, setGroundSettingParameter] = useState(null);
 
     // ------------------------------------PID--------------------------
 
@@ -111,12 +129,18 @@ const Iroamer = forwardRef(
     const [backgroundTheme, setBackgroundTheme] = useState("DEFAULT");
     const [groundSettingsVisible, setGroundSettingsVisible] = useState(false);
     const [waterSettingsVisible, setWaterSettingsVisible] = useState(false);
-
     const [clippingSetting, setClippingSetting] = useState(false);
+
+    console.log(allComments);
+    console.log(allCommentStatus);
+    let view = location.state?.view;
+    console.log(view);
+
+  
 
     // handel orbit control
     const handleOrbitClick = (buttonName) => {
-        console.log("Setting active button to:", buttonName);
+      //console.log("Setting active button to:", buttonName);
       setMode("orbit");
       setActiveButton(buttonName);
     };
@@ -131,10 +155,10 @@ const Iroamer = forwardRef(
       setShowAxis(!showAxis);
       setActiveButton(buttonName);
     };
-  const handleWireFrames = (buttonName) => {
-    setShowWireFrame(!showWireFrame);
-    setActiveButton(buttonName);
-  };
+    const handleWireFrames = (buttonName) => {
+      setShowWireFrame(!showWireFrame);
+      setActiveButton(buttonName);
+    };
     // handleorthoview
     const handleorthoview = (buttonName) => {
       setOrthoviewmode("orthographic");
@@ -199,7 +223,6 @@ const Iroamer = forwardRef(
       setActiveButton(buttonName);
     };
 
-    
     const handleSavedView = (buttonName) => {
       setActiveButton(buttonName);
       setSavedViewDialog(true);
@@ -291,7 +314,9 @@ const Iroamer = forwardRef(
     const [reflectionIntensity, setReflectionIntensity] = useState(0.5);
     const [resetTheme, setResetTheme] = useState(false);
     const [reload, setReload] = useState(false);
-    const [FileInfoDetails, setFileInfoDetails] = useState(null);
+    const [FileInfoDetails, setFileInfoDetails] = useState({});
+    //console.log("filedetails", FileInfoDetails);
+
     const [groundFormValues, setGroundFormValues] = useState({
       level: groundSettingParameter?.level ?? 0,
       color: groundSettingParameter?.color ?? "#cccccc",
@@ -372,7 +397,9 @@ const Iroamer = forwardRef(
     const [lightColor, setLightColor] = useState("#ffffff");
     const [specularColor, setSpecularColor] = useState("#ffffff");
     const [lightShadowsEnabled, setLightShadowsEnabled] = useState(false);
-
+    const projectString = sessionStorage.getItem("selectedProject");
+    const project = projectString ? JSON.parse(projectString) : null;
+    const projectId = project?.projectId;
     useEffect(() => {
       if (!sceneRef.current) return;
       const scene = sceneRef.current;
@@ -381,11 +408,11 @@ const Iroamer = forwardRef(
       }
     }, [reflectionIntensity]);
 
-      useEffect(() => {
-        if (showWireFrame) {
-          handleWireFrame();
-        }
-      }, [showWireFrame]);
+    useEffect(() => {
+      if (showWireFrame) {
+        handleWireFrame();
+      }
+    }, [showWireFrame]);
     const lastHighlightedTagRef = useRef(null);
 
     useEffect(() => {
@@ -419,7 +446,7 @@ const Iroamer = forwardRef(
         return;
       }
 
-      console.log("highlightedTagKey", highlightedTagKey);
+      //console.log("highlightedTagKey", highlightedTagKey);
 
       const parts = highlightedTagKey.split("-");
       const area = parts[0];
@@ -427,14 +454,14 @@ const Iroamer = forwardRef(
       const sys = parts[2];
       const tag = parts.slice(3).join("-");
 
-      console.log("Parsed:", { area, disc, sys, tag });
+      //console.log("Parsed:", { area, disc, sys, tag });
 
       const matchFilename = selectedTags?.find(
         (t) =>
           t.area === area && t.disc === disc && t.sys === sys && t.tag === tag
       )?.filename;
 
-      console.log("matchFilename", matchFilename);
+      //console.log("matchFilename", matchFilename);
 
       if (matchFilename) {
         highlightTagInScene(matchFilename);
@@ -468,27 +495,28 @@ const Iroamer = forwardRef(
 
     const AllTags = async () => {
       const data = modalData;
-      console.log(data);
+      //console.log("data", data);
 
       if (!data || !Array.isArray(data) || data.length === 0) return;
       const fileDataArray = Array.isArray(data) ? data : [data];
-      console.log(fileDataArray);
+      //console.log(fileDataArray);
 
       const formattedData = fileDataArray?.map((file) => ({
         tag: file.tag,
-        filePath: ` ${url}/tags/${file.filename}`,
+        tagId: file.tagId,
+        filePath: ` ${url}/tags/${projectId}/${file.filename}`,
         filename: file.filename,
         area: file.area,
         disc: file.disc,
         sys: file.sys,
-        fileDetails: file.fileDetails || {},
+        fileDetails: file.file || {},
       }));
-      console.log(formattedData);
+      //console.log(formattedData);
       setSelectedTags((prevTags) => {
         // Create a new array to avoid duplicates
         const newTags = formattedData?.filter(
           (newTag) =>
-            !prevTags.some(
+            !prevTags?.some(
               (prevTag) =>
                 prevTag.tag === newTag.tag &&
                 prevTag.filename === newTag.filename &&
@@ -504,14 +532,15 @@ const Iroamer = forwardRef(
             highlightTagInScene(tag.filename);
           }
         });
-        navigate(location.pathname, { replace: true, state: {} });
+
         return [...prevTags, ...newTags];
       });
     };
 
     useEffect(() => {
       AllTags();
-    }, [location.state?.timestamp]);
+
+    }, [modalData]);
 
     // useEffect for reciecve all tag  from p &ID
     const AlltagsPID = async () => {
@@ -520,7 +549,7 @@ const Iroamer = forwardRef(
       const fileDataArray = Array.isArray(data) ? data : [data];
       const formattedData = fileDataArray?.map((file) => ({
         tag: file.tag,
-        filePath: ` ${url}/tags/${file.filePath}`,
+        filePath: ` ${url}/tags/${projectId}/${file.filePath}`,
         filename: file.filename,
         area: file.area,
         disc: file.disc,
@@ -531,7 +560,7 @@ const Iroamer = forwardRef(
       setSelectedTags((prevTags) => {
         // Iterate through each file in formattedData
         formattedData?.forEach((newTag) => {
-          const isPresent = prevTags.some(
+          const isPresent = prevTags?.some(
             (prevTag) =>
               prevTag.tag === newTag.tag &&
               prevTag.filename === newTag.filename &&
@@ -590,7 +619,7 @@ const Iroamer = forwardRef(
         // Create a new array to avoid duplicates
         const newTags = formattedData?.filter(
           (newTag) =>
-            !prevTags.some(
+            !prevTags?.some(
               (prevTag) =>
                 prevTag.tag === newTag.tag &&
                 prevTag.filename === newTag.filename
@@ -845,234 +874,6 @@ const Iroamer = forwardRef(
 
     const isUserInteracting = useRef(false);
 
-    // useEffect(() => {
-    //   if (!sceneRef.current) return;
-    //   const scene = sceneRef.current;
-
-    //   if (enableClipping) {
-    //     handleEnableSectioning(scene, clippingPosition);
-    //   } else {
-    //     scene.clipPlane = null;
-
-    //     // Cleanup clipping plane mesh
-    //     if (clippingPlaneMeshRef.current) {
-    //       clippingPlaneMeshRef.current.dispose();
-    //       clippingPlaneMeshRef.current = null;
-    //     }
-
-    //     // Cleanup gizmo manager
-    //     if (scene.gizmoManager) {
-    //       scene.gizmoManager.dispose();
-    //       scene.gizmoManager = null;
-    //     }
-    //   }
-
-    //   // Cleanup function for when component unmounts or dependencies change
-    //   return () => {
-    //     // Only cleanup if we're switching from enabled to disabled
-    //     if (enableClipping && scene.gizmoManager) {
-    //       // Keep gizmo visible during session, only cleanup on unmount
-    //     }
-    //   };
-    // }, [enableClipping, clippingPosition,clippingAxis]);
-
-    // const handleEnableSectioning = (scene, positionPercent) => {
-    //   if (!modelInfoRef.current) return;
-
-    //   const { boundingBoxMin, boundingBoxMax } = modelInfoRef.current;
-    //   let normal = new BABYLON.Vector3(0, 0, 0);
-    //   let clipDistance = 0;
-
-    //   const isNegative = clippingAxis.startsWith("-");
-    //   const axis = clippingAxis.replace("-", "");
-
-    //   // Calculate center of the model for better positioning
-    //   const center = new BABYLON.Vector3(
-    //     (boundingBoxMin.x + boundingBoxMax.x) / 2,
-    //     (boundingBoxMin.y + boundingBoxMax.y) / 2,
-    //     (boundingBoxMin.z + boundingBoxMax.z) / 2
-    //   );
-
-    //   // Calculate model dimensions for plane sizing
-    //   const width = Math.abs(boundingBoxMax.x - boundingBoxMin.x);
-    //   const height = Math.abs(boundingBoxMax.y - boundingBoxMin.y);
-    //   const depth = Math.abs(boundingBoxMax.z - boundingBoxMin.z);
-
-    //   // Calculate maximum dimension for plane size
-    //   const maxDimension = Math.max(width, height, depth) * 1.5;
-
-    //   if (axis === "X") {
-    //     const min = boundingBoxMin.x,
-    //       max = boundingBoxMax.x;
-    //     clipDistance = min + ((max - min) * positionPercent) / 100;
-    //     normal = isNegative
-    //       ? new BABYLON.Vector3(1, 0, 0)
-    //       : new BABYLON.Vector3(-1, 0, 0);
-    //   } else if (axis === "Z") {
-    //     // Z axis (swapped from Y)
-    //     const min = boundingBoxMin.z,
-    //       max = boundingBoxMax.z;
-    //     clipDistance = min + ((max - min) * positionPercent) / 100;
-    //     normal = isNegative
-    //       ? new BABYLON.Vector3(0, 0, 1)
-    //       : new BABYLON.Vector3(0, 0, -1);
-    //   } else if (axis === "Y") {
-    //     // Y axis (swapped from Z)
-    //     const min = boundingBoxMin.y,
-    //       max = boundingBoxMax.y;
-    //     clipDistance = min + ((max - min) * positionPercent) / 100;
-    //     normal = isNegative
-    //       ? new BABYLON.Vector3(0, 1, 0)
-    //       : new BABYLON.Vector3(0, -1, 0);
-    //   }
-
-    //   // Calculate plane position (origin point)
-    //   let planePosition;
-    //   if (axis === "X") {
-    //     planePosition = new BABYLON.Vector3(clipDistance, center.y, center.z);
-    //   } else if (axis === "Y") {
-    //     planePosition = new BABYLON.Vector3(center.x, clipDistance, center.z);
-    //   } else {
-    //     // Z axis
-    //     planePosition = new BABYLON.Vector3(center.x, center.y, clipDistance);
-    //   }
-
-    //   // Set actual clipping plane
-    //   const d = -BABYLON.Vector3.Dot(normal, planePosition);
-    //   const clippingPlane = new BABYLON.Plane(
-    //     normal.x,
-    //     normal.y,
-    //     normal.z,
-    //     d
-    //   );
-
-    //   scene.clipPlane = clippingPlane;
-
-    //   // Clean up old mesh if it exists
-    //   if (clippingPlaneMeshRef.current) {
-    //     clippingPlaneMeshRef.current.dispose();
-    //     clippingPlaneMeshRef.current = null;
-    //   }
-
-    //   // Create new plane mesh
-    //   const planeMesh = BABYLON.MeshBuilder.CreatePlane(
-    //     "clipPlaneVis",
-    //     {
-    //       size: maxDimension,
-    //     },
-    //     scene
-    //   );
-
-    //   // Create light blue material for the plane
-    //   const planeMaterial = new BABYLON.StandardMaterial("clipMat", scene);
-    //   planeMaterial.diffuseColor = new BABYLON.Color3(0.6, 0.8, 1.0); // Light blue color
-    //   planeMaterial.alpha = 0.4;
-    //   planeMaterial.backFaceCulling = false; // Show both sides of the plane
-    //   planeMaterial.emissiveColor = new BABYLON.Color3(0.2, 0.4, 0.8); // Slight glow effect
-    //   planeMesh.material = planeMaterial;
-
-    //   // Position the plane exactly at the clipping position
-    //   planeMesh.position = planePosition;
-
-    //   // Properly orient the plane to match the clipping direction
-    //   if (axis === "X") {
-    //     planeMesh.rotation.y = isNegative ? Math.PI / 2 : -Math.PI / 2;
-    //   } else if (axis === "Y") {
-    //     planeMesh.rotation.x = isNegative ? Math.PI / 2 : -Math.PI / 2;
-    //   } else {
-    //     // Z axis
-    //     planeMesh.rotation.y = isNegative ? Math.PI : 0;
-    //   }
-
-    //   clippingPlaneMeshRef.current = planeMesh;
-
-    //   // Create gizmo for the plane
-    //   const gizmoManager = new BABYLON.GizmoManager(scene);
-    //   gizmoManager.positionGizmoEnabled = true;
-    //   gizmoManager.rotationGizmoEnabled = false; // We can enable this if rotation is needed
-    //   gizmoManager.scaleGizmoEnabled = true;
-    //   gizmoManager.attachToMesh(planeMesh);
-    //   gizmoManager.gizmos.positionGizmo.updateGizmoRotationToMatchAttachedMesh = true;
-
-    //   // Save reference to gizmo manager to dispose later
-    //   if (!sceneRef.current.gizmoManager) {
-    //     sceneRef.current.gizmoManager = gizmoManager;
-    //   } else {
-    //     sceneRef.current.gizmoManager.dispose();
-    //     sceneRef.current.gizmoManager = gizmoManager;
-    //   }
-
-    //   // Update clipping plane when gizmo moves the plane
-    //   planeMesh.onAfterWorldMatrixUpdateObservable.add(() => {
-    //     // Get the new position after gizmo movement
-    //     const newPosition = planeMesh.position;
-
-    //     // Update the clipping plane with the new position
-    //     const updatedD = -BABYLON.Vector3.Dot(normal, newPosition);
-    //     scene.clipPlane = new BABYLON.Plane(
-    //       normal.x,
-    //       normal.y,
-    //       normal.z,
-    //       updatedD
-    //     );
-
-    //     // Calculate and update the position percentage for UI slider
-    //     let percentage = 0;
-    //     if (axis === "X") {
-    //       percentage =
-    //         ((newPosition.x - boundingBoxMin.x) /
-    //           (boundingBoxMax.x - boundingBoxMin.x)) *
-    //         100;
-    //     } else if (axis === "Y") {
-    //       percentage =
-    //         ((newPosition.y - boundingBoxMin.y) /
-    //           (boundingBoxMax.y - boundingBoxMin.y)) *
-    //         100;
-    //     } else {
-    //       // Z axis
-    //       percentage =
-    //         ((newPosition.z - boundingBoxMin.z) /
-    //           (boundingBoxMax.z - boundingBoxMin.z)) *
-    //         100;
-    //     }
-    //     if (!isUserInteracting.current) {
-    //       const newPercentage = parseFloat(percentage.toFixed(1));
-
-    //       // Don't call setClippingPosition unless truly different
-    //       if (Math.abs(newPercentage - clippingPosition) > 0.5) {
-    //         isUserInteracting.current = true;
-    //         setClippingPosition(newPercentage);
-
-    //         // Reset after slight delay to avoid loop
-    //         setTimeout(() => {
-    //           isUserInteracting.current = false;
-    //         }, 300);
-    //       }
-    //     }
-
-    //     //   // Keep percentage within bounds
-    //     //   percentage = Math.max(0, Math.min(100, percentage));
-
-    //     //   // Update state without triggering the useEffect loop
-    //     //   if (Math.abs(percentage - clippingPosition) > 0.5) {
-    //     //     // Use a small threshold to prevent excessive updates
-    //     //     setTimeout(() => setClippingPosition(parseFloat(percentage.toFixed(1))), 0);
-    //     //   }
-    //   });
-    // };
-
-    // // Add a slider for user control
-    // const handleClippingSliderChange = (event) => {
-    //   isUserInteracting.current = true; // prevent feedback loop
-    //   setClippingPosition(parseFloat(event.target.value));
-
-    //   setTimeout(() => {
-    //     isUserInteracting.current = false;
-    //   }, 300);
-    // };
-
-    // useEffect for initial scene,camera setup
-
     const handleEnableSectioning = (scene, positionPercent) => {
       if (!modelInfoRef.current) return;
 
@@ -1299,7 +1100,10 @@ const Iroamer = forwardRef(
       const scene = createScene(engine, canvasRef.current);
       scene.clearColor = new BABYLON.Color4(0.2, 0.2, 0.3, 1); // RGBA format
       sceneRef.current = scene;
+
+      canvas.addEventListener("contextmenu", (e) => e.preventDefault());
       canvas.addEventListener("dblclick", handleDoubleClick);
+
       // Engine resize handler
       const handleResize = () => {
         const width = canvas.clientWidth;
@@ -1354,10 +1158,10 @@ const Iroamer = forwardRef(
           scene.activeCamera.setTarget(newTarget);
         }
 
-        console.log(
-          "Camera target set to intersected point:",
-          targetPoint.toString()
-        );
+        //console.log(
+        //   "Camera target set to intersected point:",
+        //   targetPoint.toString()
+        // );
       }
     };
     useEffect(() => {
@@ -1366,7 +1170,7 @@ const Iroamer = forwardRef(
           engineRef.current.resize();
         }
       };
-      console.log(engineRef.current.resize());
+      //console.log(engineRef.current.resize());
 
       window.addEventListener("resize", handleResize);
 
@@ -1383,6 +1187,11 @@ const Iroamer = forwardRef(
         applySavedView(applyViewSaved);
       }
     }, [applyViewSaved]);
+       useEffect(() => {
+      if (view) {
+              applySavedView(view);
+      }
+    }, [view]);
     const removeMeshesFromScene = (scene, tagList) => {
       tagList?.forEach((tag) => {
         const mesh = scene.meshes?.find(
@@ -1406,7 +1215,7 @@ const Iroamer = forwardRef(
     const filterSelectedTags = (modelNames, mode) =>
       setSelectedTags((prevTags) =>
         prevTags?.filter((tag) => {
-          return !modelNames.some((model) => {
+          return !modelNames?.some((model) => {
             const match =
               tag.filename === model.filename &&
               tag.tag === model.tag &&
@@ -1453,7 +1262,7 @@ const Iroamer = forwardRef(
         setSelectedTags((prev) =>
           prev?.filter(
             (tag) =>
-              !modelNames.some(
+              !modelNames?.some(
                 (m) => m.filename === tag.filename && m.number === tag.tag
               )
           )
@@ -1661,7 +1470,7 @@ const Iroamer = forwardRef(
           return viewHideThree[tagKey];
         }
 
-        console.log("Keys checked:", { tagKey, sysKey, discKey, areaKey });
+        //console.log("Keys checked:", { tagKey, sysKey, discKey, areaKey });
 
         if (viewHideThree[tagKey] !== undefined) return viewHideThree[tagKey];
         if (viewHideThree[sysKey] !== undefined) return viewHideThree[sysKey];
@@ -1675,7 +1484,7 @@ const Iroamer = forwardRef(
 
         const visibility = getVisibility(tag.area, tag.disc, tag.sys, tag.tag);
 
-        console.log(`Setting visibility for ${tag.filename} to`, visibility);
+        //console.log(`Setting visibility for ${tag.filename} to`, visibility);
 
         toggleFileVisibility(tag.filename, visibility);
       });
@@ -1691,9 +1500,9 @@ const Iroamer = forwardRef(
         const newTags = selectedTags?.filter(
           (tag) => !loadedFiles.includes(tag.filename)
         );
-        console.log(newTags);
+        //console.log(newTags);
         if (newTags.length > 0) {
-          console.log("loadfile");
+          //console.log("loadfile");
           // Load files sequentially
           loadFilesSequentially(scene, newTags);
 
@@ -1708,17 +1517,17 @@ const Iroamer = forwardRef(
         const tagKey = `${tag.areaTag}-${tag.discTag}-${tag.sysTag}-${tag.tagTag}`;
         if (
           viewHideThree?.[tagKey] === false ||
-          tagsToRemove.includes(tag.tagTag)
+          tagsToRemove?.includes(tag.tagTag)
         ) {
           setLoadedFiles((prevFiles) =>
             prevFiles.filter((filename) => filename !== tag.filename)
           );
         }
       });
-      if (tagsToRemove.length > 0) {
+      if (tagsToRemove?.length > 0) {
         setTagsToRemove([]);
       }
-    }, [selectedTags, loadedFiles]);
+    }, [selectedTags, loadedFiles,iroamerfieldEmpty,modalData]);
 
     //useEffect Camera mode change effects
     useEffect(() => {
@@ -1745,7 +1554,6 @@ const Iroamer = forwardRef(
       };
     }, []);
 
-    // useEffect for select item functionality
     // useEffect(() => {
     //   let observer = null;
     //   if (selectedItem) {
@@ -1760,7 +1568,7 @@ const Iroamer = forwardRef(
     //         const isRightClick = event.button === 2;
 
     //         if (isLeftClick) {
-    //           console.log("pickInfo.hit",pickInfo)
+    //           //console.log("pickInfo.hit",pickInfo)
 
     //           if (pickInfo.hit && pickInfo.pickedMesh) {
     //             let mesh = pickInfo.pickedMesh;
@@ -1772,7 +1580,7 @@ const Iroamer = forwardRef(
     //             ) {
     //               mesh = mesh.parent;
     //             }
-    //             console.log(mesh);
+    //             //console.log(mesh);
 
     //             // Skip if root has no tag metadata
     //             if (!mesh.metadata || !mesh.metadata.tagNo) {
@@ -1826,7 +1634,7 @@ const Iroamer = forwardRef(
     //               UsertagInfoDetails: UsertagInfoDetails || null,
     //             };
 
-    //             console.log("tagInfoDetails:", tagInfoDetails);
+    //             //console.log("tagInfoDetails:", tagInfoDetails);
     //             settaginfo(tagInfoDetails);
     //           } else {
     //             // Clear selection
@@ -1867,6 +1675,72 @@ const Iroamer = forwardRef(
     //     };
     //   }
     // }, [selectedItem]);
+    const getGeneralTagInfoField = async (projectId) => {
+
+        const response = await fetchFromGentagInfoFields(projectId);
+        if (response.status === 200) {
+          console.log(response);
+
+          setGeneralTagInfoFields(response.data);
+        }
+        if(response.status ===404){
+          console.log(response.data.message);
+          
+        }
+    
+    };
+    //console.log(generalTagInfoFields);
+
+    const getAllLinelist = async (projectId) => {
+      const response = await getLineList(projectId);
+      if (response.status === 200) {
+        console.log(response);
+
+        setallLineList(response.data);
+      }
+    };
+
+    const getAllEquipmentList = async (projectId) => {
+      const response = await getequipmentList(projectId);
+      if (response.status === 200) {
+        //console.log(response);
+
+        setallEquipementList(response.data);
+      }
+    };
+    //console.log("linelist", allLineList);
+    const getusertaginfo = async (projectId) => {
+      const response = await fetchAllGentagInfo(projectId);
+      if (response.status === 200) {
+        //console.log(response);
+
+        setUserTagInfotable(response.data);
+      }else if(response.status===404){
+      console.log(response)
+    }
+    };
+    useEffect(() => {
+      if (projectId) {
+        getGeneralTagInfoField(projectId);
+        getAllLinelist(projectId);
+        getAllEquipmentList(projectId);
+        getusertaginfo(projectId);
+      }
+    }, [modalData]);
+    const getAllSavedViews = async (projectId) => {
+      try {
+        const response = await AllSavedView(projectId);
+        if (response.status === 200) {
+          setAllSavedViews(response.data);
+        }
+      } catch (error) {
+        console.error("Failed to fetch all saved views table data:", error);
+      }
+    };
+
+    useEffect(() => {
+      getAllSavedViews(projectId);
+    }, [updateProject]);
 
     useEffect(() => {
       let observer = null;
@@ -1897,7 +1771,7 @@ const Iroamer = forwardRef(
                 ) {
                   return;
                 }
-                console.log("mesh", mesh);
+                //console.log("mesh", mesh);
                 // Clear previous highlight
                 dehighlightMesh();
                 selectedMeshRef.current = mesh;
@@ -1918,15 +1792,20 @@ const Iroamer = forwardRef(
 
                 setFileInfoDetails(mesh.metadata.tagNo.fileDetails);
 
-                const tagid = mesh.metadata.tagNo.tag;
+                // console.log(mesh.metadata);
+                const tagid = mesh.metadata.tagNo.tagId;
+                console.log(tagid);
+
                 const linelistDetails = allLineList?.find(
-                  (line) => line.tag === tagid
+                  (line) => line.tagId === tagid
                 );
+                console.log(allLineList);
+
                 const equipmentlistDetails = allEquipementList?.find(
-                  (equipment) => equipment.tag === tagid
+                  (equipment) => equipment.tagId === tagid
                 );
                 const UsertagInfoDetails = userTagInfotable?.find(
-                  (tag) => tag.tag === tagid
+                  (tag) => tag.tagId === tagid
                 );
                 console.log(UsertagInfoDetails);
 
@@ -2000,7 +1879,7 @@ const Iroamer = forwardRef(
         let scaleValue = baseFormValues.customUnitFactor
           ? baseFormValues.customUnitFactor
           : 1;
-        console.log(unit);
+        //console.log(unit);
         if (!sceneRef.current) return;
         const scene = sceneRef.current;
 
@@ -2064,6 +1943,86 @@ const Iroamer = forwardRef(
       };
     }, [showMeasure]);
 
+    const FetchAllcommentStatus = async (projectId) => {
+      const response = await GetStatusComment(projectId);
+
+      if (response.status === 200) {
+        //console.log(response.data.data);
+        setAllCommentStatus(response.data.data);
+      }
+    };
+
+    const FetchAllcomments = async (projectId) => {
+      const response = await getAllcomments(projectId);
+
+      if (response.status === 200) {
+        //console.log(response.data.data);
+        setAllComments(response.data.data);
+      }
+    };
+    const fetchAllCommentData = async () => {
+      try {
+        const [commentsResponse, statusResponse] = await Promise.all([
+          getAllcomments(projectId),
+          GetStatusComment(projectId),
+        ]);
+
+        if (commentsResponse.status === 200) {
+          setAllComments(commentsResponse.data.data);
+        }
+        if (statusResponse.status === 200) {
+          setAllCommentStatus(statusResponse.data.data);
+        }
+      } catch (error) {
+        console.error("Failed to fetch comment data:", error);
+        setCustomAlert(true);
+        setModalMessage("Failed to fetch comments. Please try again.");
+      }
+    };
+     const fetchwatersettings = async(projectId)=>{
+      const response = await getWaterSettings(projectId)
+      if(response.status===200){
+            //console.log(response.data);
+        setWaterSettingParameter(response.data)
+      }
+     }
+
+       const fetchBaseSettinngs = async(projectId)=>{
+      const response = await getBaseSettings(projectId)
+      if(response.status===200){
+            //console.log(response.data);
+        setBaseSettingParameter(response.data)
+      }
+     }
+
+       const fetchGroundsettings = async(projectId)=>{
+      const response = await getGroundSettings(projectId)
+      if(response.status===200){
+        //console.log(response.data);
+        
+        setGroundSettingParameter(response.data)
+      }
+     }
+      useEffect(()=>{
+        if(projectId){
+          fetchBaseSettinngs(projectId)
+          fetchGroundsettings(projectId)
+            fetchwatersettings(projectId)
+          
+        }
+
+      },projectId,modalData)
+
+
+    useEffect(() => {
+      if (projectId) {
+        fetchAllCommentData();
+        getGeneralTagInfoField(projectId);
+        getAllLinelist(projectId);
+        getAllEquipmentList(projectId);
+        getusertaginfo(projectId);
+      }
+    }, [projectId, isCommentOpen]);
     // useEffect for showAll comments functionality
     useEffect(() => {
       if (!sceneRef.current) return;
@@ -2163,7 +2122,7 @@ const Iroamer = forwardRef(
 
       // Update state with combined labels
       setAllLabels([...updatedLabels, ...newLabels]);
-    }, [allComments, showComment, allCommentStatus]);
+    }, [allComments, showComment, allCommentStatus, isCommentOpen]);
 
     useEffect(() => {
       if (baseSettingParameter) {
@@ -2231,11 +2190,12 @@ const Iroamer = forwardRef(
       if (!sceneRef.current) return;
 
       const scene = sceneRef.current;
+      //console.log(themeName);
 
       switch (themeName) {
         case "DEFAULT":
           // Set default background (dark blue)
-          scene.clearColor = new BABYLON.Color4(0.2, 0.2, 0.2, 1);
+          scene.clearColor = new BABYLON.Color4(0.2, 0.2, 0.298, 1);
 
           // Remove ground if it exists
           if (groundRef.current) {
@@ -2513,7 +2473,28 @@ const Iroamer = forwardRef(
           break;
 
         default:
-          break;
+          scene.clearColor = new BABYLON.Color4(0.2, 0.2, 0.2, 1);
+
+          // Remove ground if it exists
+          if (groundRef.current) {
+            groundRef.current.dispose();
+            groundRef.current = null;
+          }
+
+          // Remove skybox if it exists
+          if (skyboxRef.current) {
+            skyboxRef.current.dispose();
+            skyboxRef.current = null;
+          }
+
+          // Remove water if it exists
+          if (waterMeshRef.current) {
+            waterMeshRef.current.dispose();
+            waterMeshRef.current = null;
+          }
+
+          setWaterSettingsVisible(false);
+          setGroundSettingsVisible(false);
       }
     };
 
@@ -3059,7 +3040,7 @@ const Iroamer = forwardRef(
     };
 
     const handleCommentInfo = (item) => {
-      console.log("comment info", item);
+      //console.log("comment info", item);
       setcommentinfo(item);
       setcommentinfotable(true);
     };
@@ -3081,10 +3062,13 @@ const Iroamer = forwardRef(
       setTagInfoVisible(false);
     };
 
-    const deletecomment = (commentNumber) => {
-      window.api.send("delete-comment", commentNumber);
-      setcommentinfotable(false);
-      setcommentinfo(null);
+    const deletecomment = async (commentNumber) => {
+      const response = await deleteComment(commentNumber);
+      if (response.status === 200) {
+        fetchAllCommentData();
+        setcommentinfotable(false);
+        setcommentinfo(null);
+      }
     };
 
     const handleEditButtonClick = (number) => {
@@ -3094,26 +3078,24 @@ const Iroamer = forwardRef(
       setPriority(commentinfo.priority);
     };
 
-    const handleSaveButtonClick = (commentNumber) => {
+    const handleSaveButtonClick = async (commentNumber) => {
       setIsEditing(false);
       const data = {
-        commentNumber: commentNumber,
+        number: commentNumber,
         comment: commentEdit,
         status: status,
         priority: priority,
       };
 
-      window.api.send("editCommentStatus", data);
-      setCustomAlert(true);
-      setModalMessage("Status updated");
-      const updatedComment = {
-        ...commentinfo,
-        comment: commentEdit,
-        status: status,
-        priority: priority,
-      };
-      setcommentinfo(updatedComment);
-      handleclosecommentinfo();
+      const response = await updateCommentField(data);
+      if (response.status === 200) {
+        console.log(response);
+
+        setCustomAlert(true);
+        setModalMessage("Status updated");
+        fetchAllCommentData();
+        handleclosecommentinfo();
+      }
     };
 
     const showContextMenu = (x, y, mesh) => {
@@ -3131,7 +3113,7 @@ const Iroamer = forwardRef(
       setRightClickCoordinates({ x: top, y: left });
       setIsMenuOpen(true);
       // } else {
-      //   console.log("No mesh selected for context menu");
+      //   //console.log("No mesh selected for context menu");
       // }
     };
 
@@ -3209,9 +3191,12 @@ const Iroamer = forwardRef(
 
       // 1. Find the parent mesh by tag name
       const parentMesh = scene.meshes?.find(
-        (mesh) => mesh.name === tagName || mesh.metadata?.tagNo?.tag === tagName
+        (mesh) =>
+          mesh.name === tagName ||
+          mesh.metadata?.tagNo?.tag === tagName ||
+          mesh.metadata?.tagNo?.tagId === tagName
       );
-      console.log(parentMesh);
+      //console.log(parentMesh);
 
       if (!parentMesh) {
         console.warn("Parent mesh not found for tag:", tagName);
@@ -3220,7 +3205,7 @@ const Iroamer = forwardRef(
 
       // 2. Collect all child meshes (if any)
       const meshesToSelect = [parentMesh, ...parentMesh.getChildMeshes()];
-      console.log(meshesToSelect);
+      //console.log(meshesToSelect);
 
       // 3. Clear previous highlights
       dehighlightMesh();
@@ -3243,14 +3228,21 @@ const Iroamer = forwardRef(
       const scene = sceneRef.current;
 
       const selectedMeshes = selectedMeshRef.current;
-      if (!selectedMeshes || selectedMeshes.length === 0) {
+
+      // Filter out any non-mesh objects
+      const validMeshes = selectedMeshes?.filter(
+        (mesh) => mesh && typeof mesh.getBoundingInfo === "function"
+      );
+
+      if (!validMeshes || validMeshes.length === 0) {
         setCustomAlert(true);
-        setModalMessage("Please select object..");
+        setModalMessage("Please select a valid object..");
         setIsMenuOpen(false);
-      } else {
-        zoomOnSelectedMesh(scene, selectedMeshes);
-        setIsMenuOpen(false);
+        return;
       }
+
+      zoomOnSelectedMesh(scene, validMeshes);
+      setIsMenuOpen(false);
     };
 
     const handleAddComment = () => {
@@ -3455,7 +3447,7 @@ const Iroamer = forwardRef(
 
     const highlightTagInScene = (file) => {
       const filename = file.slice(0, file.lastIndexOf("."));
-      console.log(filename);
+      //console.log(filename);
       if (!sceneRef.current) return;
 
       const meshesToHighlight = [];
@@ -3465,11 +3457,11 @@ const Iroamer = forwardRef(
       let foundTagNo = null; // For extracting tag info
 
       sceneRef.current.meshes?.forEach((mesh) => {
-        //console.log(mesh.metadata)
+        ////console.log(mesh.metadata)
         if (mesh.name.includes("__root__") || mesh.name.includes("sky")) return;
 
         if (mesh.metadata && mesh.metadata.tagNo.tag === filename) {
-          console.log("sdgsd");
+          //console.log("sdgsd");
 
           meshesToHighlight.push(mesh);
 
@@ -3526,9 +3518,9 @@ const Iroamer = forwardRef(
             center.z + distance
           );
           cam.setTarget(center);
-          console.log(
-            `Camera positioned on highlighted tag group: ${filename}`
-          );
+          //console.log(
+          //   `Camera positioned on highlighted tag group: ${filename}`
+          // );
         } else {
           console.warn("No active camera found.");
         }
@@ -3667,11 +3659,11 @@ const Iroamer = forwardRef(
       const meshes = Array.isArray(selectedMeshRef.current)
         ? selectedMeshRef.current
         : [selectedMeshRef.current];
-      console.log(meshes);
+      //console.log(meshes);
 
       meshes?.forEach((mesh) => {
         if (mesh) {
-          console.log(mesh);
+          //console.log(mesh);
           highlightLayer.removeMesh(mesh);
         }
       });
@@ -3691,7 +3683,7 @@ const Iroamer = forwardRef(
       for (let i = 0; i < tags.length; i++) {
         const tag = tags[i];
         const { filePath, filename, tag: tagName } = tag;
-        console.log("tagdata");
+        //console.log("tagdata");
 
         try {
           await new Promise((resolve) => {
@@ -3747,7 +3739,7 @@ const Iroamer = forwardRef(
 
     const toggleFileVisibility = (file, isVisible) => {
       const filename = file.slice(0, file.lastIndexOf("."));
-      console.log(filename);
+      //console.log(filename);
 
       if (sceneRef.current) {
         // Iterate through all meshes in the scene
@@ -3791,7 +3783,7 @@ const Iroamer = forwardRef(
             // scene.getEngine().setHardwareScalingLevel(1.0);
 
             const rootUrl = filePath;
-            console.log(rootUrl);
+            //console.log(rootUrl);
 
             const fileName = filePath;
 
@@ -3836,7 +3828,7 @@ const Iroamer = forwardRef(
 
                         // Toggle visibility (opposite of current state)
                         toggleFileVisibility(tag, !isCurrentlyVisible);
-                        console.log("isCurrentlyVisible", isCurrentlyVisible);
+                        //console.log("isCurrentlyVisible", isCurrentlyVisible);
 
                         // Update your state management
                         objectVisibilityRef.current[tag] = !isCurrentlyVisible;
@@ -3863,7 +3855,7 @@ const Iroamer = forwardRef(
                   objectVisibilityRef.current[tag] !== undefined
                     ? objectVisibilityRef.current[tag]
                     : true;
-                console.log("isVisible", isVisible);
+                //console.log("isVisible", isVisible);
 
                 toggleFileVisibility(tag, isVisible);
                 // recalculateCumulativeBoundingBox();
@@ -3873,7 +3865,7 @@ const Iroamer = forwardRef(
 
                 // Recalculate scene bounds
                 // recalculateCumulativeBoundingBox();
-                console.log("objectVisibilityRef", objectVisibilityRef.current);
+                //console.log("objectVisibilityRef", objectVisibilityRef.current);
 
                 meshes?.forEach((mesh) => {
                   if (mesh.name === "__root__") return; // Skip root nodes
@@ -4038,7 +4030,7 @@ const Iroamer = forwardRef(
       setItemToDelete(null);
     };
 
-    const handleConfirm = () => {
+    const handleConfirm = async() => {
       if (
         itemToDelete?.type === "save-water-settings" &&
         waterMeshRef.current
@@ -4054,7 +4046,7 @@ const Iroamer = forwardRef(
         } = waterFormValues;
 
         const waterSettings = {
-          projectId: currentProjectId,
+          projectId,
           level,
           opacity: opacity / 100,
           color,
@@ -4064,31 +4056,36 @@ const Iroamer = forwardRef(
           windForce: parseInt(windForce),
         };
 
-        window.api.send("save-water-settings", waterSettings);
-        setWaterSettingParameter({ ...waterSettings });
-        setModalMessage("Water settings saved successfully!");
+         const response = await updateWaterSettings(waterSettings)
+    if(response.status ===2000){
+ setModalMessage("Water settings saved successfully!");
         setCustomAlert(true);
+    }
+       
       }
 
       if (itemToDelete?.type === "save-ground-settings" && groundRef.current) {
         const { level, color, opacity } = groundFormValues;
 
         const groundSettings = {
-          projectId: currentProjectId,
+          projectId,
           level,
           color,
           opacity: opacity / 100,
         };
 
-        window.api.send("save-ground-settings", groundSettings);
+        const response = await updateGroundSettings(groundSettings)
+        if(response.status===200){
         setGroundSettingParameter({ ...groundSettings });
         setModalMessage("Ground settings saved successfully!");
         setCustomAlert(true);
+        }
+
       }
 
       if (itemToDelete?.type === "save-base-settings") {
         const settingsToSave = {
-          projectId: currentProjectId,
+          projectId,
           camera: {
             fov,
             nearClip,
@@ -4114,8 +4111,13 @@ const Iroamer = forwardRef(
             scaleValue,
           },
         };
-        console.log("settingsToSave", settingsToSave);
-        window.api.send("save-base-setting", settingsToSave);
+        //console.log("settingsToSave", settingsToSave);
+        // window.api.send("save-base-setting", settingsToSave);
+         const response = await updateBaseSettings(settingsToSave)
+         if(response.status===200){
+          alert("updated")
+          fetchBaseSettinngs(projectId)
+         }
       }
 
       // Close the confirmation modal and reset state
@@ -4172,15 +4174,15 @@ const Iroamer = forwardRef(
         colorBlendFactor,
       } = waterSettingParameter || {};
 
-      console.log("Resetting to:", {
-        level,
-        color,
-        opacity,
-        windForce,
-        waveLength,
-        bumpHeight,
-        colorBlendFactor,
-      });
+      // //console.log("Resetting to:", {
+      //   level,
+      //   color,
+      //   opacity,
+      //   windForce,
+      //   waveLength,
+      //   bumpHeight,
+      //   colorBlendFactor,
+      // });
 
       // Update the form state
       setWaterFormValues({
@@ -4306,7 +4308,7 @@ const Iroamer = forwardRef(
       // Store current camera position and target
       // Store current camera position and target
       const cameraPosition = scene.activeCamera.position.clone();
-      console.log("Current camera position:", cameraPosition.toString());
+      //console.log("Current camera position:", cameraPosition.toString());
 
       // Create a temporary camera to maintain our position
       const oldCamera = scene.activeCamera;
@@ -4690,7 +4692,7 @@ const Iroamer = forwardRef(
       setMultiplier(validValue); // Store only multiplier
     };
 
-    const handleSaveView = () => {
+    const handleSaveView = async () => {
       if (!saveViewName.trim()) {
         setCustomAlert(true);
         setModalMessage("Please enter a view name");
@@ -4698,7 +4700,7 @@ const Iroamer = forwardRef(
       }
 
       // Check if a view with the same name already exists
-      const viewExists = allViews.some(
+      const viewExists = allViews?.some(
         (view) => view.name === saveViewName.trim()
       );
       if (viewExists) {
@@ -4718,6 +4720,7 @@ const Iroamer = forwardRef(
 
       const viewData = {
         name: saveViewName.trim(),
+        projectId,
         posX: camera.position.x,
         posY: camera.position.y,
         posZ: camera.position.z,
@@ -4744,15 +4747,16 @@ const Iroamer = forwardRef(
       };
 
       // Send the view data to be saved
-      window.api.send("save-camera-view", viewData);
+      const response = await SaveSavedView(viewData);
+      if (response.status === 200) {
+        // Show success message
+        setCustomAlert(true);
+        setModalMessage(`View "${saveViewName}" saved successfully`);
 
-      // Show success message
-      setCustomAlert(true);
-      setModalMessage(`View "${saveViewName}" saved successfully`);
-
-      // Close dialog and reset name
-      setSavedViewDialog(false);
-      setSaveViewName("");
+        // Close dialog and reset name
+        setSavedViewDialog(false);
+        setSaveViewName("");
+      }
 
       // Hide message after a delay
       setTimeout(() => {
@@ -4897,23 +4901,22 @@ const Iroamer = forwardRef(
     const handlecontrolsopen = () => {
       setShowControls(!showControls);
     };
-   const handleWireFrame = () => {
-        if (!sceneRef.current) return;
-        const scene = sceneRef.current;
-        // scene.meshes.forEach((mesh) => {
-        //   if (
-        //     mesh.material &&
-        //     mesh.name !== "skyBox" &&
-        //     mesh.name !== "waterMesh" &&
-        //     mesh.name !== "ground"
-        //   ) {
-        //     mesh.material.wireframe = !mesh.material.wireframe;
-        //   }
-        // });
-        scene.forceWireframe = !scene.forceWireframe;
-        setShowWireFrame((prev) => !prev);
-      };
-
+    const handleWireFrame = () => {
+      if (!sceneRef.current) return;
+      const scene = sceneRef.current;
+      // scene.meshes.forEach((mesh) => {
+      //   if (
+      //     mesh.material &&
+      //     mesh.name !== "skyBox" &&
+      //     mesh.name !== "waterMesh" &&
+      //     mesh.name !== "ground"
+      //   ) {
+      //     mesh.material.wireframe = !mesh.material.wireframe;
+      //   }
+      // });
+      scene.forceWireframe = !scene.forceWireframe;
+      setShowWireFrame((prev) => !prev);
+    };
 
     const handleResetSettings = () => {
       // === Reset State Variables ===
@@ -5120,12 +5123,12 @@ const Iroamer = forwardRef(
           <canvas
             ref={canvasRef}
             id="renderCanvas"
-            tabindex="0"
+            tabIndex="0"
             style={{
               overflow: "hidden",
               position: "absolute",
               zIndex: "0",
-              width: "100%",
+              width: "95%",
               height: "100%",
             }}
           />
@@ -5170,7 +5173,6 @@ const Iroamer = forwardRef(
           {/* CAD Axis */}
 
           {showAxis && sceneRef.current && (
-            
             <CADTopViewAxisIndicator scene={sceneRef.current} />
           )}
 
@@ -5371,17 +5373,16 @@ const Iroamer = forwardRef(
               setIsMenuOpen={setIsMenuOpen}
               onClose={handleCloseComment}
               content={commentPosition}
-              allCommentStatus={allCommentStatus}
               docdetnum={selectedItemName.name}
             />
           )}
 
           {/* Ground settings panel */}
           {groundSettingsVisible && (
-            <div id="groundSettings" class="contextMenu">
-              <div class="cm-content">
-                <div class="row-narrow">
-                  <label for="groundLevel" class="gray">
+            <div id="groundSettings" className="contextMenu">
+              <div className="cm-content">
+                <div className="row-narrow">
+                  <label for="groundLevel" className="gray">
                     Ground level
                   </label>
                   <br />
@@ -5410,8 +5411,8 @@ const Iroamer = forwardRef(
                     }}
                   />
                 </div>
-                <div class="row-narrow">
-                  <label for="groundColor" class="gray">
+                <div className="row-narrow">
+                  <label for="groundColor" className="gray">
                     Ground color
                   </label>
                   <br />
@@ -5430,8 +5431,8 @@ const Iroamer = forwardRef(
                     }}
                   />
                 </div>
-                <div class="row-narrow">
-                  <label for="groundOpacity" class="gray">
+                <div className="row-narrow">
+                  <label for="groundOpacity" className="gray">
                     Ground opacity
                   </label>
                   <br />
@@ -5478,12 +5479,12 @@ const Iroamer = forwardRef(
           {/* Water settings panel */}
 
           {waterSettingsVisible && (
-            <div id="seaSettingsMenu" class="contextMenuScreen">
-              <div class="contextMenuBg"></div>
-              <div id="seaSettings" class="contextMenu">
-                <div class="cm-content">
-                  <div class="row-narrow">
-                    <label for="seaLevel" class="gray">
+            <div id="seaSettingsMenu" className="contextMenuScreen">
+              <div className="contextMenuBg"></div>
+              <div id="seaSettings" className="contextMenu">
+                <div className="cm-content">
+                  <div className="row-narrow">
+                    <label for="seaLevel" className="gray">
                       Sea level (m)
                     </label>
                     <br />
@@ -5509,8 +5510,8 @@ const Iroamer = forwardRef(
                       }}
                     />
                   </div>
-                  <div class="row-narrow noMargin">
-                    <label for="seaOpacity" class="gray">
+                  <div className="row-narrow noMargin">
+                    <label for="seaOpacity" className="gray">
                       Sea opacity
                     </label>
                     <br />
@@ -5530,8 +5531,8 @@ const Iroamer = forwardRef(
                       }}
                     />
                   </div>
-                  <div class="row-narrow">
-                    <label for="seaColor" class="gray">
+                  <div className="row-narrow">
+                    <label for="seaColor" className="gray">
                       Water color
                     </label>
                     <br />
@@ -5556,8 +5557,8 @@ const Iroamer = forwardRef(
                       }}
                     />
                   </div>
-                  <div class="row-narrow">
-                    <label for="seaColorBlendFactor" class="gray">
+                  <div className="row-narrow">
+                    <label for="seaColorBlendFactor" className="gray">
                       Color blend factor (%)
                     </label>
                     <br />
@@ -5589,8 +5590,8 @@ const Iroamer = forwardRef(
                       }}
                     />
                   </div>
-                  <div class="row-narrow">
-                    <label for="seaBumpHeight" class="gray">
+                  <div className="row-narrow">
+                    <label for="seaBumpHeight" className="gray">
                       Bump height
                     </label>
                     <br />
@@ -5619,8 +5620,8 @@ const Iroamer = forwardRef(
                       }}
                     />
                   </div>
-                  <div class="row-narrow">
-                    <label for="seaWaveLength" class="gray">
+                  <div className="row-narrow">
+                    <label for="seaWaveLength" className="gray">
                       Wave length
                     </label>
                     <br />
@@ -5649,8 +5650,8 @@ const Iroamer = forwardRef(
                       }}
                     />
                   </div>
-                  <div class="row-narrow">
-                    <label for="seaWindForce" class="gray">
+                  <div className="row-narrow">
+                    <label for="seaWindForce" className="gray">
                       Wind force
                     </label>
                     <br />
@@ -5730,13 +5731,13 @@ const Iroamer = forwardRef(
                   className="btn btn-dark"
                   onClick={handleclosecommentinfo}
                 >
-                  <i class="fa-solid fa-xmark"></i>
+                  <i className="fa-solid fa-xmark"></i>
                 </button>
                 <div
                   className="btn btn-dark"
                   onClick={() => deletecomment(commentinfo.number)}
                 >
-                  <i class="fa-solid fa-trash"></i>
+                  <i className="fa-solid fa-trash"></i>
                 </div>
                 {commentinfo.status !== "closed" &&
                   (isEditing ? (
@@ -6188,16 +6189,16 @@ const Iroamer = forwardRef(
                 {showMeasureDetails ? (
                   <>
                     <div className="measureInfo" style={{ left: 0, zIndex: 1 }}>
-                      <table class="measureInfoTable">
+                      <table className="measureInfoTable">
                         <tbody>
-                          <tr class="bottomBordered">
-                            <th class="measureCornerCell left"></th>
+                          <tr className="bottomBordered">
+                            <th className="measureCornerCell left"></th>
                             <th>X</th>
                             <th>Y</th>
                             <th>Z</th>
                           </tr>
                           <tr>
-                            <th class="left">
+                            <th className="left">
                               P<sub>1</sub>
                             </th>
                             <td>{point1 ? point1.x : ""}</td>
@@ -6206,7 +6207,7 @@ const Iroamer = forwardRef(
                           </tr>
 
                           <tr>
-                            <th class="left">
+                            <th className="left">
                               P<sub>2</sub>
                             </th>
                             <td>{point1 ? point1.x : ""}</td>
@@ -6214,17 +6215,17 @@ const Iroamer = forwardRef(
                             <td>{point1 ? point1.y : ""}</td>
                           </tr>
                           <tr>
-                            <th class="left">Difference</th>
+                            <th className="left">Difference</th>
                             <td>{differences ? differences.diffX : ""}</td>
                             <td>{differences ? differences.diffZ : ""}</td>
                             <td>{differences ? differences.diffY : ""}</td>
                           </tr>
-                          <tr class="topBordered">
-                            <th class="left">Distance</th>
+                          <tr className="topBordered">
+                            <th className="left">Distance</th>
                             <td colspan="3">{distance ? distance : ""}</td>
                           </tr>
-                          <tr class="topBordered">
-                            <th class="left">Angle</th>
+                          <tr className="topBordered">
+                            <th className="left">Angle</th>
                             <td colspan="3">
                               hor:{angles ? angles.horizontalAngle : ""} &emsp;
                               ver:{angles ? angles.verticalAngle : ""}
@@ -6339,18 +6340,18 @@ const Iroamer = forwardRef(
           {/* Render setting */}
 
           {settingbox && (
-            <div id="seaSettingsMenu" class="contextMenuScreen">
-              <div class="contextMenuBg"></div>
-              <div id="seaSettings" class="contextMenuSetting">
-                <div class="cm-content">
+            <div id="seaSettingsMenu" className="contextMenuScreen">
+              <div className="contextMenuBg"></div>
+              <div id="seaSettings" className="contextMenuSetting">
+                <div className="cm-content">
                   {/* CAMERA SETTINGS */}
 
-                  <div class="row-narrow">
+                  <div className="row-narrow">
                     {activeSection === "camera" ? (
                       <>
                         <i
                           onClick={handleCameraOpen}
-                          class="fa-solid fa-caret-down"
+                          className="fa-solid fa-caret-down"
                         ></i>{" "}
                       </>
                     ) : (
@@ -6366,7 +6367,7 @@ const Iroamer = forwardRef(
                         activeSection === "camera" ? "bold" : ""
                       }`}
                       for="seaLevel"
-                      class="gray"
+                      className="gray"
                     >
                       Camera Settings
                     </label>
@@ -6374,8 +6375,8 @@ const Iroamer = forwardRef(
 
                     {activeSection === "camera" && (
                       <>
-                        <div class="row-narrow">
-                          <label for="seaLevel" class="gray">
+                        <div className="row-narrow">
+                          <label for="seaLevel" className="gray">
                             FOV
                           </label>
                           <br />
@@ -6393,8 +6394,8 @@ const Iroamer = forwardRef(
                             max="180"
                           />
                         </div>
-                        <div class="row-narrow">
-                          <label for="seaLevel" class="gray">
+                        <div className="row-narrow">
+                          <label for="seaLevel" className="gray">
                             Near Clipping Plane
                           </label>
                           <br />
@@ -6412,8 +6413,8 @@ const Iroamer = forwardRef(
                             min="0.01"
                           />
                         </div>
-                        <div class="row-narrow">
-                          <label for="seaLevel" class="gray">
+                        <div className="row-narrow">
+                          <label for="seaLevel" className="gray">
                             Far Clipping Plane
                           </label>
                           <br />
@@ -6464,8 +6465,8 @@ const Iroamer = forwardRef(
                             min="1"
                           />
                         </div>
-                        <div class="row-narrow">
-                          <label for="seaLevel" class="gray">
+                        <div className="row-narrow">
+                          <label for="seaLevel" className="gray">
                             Camera Speed
                           </label>
                           <br />
@@ -6486,8 +6487,8 @@ const Iroamer = forwardRef(
                             style={{ marginLeft: "10px" }}
                           />
                         </div>
-                        <div class="row-narrow">
-                          <label for="seaLevel" class="gray">
+                        <div className="row-narrow">
+                          <label for="seaLevel" className="gray">
                             Inertia
                           </label>
                           <br />
@@ -6511,12 +6512,12 @@ const Iroamer = forwardRef(
                   </div>
                   {/* LIGHT SETTINGS */}
 
-                  <div class="row-narrow">
+                  <div className="row-narrow">
                     {activeSection === "light" ? (
                       <>
                         <i
                           onClick={handleLightOpen}
-                          class="fa-solid fa-caret-down"
+                          className="fa-solid fa-caret-down"
                         ></i>{" "}
                       </>
                     ) : (
@@ -6533,7 +6534,6 @@ const Iroamer = forwardRef(
                         activeSection === "light" ? "bold" : ""
                       }`}
                       for="seaLevel"
-                      class="gray"
                     >
                       light Settings
                     </label>
@@ -6541,7 +6541,7 @@ const Iroamer = forwardRef(
                     {activeSection === "light" && (
                       <>
                         <div className="row-narrow">
-                          <label className="gray">Intensity</label>
+                          <label>Intensity</label>
                           <br />
 
                           <input
@@ -6555,7 +6555,7 @@ const Iroamer = forwardRef(
                         </div>
 
                         <div className="row-narrow">
-                          <label className="gray">Color</label>
+                          <label>Color</label>
                           <br />
 
                           <input
@@ -6566,7 +6566,7 @@ const Iroamer = forwardRef(
                         </div>
 
                         <div className="row-narrow">
-                          <label className="gray">Specular Color</label>
+                          <label>Specular Color</label>
                           <br />
 
                           <input
@@ -6577,7 +6577,7 @@ const Iroamer = forwardRef(
                         </div>
 
                         <div className="row-narrow">
-                          <label className="gray">Enable Shadow</label>{" "}
+                          <label>Enable Shadow</label>{" "}
                           <input
                             type="checkbox"
                             checked={lightShadowsEnabled}
@@ -6590,12 +6590,12 @@ const Iroamer = forwardRef(
                     )}
                   </div>
                   {/* MATERIAL SETTINGS */}
-                  <div class="row-narrow">
+                  <div className="row-narrow">
                     {activeSection === "material" ? (
                       <>
                         <i
                           onClick={handleMaterialOpen}
-                          class="fa-solid fa-caret-down"
+                          className="fa-solid fa-caret-down"
                         ></i>{" "}
                       </>
                     ) : (
@@ -6612,15 +6612,15 @@ const Iroamer = forwardRef(
                         activeSection === "material" ? "bold" : ""
                       }`}
                       for="seaLevel"
-                      class="gray"
+                      className="gray"
                     >
                       Material Settings
                     </label>
                     <br />
                     {activeSection === "material" && (
                       <>
-                        <div class="row-narrow">
-                          <label for="seaLevel" class="gray">
+                        <div className="row-narrow">
+                          <label for="seaLevel" className="gray">
                             Metallic
                           </label>
                           <br />
@@ -6633,8 +6633,8 @@ const Iroamer = forwardRef(
                             onChange={handleMetallicChange}
                           />
                         </div>
-                        <div class="row-narrow">
-                          <label for="seaLevel" class="gray">
+                        <div className="row-narrow">
+                          <label for="seaLevel" className="gray">
                             Roughness
                           </label>
                           <br />
@@ -6647,8 +6647,8 @@ const Iroamer = forwardRef(
                             onChange={handleRoughnessChange}
                           />
                         </div>
-                        <div class="row-narrow">
-                          <label for="seaLevel" class="gray">
+                        <div className="row-narrow">
+                          <label for="seaLevel" className="gray">
                             Reflection
                           </label>
                           <br />
@@ -6666,12 +6666,12 @@ const Iroamer = forwardRef(
                   </div>
                   {/* MEASURE SETTINGS */}
 
-                  <div class="row-narrow">
+                  <div className="row-narrow">
                     {activeSection === "measure" ? (
                       <>
                         <i
                           onClick={handleMeasureOpen}
-                          class="fa-solid fa-caret-down"
+                          className="fa-solid fa-caret-down"
                         ></i>{" "}
                       </>
                     ) : (
@@ -6688,7 +6688,7 @@ const Iroamer = forwardRef(
                         activeSection === "measure" ? "bold" : ""
                       }`}
                       for="seaLevel"
-                      class="gray"
+                      className="gray"
                     >
                       Measure Settings
                     </label>
@@ -6792,6 +6792,21 @@ const Iroamer = forwardRef(
               </div>
             </div>
           </Modal>
+          {/* All Saved view */}
+          <div className="circle-containerthree">
+            {allSavedViews.length > 0 &&
+              allSavedViews.map((view, index) => (
+                <div
+                  key={view.name}
+                  className="circle"
+                  onClick={() => applySavedView(view)}
+                  title={view.name}
+                >
+                  {index + 1}
+                </div>
+              ))}
+          </div>
+
           {/*Confirmation modal */}
           {showConfirm && (
             <DeleteConfirm
@@ -6801,325 +6816,324 @@ const Iroamer = forwardRef(
             />
           )}
         </div>
-       
-          <div class="right-sidenav">
-            <div className="rightSideNav">
-              <ul>
-                <li className={activeButton === "axis" ? "active" : ""}>
-                  <div className="tooltip-container">
-                    <span
-                      className="icon-tooltip"
-                      onClick={() => handleShowAxis("axis")}
-                      title="Show Axis"
-                    >
-                      <Axis3d />
-                    </span>
-                  </div>
-                </li>
-                <li className={activeButton === "orbit" ? "active" : ""}>
-                  <div className="tooltip-container">
-                    <span
-                      className="icon-tooltip"
-                      onClick={() => handleOrbitClick("orbit")}
-                      title="Orbit Camera"
-                    >
-                      <img
-                        style={{ width: "30px", height: "30px" }}
-                        src="images/orbit.png"
-                        alt=""
-                      />{" "}
-                    </span>
-                  </div>
-                </li>
-                <li className={activeButton === "fly" ? "active" : ""}>
-                  <div className="tooltip-container">
-                    <span
-                      className="icon-tooltip"
-                      onClick={() => handleFlyClick("fly")}
-                      title="Fly camera"
-                    >
-                      <FontAwesomeIcon icon={faPlane} size="lg" />
-                    </span>
-                  </div>
-                </li>
-                <li className={activeButton === "select" ? "active" : ""}>
-                  <div className="tooltip-container">
-                    <span
-                      className="icon-tooltip"
-                      title="Selection"
-                      onClick={() => handleObjectselected("select")}
-                    >
-                      <FontAwesomeIcon icon={faMousePointer} size="lg" />
-                    </span>
-                  </div>
-                </li>
-                <li className={activeButton === "clip" ? "active" : ""}>
-                  <div
-                    className="tooltip-container"
+
+        <div className="right-sidenav" style={{ zIndex: "1" }}>
+          <div className="rightSideNav">
+            <ul>
+              <li className={activeButton === "axis" ? "active" : ""}>
+                <div className="tooltip-container">
+                  <span
+                    className="icon-tooltip"
+                    onClick={() => handleShowAxis("axis")}
+                    title="Show Axis"
+                  >
+                    <Axis3d />
+                  </span>
+                </div>
+              </li>
+              <li className={activeButton === "orbit" ? "active" : ""}>
+                <div className="tooltip-container">
+                  <span
+                    className="icon-tooltip"
+                    onClick={() => handleOrbitClick("orbit")}
+                    title="Orbit Camera"
+                  >
+                    <img
+                      style={{ width: "30px", height: "30px" }}
+                      src="images/orbit.png"
+                      alt=""
+                    />{" "}
+                  </span>
+                </div>
+              </li>
+              <li className={activeButton === "fly" ? "active" : ""}>
+                <div className="tooltip-container">
+                  <span
+                    className="icon-tooltip"
+                    onClick={() => handleFlyClick("fly")}
+                    title="Fly camera"
+                  >
+                    <FontAwesomeIcon icon={faPlane} size="lg" />
+                  </span>
+                </div>
+              </li>
+              <li className={activeButton === "select" ? "active" : ""}>
+                <div className="tooltip-container">
+                  <span
+                    className="icon-tooltip"
+                    title="Selection"
+                    onClick={() => handleObjectselected("select")}
+                  >
+                    <FontAwesomeIcon icon={faMousePointer} size="lg" />
+                  </span>
+                </div>
+              </li>
+              <li className={activeButton === "clip" ? "active" : ""}>
+                <div
+                  className="tooltip-container"
+                  onContextMenu={(e) => {
+                    e.preventDefault(); // Prevent default right-click menu
+                    setClippingSetting(true);
+                  }}
+                  onClick={() => {
+                    if (sceneRef.current) {
+                      handleEnableSectioning(
+                        sceneRef.current,
+                        clippingPosition
+                      );
+                    }
+                  }}
+                >
+                  <span className="icon-tooltip" title="Enable sectioning">
+                    <FontAwesomeIcon icon={faScissors} size="lg" />
+                  </span>
+                </div>
+              </li>
+              <li className={activeButton === "fitview" ? "active" : ""}>
+                <div
+                  className="tooltip-container"
+                  onClick={() => handlezoomfit("fitview")}
+                >
+                  <span className="icon-tooltip" title="Fit View">
+                    <FontAwesomeIcon icon={faArrowsToDot} size="lg" />
+                  </span>
+                </div>
+              </li>
+              <li className={activeButton === "setting" ? "active" : ""}>
+                <div
+                  className="tooltip-container"
+                  onClick={() => handleSetting("setting")}
+                >
+                  <span className="icon-tooltip" title="Setting">
+                    <FontAwesomeIcon icon={faGear} size="lg" />
+                  </span>
+                </div>
+              </li>
+              <li className={activeButton === "orthographic" ? "active" : ""}>
+                <div className="tooltip-container">
+                  <span
+                    className="icon-tooltip"
+                    onClick={() => handleorthoview("orthographic")}
+                    title="Orthographic View"
+                  >
+                    <img
+                      className="button"
+                      src="images/orthographic.png"
+                      alt=""
+                    />
+                  </span>
+                </div>
+              </li>
+              <li className={activeButton === "perspective" ? "active" : ""}>
+                <div className="tooltip-container">
+                  <span
+                    className="icon-tooltip"
+                    onClick={() => handleperspective("perspective")}
+                    title="Perspective View"
+                  >
+                    <img
+                      className="button"
+                      src="images/perspective.png"
+                      alt=""
+                    />
+                  </span>
+                </div>
+              </li>
+              <li className={activeButton === "front" ? "active" : ""}>
+                <div className="tooltip-container">
+                  <span
+                    className="icon-tooltip"
+                    onClick={() => handleorthofront("front")}
+                    title="Front View"
+                  >
+                    <img className="button" src="images/front.png" alt="" />
+                  </span>
+                </div>
+              </li>
+              <li className={activeButton === "left" ? "active" : ""}>
+                <div className="tooltip-container">
+                  <span
+                    className="icon-tooltip"
+                    onClick={() => handleortholeft("left")}
+                    title="Left View"
+                  >
+                    <img className="button" src="images/left.png" alt="" />
+                  </span>
+                </div>
+              </li>
+              <li className={activeButton === "back" ? "active" : ""}>
+                <div className="tooltip-container">
+                  <span
+                    className="icon-tooltip"
+                    onClick={() => handleorthoback("back")}
+                    title="Back View"
+                  >
+                    <img className="button" src="images/back.png" alt="" />
+                  </span>
+                </div>
+              </li>
+              <li className={activeButton === "right" ? "active" : ""}>
+                <div className="tooltip-container">
+                  <span
+                    className="icon-tooltip"
+                    onClick={() => handleorthoright("right")}
+                    title="Right View"
+                  >
+                    <img className="button" src="images/right.png" alt="" />
+                  </span>
+                </div>
+              </li>
+              <li className={activeButton === "top" ? "active" : ""}>
+                <div className="tooltip-container">
+                  <span
+                    className="icon-tooltip"
+                    onClick={() => handleorthotop("top")}
+                    title="Top View"
+                  >
+                    <img className="button" src="images/top.png" alt="" />
+                  </span>
+                </div>
+              </li>
+              <li className={activeButton === "bottom" ? "active" : ""}>
+                <div className="tooltip-container">
+                  <span
+                    className="icon-tooltip"
+                    onClick={() => handleorthobottom("bottom")}
+                    title="Bottom View"
+                  >
+                    <img className="button" src="images/bottom.png" alt="" />
+                  </span>
+                </div>
+              </li>
+              <li className={activeButton === "measure" ? "active" : ""}>
+                <div className="tooltip-container">
+                  <span
+                    className="icon-tooltip"
+                    onClick={() => handleShowMeasure("measure")}
+                    title="Measure"
+                  >
+                    <img
+                      id="measure"
+                      className="button"
+                      src="images/measure.png"
+                      alt=""
+                    />
+                  </span>
+                </div>
+              </li>
+
+              <li className={activeButton === "wireframe" ? "active" : ""}>
+                <div className="tooltip-container">
+                  <span
+                    className="icon-tooltip"
+                    onClick={() => handleWireFrames("wireframe")}
+                    title="Wireframe"
+                  >
+                    <img
+                      id="wireframe"
+                      className="button"
+                      src="images/wireframe.png"
+                      alt=""
+                    />
+                  </span>
+                </div>
+              </li>
+              <li className={activeButton === "savedview" ? "active" : ""}>
+                <div className="tooltip-container">
+                  <span
+                    className="icon-tooltip"
+                    onClick={() => handleSavedView("savedview")}
+                    title="Saved view"
+                  >
+                    <img
+                      id="measure"
+                      className="button"
+                      src="images/save-icon.png"
+                      alt=""
+                    />
+                  </span>
+                </div>
+              </li>
+              <li className={activeButton === "Background" ? "active" : ""}>
+                <div className="tooltip-container">
+                  <span
+                    className="icon-tooltip"
+                    title="Default background"
+                    onClick={() => {
+                      // Cycle through background themes
+                      switch (backgroundTheme) {
+                        case "DEFAULT":
+                          setBackgroundTheme("WHITE");
+                          setActiveButton("Background");
+                          break;
+                        case "WHITE":
+                          setBackgroundTheme("GROUND_SKY");
+                          setActiveButton("Background");
+                          break;
+                        case "GROUND_SKY":
+                          setBackgroundTheme("SEA_SKY");
+                          setActiveButton("Background");
+                          break;
+                        case "SEA_SKY":
+                          setBackgroundTheme("DEFAULT");
+                          setActiveButton("Background");
+                          break;
+                        default:
+                          setBackgroundTheme("DEFAULT");
+                          setActiveButton("Background");
+                      }
+                    }}
                     onContextMenu={(e) => {
                       e.preventDefault(); // Prevent default right-click menu
-                      setClippingSetting(true);
-                    }}
-                    onClick={() => {
-                      if (sceneRef.current) {
-                        handleEnableSectioning(
-                          sceneRef.current,
-                          clippingPosition
-                        );
+
+                      // Only show settings for relevant themes
+                      if (backgroundTheme === "GROUND_SKY") {
+                        setGroundSettingsVisible(true);
+                      } else if (backgroundTheme === "SEA_SKY") {
+                        setWaterSettingsVisible(true);
                       }
                     }}
                   >
-                    <span className="icon-tooltip" title="Enable sectioning">
-                      <FontAwesomeIcon icon={faScissors} size="lg" />
-                    </span>
-                  </div>
-                </li>
-                <li className={activeButton === "fitview" ? "active" : ""}>
-                  <div
-                    className="tooltip-container"
-                    onClick={() => handlezoomfit("fitview")}
+                    <img
+                      id="theme"
+                      className="button"
+                      src="images/theme.png"
+                      alt=""
+                    />
+                  </span>
+                </div>
+              </li>
+              <li className={activeButton === "4dplan" ? "active" : ""}>
+                <div className="tooltip-container">
+                  <span
+                    className="icon-tooltip"
+                    onClick={() => handleWireFrame("4dplan")}
+                    title="4D plan"
                   >
-                    <span className="icon-tooltip" title="Fit View">
-                      <i class="fa-solid fa-arrows-to-dot fs-4"></i>{" "}
-                    </span>
-                  </div>
-                </li>
-                <li className={activeButton === "setting" ? "active" : ""}>
-                  <div
-                    className="tooltip-container"
-                    onClick={() => handleSetting("setting")}
+                    <img
+                      id="4dplan"
+                      className="button"
+                      src="images/4d_plan.png"
+                      alt=""
+                    />
+                  </span>
+                </div>
+              </li>
+              <li className={activeButton === "comment" ? "active" : ""}>
+                <div className="tooltip-container">
+                  <span
+                    className="icon-tooltip"
+                    onClick={() => handlecomment("comment")}
+                    title="Show comment"
                   >
-                    <span className="icon-tooltip" title="Setting">
-                      <FontAwesomeIcon icon={faGear} size="lg" />
-                    </span>
-                  </div>
-                </li>
-                <li className={activeButton === "orthographic" ? "active" : ""}>
-                  <div className="tooltip-container">
-                    <span
-                      className="icon-tooltip"
-                      onClick={() => handleorthoview("orthographic")}
-                      title="Orthographic View"
-                    >
-                      <img
-                        className="button"
-                        src="images/orthographic.png"
-                        alt=""
-                      />
-                    </span>
-                  </div>
-                </li>
-                <li className={activeButton === "perspective" ? "active" : ""}>
-                  <div className="tooltip-container">
-                    <span
-                      className="icon-tooltip"
-                      onClick={() => handleperspective("perspective")}
-                      title="Perspective View"
-                    >
-                      <img
-                        className="button"
-                        src="images/perspective.png"
-                        alt=""
-                      />
-                    </span>
-                  </div>
-                </li>
-                <li className={activeButton === "front" ? "active" : ""}>
-                  <div className="tooltip-container">
-                    <span
-                      className="icon-tooltip"
-                      onClick={() => handleorthofront("front")}
-                      title="Front View"
-                    >
-                      <img className="button" src="images/front.png" alt="" />
-                    </span>
-                  </div>
-                </li>
-                <li className={activeButton === "left" ? "active" : ""}>
-                  <div className="tooltip-container">
-                    <span
-                      className="icon-tooltip"
-                      onClick={() => handleortholeft("left")}
-                      title="Left View"
-                    >
-                      <img className="button" src="images/left.png" alt="" />
-                    </span>
-                  </div>
-                </li>
-                <li className={activeButton === "back" ? "active" : ""}>
-                  <div className="tooltip-container">
-                    <span
-                      className="icon-tooltip"
-                      onClick={() => handleorthoback("back")}
-                      title="Back View"
-                    >
-                      <img className="button" src="images/back.png" alt="" />
-                    </span>
-                  </div>
-                </li>
-                <li className={activeButton === "right" ? "active" : ""}>
-                  <div className="tooltip-container">
-                    <span
-                      className="icon-tooltip"
-                      onClick={() => handleorthoright("right")}
-                      title="Right View"
-                    >
-                      <img className="button" src="images/right.png" alt="" />
-                    </span>
-                  </div>
-                </li>
-                <li className={activeButton === "top" ? "active" : ""}>
-                  <div className="tooltip-container">
-                    <span
-                      className="icon-tooltip"
-                      onClick={() => handleorthotop("top")}
-                      title="Top View"
-                    >
-                      <img className="button" src="images/top.png" alt="" />
-                    </span>
-                  </div>
-                </li>
-                <li className={activeButton === "bottom" ? "active" : ""}>
-                  <div className="tooltip-container">
-                    <span
-                      className="icon-tooltip"
-                      onClick={() => handleorthobottom("bottom")}
-                      title="Bottom View"
-                    >
-                      <img className="button" src="images/bottom.png" alt="" />
-                    </span>
-                  </div>
-                </li>
-                <li className={activeButton === "measure" ? "active" : ""}>
-                  <div className="tooltip-container">
-                    <span
-                      className="icon-tooltip"
-                      onClick={() => handleShowMeasure("measure")}
-                      title="Measure"
-                    >
-                      <img
-                        id="measure"
-                        class="button"
-                        src="images/measure.png"
-                        alt=""
-                      />
-                    </span>
-                  </div>
-                </li>
-               
-                <li className={activeButton === "wireframe" ? "active" : ""}>
-                  <div className="tooltip-container">
-                    <span
-                      className="icon-tooltip"
-                      onClick={() => handleWireFrames("wireframe")}
-                      title="Wireframe"
-                    >
-                      <img
-                        id="wireframe"
-                        className="button"
-                        src="images/wireframe.png"
-                        alt=""
-                      />
-                    </span>
-                  </div>
-                </li>
-                <li className={activeButton === "savedview" ? "active" : ""}>
-                  <div className="tooltip-container">
-                    <span
-                      className="icon-tooltip"
-                      onClick={() => handleSavedView("savedview")}
-                      title="Saved view"
-                    >
-                      <img
-                        id="measure"
-                        class="button"
-                        src="images/save-icon.png"
-                        alt=""
-                      />
-                    </span>
-                  </div>
-                </li>
-                <li className={activeButton === "Background" ? "active" : ""}>
-                  <div className="tooltip-container">
-                    <span
-                      className="icon-tooltip"
-                      title="Default background"
-                      onClick={() => {
-                        // Cycle through background themes
-                        switch (backgroundTheme) {
-                          case "DEFAULT":
-                            setBackgroundTheme("WHITE");
-                            setActiveButton("Background");
-                            break;
-                          case "WHITE":
-                            setBackgroundTheme("GROUND_SKY");
-                            setActiveButton("Background");
-                            break;
-                          case "GROUND_SKY":
-                            setBackgroundTheme("SEA_SKY");
-                            setActiveButton("Background");
-                            break;
-                          case "SEA_SKY":
-                            setBackgroundTheme("DEFAULT");
-                            setActiveButton("Background");
-                            break;
-                          default:
-                            setBackgroundTheme("DEFAULT");
-                            setActiveButton("Background");
-                        }
-                      }}
-                      onContextMenu={(e) => {
-                        e.preventDefault(); // Prevent default right-click menu
-
-                        // Only show settings for relevant themes
-                        if (backgroundTheme === "GROUND_SKY") {
-                          setGroundSettingsVisible(true);
-                        } else if (backgroundTheme === "SEA_SKY") {
-                          setWaterSettingsVisible(true);
-                        }
-                      }}
-                    >
-                      <img
-                        id="theme"
-                        className="button"
-                        src="images/theme.png"
-                        alt=""
-                      />
-                    </span>
-                  </div>
-                </li>
-                <li className={activeButton === "4dplan" ? "active" : ""}>
-                  <div className="tooltip-container">
-                    <span
-                      className="icon-tooltip"
-                      onClick={() => handleWireFrame("4dplan")}
-                      title="4D plan"
-                    >
-                      <img
-                        id="4dplan"
-                        class="button"
-                        src="images/4d_plan.png"
-                        alt=""
-                      />
-                    </span>
-                  </div>
-                </li>
-                <li className={activeButton === "comment" ? "active" : ""}>
-                  <div className="tooltip-container">
-                    <span
-                      className="icon-tooltip"
-                      onClick={() => handlecomment("comment")}
-                      title="Show comment"
-                    >
-                      <i class="fa-solid fa-comment fs-4"></i>
-                    </span>
-                  </div>
-                </li>
-              </ul>
-            </div>
+                    <i className="fa-solid fa-comment fs-4"></i>
+                  </span>
+                </div>
+              </li>
+            </ul>
           </div>
         </div>
-    
+      </div>
     );
   }
 );

@@ -1,6 +1,7 @@
 import React from 'react'
 
-function DeleteConfirm({message,onConfirm, onCancel }) {
+function DeleteConfirm({message,onConfirm, onCancel,show }) {
+  if (!show) return null;
   return (
     <div className="custom-confirm">
     <div className="custom-confirm-content">
