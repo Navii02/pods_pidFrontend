@@ -130,7 +130,7 @@ const handleMoveToSavedView = (view) => {
 
   if (view) {
     if (activeItem === "Open Global Model") {
-      navigate("/global-model/open", { state: { view: view } });
+      navigate("/global-model/open",  { state: { view: view } });
     } else {
       navigate("/iroamer", { state: { view: view } });
     }

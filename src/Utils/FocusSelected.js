@@ -4,35 +4,44 @@
  */
 import * as BABYLON from "@babylonjs/core";
 
-export   const focusOnSelectedMesh = (scene,mesh) => {
-    if (!scene || !mesh) return;
+export const focusOnSelectedMesh = (scene, meshes) => {
+  if (!scene || !meshes || meshes.length === 0) return;
 
-    // Calculate bounding info
-    const boundingInfo = mesh.getBoundingInfo();
-    const center = boundingInfo.boundingBox.centerWorld;
+  // Combine bounding boxes of all selected meshes
+  let min = null;
+  let max = null;
 
-    // Calculate size for appropriate distance
-    const size = boundingInfo.boundingBox.maximumWorld.subtract(
-      boundingInfo.boundingBox.minimumWorld
-    );
-    const maxDimension = Math.max(size.x, size.y, size.z);
+  meshes.forEach(mesh => {
+    if (!mesh.getBoundingInfo || mesh.name==='__root__') return;
+    const boundingBox = mesh.getBoundingInfo().boundingBox;
+    const minBox = boundingBox.minimumWorld;
+    const maxBox = boundingBox.maximumWorld;
 
-    // If Arc Rotate camera, set target and radius
-    if (scene.activeCamera instanceof BABYLON.ArcRotateCamera) {
-      scene.activeCamera.setTarget(center);
-      scene.activeCamera.radius = maxDimension * 2; // Position at a reasonable distance
+    if (!min) {
+      min = minBox.clone();
+      max = maxBox.clone();
+    } else {
+      min = BABYLON.Vector3.Minimize(min, minBox);
+      max = BABYLON.Vector3.Maximize(max, maxBox);
     }
-    // If FreeCamera, move to position in front of the mesh
-    else if (scene.activeCamera instanceof BABYLON.FreeCamera) {
-      // Calculate position in front of the object
-      const distance = maxDimension * 2;
-      const direction = scene.activeCamera.getDirection(
-        BABYLON.Vector3.Forward()
-      );
-      const newPosition = center.subtract(direction.scale(-distance));
+  });
 
-      // Set position and target
-      scene.activeCamera.position = newPosition;
-      scene.activeCamera.setTarget(center);
-    }
-  };
+  if (!min || !max) return;
+   console.log(min,max);
+  const center = min.add(max).scale(0.5);
+  console.log(center);
+  const size = max.subtract(min);
+  const maxDimension = Math.max(size.x, size.y, size.z);
+  const distance = maxDimension * 2;
+
+  const camera = scene.activeCamera;
+
+  if (camera instanceof BABYLON.ArcRotateCamera) {
+    camera.setTarget(center);
+  } else if (camera instanceof BABYLON.FreeCamera) {
+    const direction = camera.getDirection(BABYLON.Vector3.Forward());
+    const newPosition = center.subtract(direction.scale(distance));
+    camera.position = newPosition;
+    camera.setTarget(center);
+  }
+};

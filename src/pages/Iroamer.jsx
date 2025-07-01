@@ -62,20 +62,12 @@ const Iroamer = forwardRef(
   (
     {
       projectNo,
-
       viewHideThreeunassigned,
       leftNavVisible,
-
       allViews,
-
       setViewHideThreeunassigned,
-
       currentProjectId,
-
-    
-
       applyViewSaved,
-
       setshowDisc,
       setShowTag,
       setshowSys,
@@ -96,8 +88,6 @@ const Iroamer = forwardRef(
       modalData,
     } = useContext(iroamerContext);
     const location = useLocation();
-
-    // let modalData = location.state?.modalData || [];
 
     const navigate = useNavigate();
 
@@ -131,11 +121,7 @@ const Iroamer = forwardRef(
     const [waterSettingsVisible, setWaterSettingsVisible] = useState(false);
     const [clippingSetting, setClippingSetting] = useState(false);
 
-    console.log(allComments);
-    console.log(allCommentStatus);
     let view = location.state?.view;
-    console.log(view);
-
   
 
     // handel orbit control
@@ -469,28 +455,6 @@ const Iroamer = forwardRef(
       }
     }, [highlightedTagKey]);
 
-    useEffect(() => {
-      if (!sceneRef.current) return;
-      const scene = sceneRef.current;
-      scene.onPointerDown = function (evt, pickResult) {
-        if (evt.button === 0 && !pickResult.hit) {
-          setHighlightedTagKey(""); // Or however you're clearing it
-          selectedMeshRef.current = [];
-          setFileInfoDetails(null); // Clear file info
-          settaginfo({
-            filename: "",
-            meshname: "",
-            linelistDetails: null,
-            equipmentlistDetails: null,
-            UsertagInfoDetails: {},
-            originalUsertagInfoDetails: null,
-          });
-          setIsMenuOpen(false);
-
-          lastHighlightedTagRef.current = null; // Clear last highlighted tag reference
-        }
-      };
-    });
     // useEffect for reciecve all tag
 
     const AllTags = async () => {
@@ -1747,7 +1711,26 @@ const Iroamer = forwardRef(
       if (selectedItem) {
         if (!sceneRef.current) return;
         const scene = sceneRef.current;
+  const canvas = scene.getEngine().getRenderingCanvas();
+  const canvasParent = canvas?.parentElement;
 
+  // === Prevent native browser context menu ===
+  const preventContextMenu = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    e.stopImmediatePropagation();
+    return false;
+  };
+
+  // Add context menu preventers
+  canvas?.addEventListener("contextmenu", preventContextMenu, true);
+  canvas.oncontextmenu = preventContextMenu;
+
+  if (canvasParent) {
+    canvasParent.addEventListener("contextmenu", preventContextMenu, true);
+  }
+
+  document.addEventListener("contextmenu", preventContextMenu, true);
         observer = scene.onPointerObservable.add((pointerInfo) => {
           const { event, type, pickInfo } = pointerInfo;
 
@@ -3223,27 +3206,21 @@ const Iroamer = forwardRef(
       setActiveButton(null);
     };
 
-    const handleZoomSelected = () => {
-      if (!sceneRef.current) return;
-      const scene = sceneRef.current;
+  const handleZoomSelected = () => {
+        if (!sceneRef.current) return;
+        const scene = sceneRef.current;
 
-      const selectedMeshes = selectedMeshRef.current;
-
-      // Filter out any non-mesh objects
-      const validMeshes = selectedMeshes?.filter(
-        (mesh) => mesh && typeof mesh.getBoundingInfo === "function"
-      );
-
-      if (!validMeshes || validMeshes.length === 0) {
-        setCustomAlert(true);
-        setModalMessage("Please select a valid object..");
-        setIsMenuOpen(false);
-        return;
-      }
-
-      zoomOnSelectedMesh(scene, validMeshes);
-      setIsMenuOpen(false);
-    };
+        const selectedMeshes = selectedMeshRef.current;
+        if (!selectedMeshes || selectedMeshes.length === 0) {
+          setCustomAlert(true);
+          setModalMessage("Please select object..");
+          setIsMenuOpen(false);
+        } else {
+          console.log(selectedMeshes);
+          zoomOnSelectedMesh(scene,selectedMeshes);
+          setIsMenuOpen(false);
+        }
+      };
 
     const handleAddComment = () => {
       // Implement logic to add a comment
@@ -4756,6 +4733,8 @@ const Iroamer = forwardRef(
         // Close dialog and reset name
         setSavedViewDialog(false);
         setSaveViewName("");
+        getAllSavedViews(projectId);
+
       }
 
       // Hide message after a delay

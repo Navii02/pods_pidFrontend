@@ -155,7 +155,6 @@ function GlobalModalOpen({leftNavVisible,
   };
    const location = useLocation();
    let modalData = location.state?.view || [];
-
   return (
     <div>
       <div className="d-flex">

@@ -7140,7 +7140,7 @@ console.log(modelInfoRef.current);
 
   useEffect(() => {
     if (modalData) {
-      // applySavedView(modalData);
+      applySavedView(modalData);
     }
   }, [modalData]);
 
