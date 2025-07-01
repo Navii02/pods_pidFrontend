@@ -354,6 +354,7 @@ header {
 
 .rightSideNav li.active {
   background-color: #5B66CB;
+  margin-left: 10px;
 }
 
 /* Adjust scrollbar styles as needed */
@@ -407,7 +408,7 @@ header {
 
 .right-sidenav {
   right:0;
-  width: 75px;
+  width: 75 npx;
   z-index: 1;
 }
 .leftSideNav{

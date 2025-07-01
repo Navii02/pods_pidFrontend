@@ -819,7 +819,7 @@ function TagFileRegisterModal({ setLoading, setFile, file, setOpenModalBox }) {
     selectedFiles.forEach((file) => {
       formData.append("files", file);
     });
-
+  formData.append("projectId", projectId);
     try {
       let responseReceived = false;
 
