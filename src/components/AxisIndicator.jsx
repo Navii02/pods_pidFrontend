@@ -8,7 +8,6 @@ const CADTopViewAxisIndicator = ({ scene }) => {
   
   useEffect(() => {
     if (!scene) return;
-    console.log("axis1")
     
     // Create a fullscreen UI layer
     const advancedTexture = GUI.AdvancedDynamicTexture.CreateFullscreenUI("UI", true, scene);

@@ -10,6 +10,7 @@ function ContextShare({ children }) {
   const [viewHideThree, setViewHideThree] = useState({});
   const [backgroundColorTag, setBackgroundColorTag] = useState({});
   const [highlightedTagKey, setHighlightedTagKey] = useState(null);
+  const [highlightedTagKeyGlobal, setHighlightedTagKeyGlobal] = useState(null);
   const [tagsToRemove, setTagsToRemove] = useState([]);
   const [iroamerfieldEmpty, setIroamerfieldEmpty] = useState(false);
   //console.log(modalData)
@@ -25,6 +26,8 @@ function ContextShare({ children }) {
               setViewHideThree,
               highlightedTagKey,
               setHighlightedTagKey,
+              highlightedTagKeyGlobal,
+              setHighlightedTagKeyGlobal,
               backgroundColorTag,
               setBackgroundColorTag,
               tagsToRemove,

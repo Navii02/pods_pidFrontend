@@ -77,6 +77,8 @@ const Iroamer = forwardRef(
     const {
       highlightedTagKey,
       setHighlightedTagKey,
+      highlightedTagKeyGlobal,
+      setHighlightedTagKeyGlobal,
       setBackgroundColorTag,
       tagsToRemove,
       setTagsToRemove,
@@ -110,7 +112,6 @@ const Iroamer = forwardRef(
     const [waterSettingParameter, setWaterSettingParameter] = useState(null);
     const [baseSettingParameter, setBaseSettingParameter] = useState(null);
     const [groundSettingParameter, setGroundSettingParameter] = useState(null);
-    console.log(baseSettingParameter);
 
     // ------------------------------------PID--------------------------
 
@@ -121,10 +122,6 @@ const Iroamer = forwardRef(
     const [clippingSetting, setClippingSetting] = useState(false);
 
     let view = location.state?.view;
-    console.log(view);
-
-  
-
     // handel orbit control
     const handleOrbitClick = (buttonName) => {
       //console.log("Setting active button to:", buttonName);
@@ -612,6 +609,30 @@ const Iroamer = forwardRef(
         return prevTags;
       });
     };
+
+        useEffect(() => {
+        if (!sceneRef.current) return;
+        const scene = sceneRef.current;
+        scene.onPointerDown = function (evt, pickResult) {
+          if (evt.button === 0 && !pickResult.hit) {
+            dehighlightMesh();
+            setHighlightedTagKey(""); // Or however you're clearing it
+            selectedMeshRef.current = [];
+            setFileInfoDetails(null); // Clear file info
+            settaginfo({
+              filename: "",
+              meshname: "",
+              linelistDetails: null,
+              equipmentlistDetails: null,
+              UsertagInfoDetails: {},
+              originalUsertagInfoDetails: null,
+            });
+            setIsMenuOpen(false);
+
+            lastHighlightedTagRef.current = null; // Clear last highlighted tag reference
+          }
+        };
+      });
 
     useEffect(() => {
       AlltagsPID();
@@ -2038,8 +2059,8 @@ const Iroamer = forwardRef(
           fetchwatersettings(projectId);
         }
       },
-      projectId,
-      modalData
+     [ projectId,
+      modalData]
     );
 
     useEffect(() => {
@@ -2128,8 +2149,8 @@ const Iroamer = forwardRef(
 
       // Add new labels
       const newLabels = [];
-      commentsToAdd?.forEach((comment) => {
-        const labelElement = createCommentLabel(comment, scene);
+      commentsToAdd?.forEach((comment,index) => {
+        const labelElement = createCommentLabel(comment, scene,index);
 
         // Set background color based on status
         const labelColor =
@@ -2957,7 +2978,7 @@ const Iroamer = forwardRef(
     // };
 
     // Function to create a comment label with plane geometry instead of box
-    const createCommentLabel = (comment, scene) => {
+    const createCommentLabel = (comment, scene,index) => {
       // Create a simple position mesh (invisible) to anchor the label
       const position = BABYLON.MeshBuilder.CreateBox(
         `marker-position-${comment.number}`,
@@ -3000,7 +3021,7 @@ const Iroamer = forwardRef(
       });
 
       const text = new GUI.TextBlock();
-      text.text = `${comment.number}`; // Fixed typo from 'numbber' to 'number'
+      text.text = index; // Fixed typo from 'numbber' to 'number'
       text.color = "white";
       text.fontSize = 10;
 
@@ -5135,7 +5156,7 @@ const Iroamer = forwardRef(
               overflow: "hidden",
               position: "absolute",
               zIndex: "0",
-              width: "95%",
+              width: "100%",
               height: "100%",
             }}
           />
@@ -5178,9 +5199,10 @@ const Iroamer = forwardRef(
           )}
           {/* CAD Axis */}
 
-          {showAxis && sceneRef.current && (
+          {/* {showAxis && sceneRef.current && (
+            
             <CADTopViewAxisIndicator scene={sceneRef.current} />
-          )}
+          )} */}
 
           {/* Speed bar */}
           {speedBar}
@@ -6286,7 +6308,7 @@ const Iroamer = forwardRef(
                 fontFamily: "sans-serif",
                 fontSize: "12px",
                 color: "white",
-                width: "80px",
+                minWidth: "80px",
               }}
             >
               {/* Top bar: total distance */}
@@ -6393,7 +6415,6 @@ const Iroamer = forwardRef(
                         activeSection === "camera" ? "bold" : ""
                       }`}
                       for="seaLevel"
-                      className="gray"
                     >
                       Camera Settings
                     </label>
@@ -6603,7 +6624,6 @@ const Iroamer = forwardRef(
                         activeSection === "material" ? "bold" : ""
                       }`}
                       for="seaLevel"
-                      className="gray"
                     >
                       Material Settings
                     </label>
@@ -6679,7 +6699,6 @@ const Iroamer = forwardRef(
                         activeSection === "measure" ? "bold" : ""
                       }`}
                       for="seaLevel"
-                      className="gray"
                     >
                       Measure Settings
                     </label>

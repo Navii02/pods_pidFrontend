@@ -12,8 +12,7 @@ import { Axis3d } from "lucide-react";
 import { useLocation } from "react-router-dom";
 import { useEffect } from "react";
 
-function GlobalModalOpen({leftNavVisible,
-  }) {
+function GlobalModalOpen({ leftNavVisible }) {
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   const mockContent = {
@@ -45,7 +44,6 @@ function GlobalModalOpen({leftNavVisible,
 
   const [enableClipping, setEnableClipping] = useState(false);
 
-
   // ------------------------------------PID--------------------------
 
   const [showAxis, setShowAxis] = useState(true);
@@ -53,7 +51,6 @@ function GlobalModalOpen({leftNavVisible,
   const [groundSettingsVisible, setGroundSettingsVisible] = useState(false);
   const [waterSettingsVisible, setWaterSettingsVisible] = useState(false);
   const [waterSettingParameter, setWaterSettingParameter] = useState(null);
-  const [baseSettingParameter, setBaseSettingParameter] = useState(null);
   const [groundSettingParameter, setGroundSettingParameter] = useState(null);
 
   const [clippingSetting, setClippingSetting] = useState(false);
@@ -153,8 +150,8 @@ function GlobalModalOpen({leftNavVisible,
     setActiveButton(buttonName);
     setSavedViewDialog(true);
   };
-   const location = useLocation();
-   let modalData = location.state?.view || [];
+  const location = useLocation();
+  let modalData = location.state?.view || [];
   return (
     <div>
       <div className="d-flex">
@@ -179,17 +176,31 @@ function GlobalModalOpen({leftNavVisible,
             setGroundSettingParameter={setGroundSettingParameter}
             setWaterSettingParameter={setWaterSettingParameter}
             waterSettingParameter={waterSettingParameter}
-            baseSettingParameter={baseSettingParameter}
             groundSettingParameter={groundSettingParameter}
             groundSettingsVisible={groundSettingsVisible}
-                setGroundSettingsVisible={setGroundSettingsVisible}
-                waterSettingsVisible={waterSettingsVisible}
-                setWaterSettingsVisible={setWaterSettingsVisible}
+            setGroundSettingsVisible={setGroundSettingsVisible}
+            waterSettingsVisible={waterSettingsVisible}
+            setWaterSettingsVisible={setWaterSettingsVisible}
+            enableClipping={enableClipping}
+            setEnableClipping={setEnableClipping}
+            clippingSetting={clippingSetting}
+            setClippingSetting={setClippingSetting}
+            setsettingbox={setsettingbox}
+            settingbox={settingbox}
+            showAxis={showAxis}
+            setOrthoviewmode={setOrthoviewmode}
+            orthoviewmode={orthoviewmode}
           />
         </div>
 
         <div class="right-sidenav">
-          <div className="rightSideNav">
+          <div
+            className="rightSideNav"
+            style={{
+              backgroundColor:
+                backgroundTheme === "WHITE" ? "#33334c" : "rgba(13, 9, 229, 0)",
+            }}
+          >
             <ul>
               <li className={activeButton === "axis" ? "active" : ""}>
                 <div className="tooltip-container">
@@ -258,7 +269,8 @@ function GlobalModalOpen({leftNavVisible,
                 <div
                   className="tooltip-container"
                   onContextMenu={(e) => {
-                    e.preventDefault(); // Prevent default right-click menu
+                    e.preventDefault();
+                    console.log("opensetting"); // Prevent default right-click menu
                     setClippingSetting(true);
                   }}
                   onClick={() => handleEnableSectioning("clip")}

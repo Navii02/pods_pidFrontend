@@ -408,8 +408,8 @@ header {
 
 .right-sidenav {
   right:0;
-  width: 75 npx;
-  z-index: 1;
+  width: 75px;
+  z-index: 100;
 }
 .leftSideNav{
   height: 100%;
@@ -521,7 +521,7 @@ div.sideLnkDiv {
 .contextMenuSetting {
   position: absolute;
   top: 0;
-  right: 0;
+  right: 65px;
   z-index: 1000;
   padding: 4px 0;
   max-width: 250px;
@@ -2202,7 +2202,7 @@ div#seaSettings input[type=number] {
 div.contextMenu {
   position: absolute;
   bottom:100px;
-  right: 0;
+  right: 65px;
   z-index: 1000;
   padding: 4px 0;
   max-width: 250px;

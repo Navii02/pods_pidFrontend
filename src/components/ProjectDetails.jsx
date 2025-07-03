@@ -42,6 +42,7 @@ const ProjectDetails = ({
     viewHideThree,
     backgroundColorTag,
     setHighlightedTagKey,
+    setHighlightedTagKeyGlobal,
     setTagsToRemove,
     setViewHideThree,
     iroamerfieldEmpty,
@@ -719,6 +720,7 @@ const ProjectDetails = ({
                                               onClick={() => {
                                                 const tagKey = `${area.area}-${disc.disc}-${sys.sys}-${tag.tag}`;
                                                 setHighlightedTagKey(tagKey);
+                                                setHighlightedTagKeyGlobal(tag.tag);
                                               }}
                                             >
                                               <FontAwesomeIcon
