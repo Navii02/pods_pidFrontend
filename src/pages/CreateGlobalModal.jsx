@@ -8,6 +8,8 @@ import "@babylonjs/loaders";
 import { calculateScreenCoverage } from "../Utils/CalculateScreenCoverage";
 import { loadModels } from "../Utils/LoadModels";
 import {createOctreeBlock, createOctreeInfo, distributeMeshesToOctree} from "../Utils/CreateOctreeBlock";
+import { url } from "../services/Url";
+
 // Simplified configuration
 const BATCH_SIZE = 10;
 const DB_BATCH_SIZE = 50;
@@ -16,11 +18,15 @@ function CreateGlobalModal() {
   const [files, setFiles] = useState([]);
   const [status, setStatus] = useState("");
   const [progress, setProgress] = useState({ current: 0, total: 0 });
+  const [isProcessing, setIsProcessing] = useState(false);
   const engineRef = useRef(null);
   const sceneRef = useRef(null);
   const canvasRef = useRef(null);
   const meshIdCounter = useRef(1);
   const dbConnection = useRef(null);
+  const projectString = sessionStorage.getItem("selectedProject");
+    const project = projectString ? JSON.parse(projectString) : null;
+    const projectId = project?.projectId;
   
   const [processProgress, setProcessProgress] = useState({
     stage: "",
@@ -29,6 +35,7 @@ function CreateGlobalModal() {
     subStage: "",
     subProgress: 0,
     processingStage: 0,
+    startTime: null,
   });
 
   // Optimized IndexedDB initialization
@@ -124,7 +131,7 @@ function CreateGlobalModal() {
   };
 
   // Optimized mesh processing without simplification
-  const processMesh = async (mesh, fileId,ParentFile) => {
+  const processMesh = async (mesh, fileId, ParentFile) => {
     if (!mesh.geometry) return null;
     
     const meshId = meshIdCounter.current++;
@@ -157,7 +164,7 @@ function CreateGlobalModal() {
     const meshData = {
       fileName: originalMeshId,
       data: {
-        ParentFile:ParentFile,
+        ParentFile: ParentFile,
         positions: Array.from(positions),
         normals: Array.from(normals),
         indices: Array.from(indices),
@@ -190,7 +197,7 @@ function CreateGlobalModal() {
           id: originalMeshId,
           fileId,
           screenCoverage,
-           ParentFile,
+          ParentFile,
         },
         boundingInfo: mesh.getBoundingInfo(),
         transforms: {
@@ -218,8 +225,8 @@ function CreateGlobalModal() {
   const processFile = async (file) => {
     validateFile(file);
     const container = await loadFile(file);
-const fileNameWithoutExt = file.name.replace(/\.glb$/i, ""); // Remove .glb (case-insensitive)
-const fileId = fileNameWithoutExt; // Replace non-alphanumerics with "_"
+    const fileNameWithoutExt = file.name.replace(/\.glb$/i, ""); // Remove .glb (case-insensitive)
+    const fileId = fileNameWithoutExt; // Replace non-alphanumerics with "_"
     const meshPromises = [];
     const dbOperations = [];
     
@@ -227,7 +234,7 @@ const fileId = fileNameWithoutExt; // Replace non-alphanumerics with "_"
       // Process meshes in parallel
       for (const mesh of container.meshes) {
         if (!mesh.geometry) continue;
-        meshPromises.push(processMesh(mesh, fileId,file.name));
+        meshPromises.push(processMesh(mesh, fileId, file.name));
       }
       
       const results = (await Promise.all(meshPromises)).filter(Boolean);
@@ -251,158 +258,192 @@ const fileId = fileNameWithoutExt; // Replace non-alphanumerics with "_"
     }
   };
 
- 
-
-  const handleFileChange = useCallback(async (event) => {
+  // Modified handleFileChange - only stores files, doesn't process
+  const handleFileChange = useCallback((event) => {
     const selectedFiles = Array.from(event.target.files);
     setFiles(selectedFiles);
     
-    try {
-        let allMeshInfos = [];
-        
-        // Step 1: Process Files (Main Thread)
-        updateProgress({
-            stage: "Processing Files",
-            current: 0,
-            total: selectedFiles.length,
-            processingStage: 1,
-            subStage: "Initializing",
-            subProgress: 0,
-        });
-        
-        // Process files in batches
-        for (let i = 0; i < selectedFiles.length; i += BATCH_SIZE) {
-            const batch = selectedFiles.slice(i, i + BATCH_SIZE);
-            const batchResults = await Promise.all(batch.map((file) => processFile(file)));
-            allMeshInfos = allMeshInfos.concat(batchResults.flat());
-            
-            const progress = Math.min(
-                Math.floor(((i + BATCH_SIZE) / selectedFiles.length) * 100),
-                100
-            );
-            updateProgress({
-                stage: "Processing Files",
-                processingStage: 1,
-                current: i + batch.length,
-                total: selectedFiles.length,
-                subStage: `Processing batch ${i / BATCH_SIZE + 1}`,
-                subProgress: progress,
-            });
-        }
-        
-        // Step 2: Store Meshes
-        updateProgress({
-            stage: "Storing Meshes",
-            processingStage: 2,
-            subStage: "Saving meshes to database",
-            subProgress: 0,
-        });
-        
-     
-        
-        updateProgress({
-            stage: "Storing Meshes",
-            processingStage: 2,
-            subStage: "Meshes stored successfully",
-            subProgress: 100,
-        });
-        
-        // Step 3: Create Octree
-        updateProgress({
-            stage: "Creating Octree",
-            processingStage: 3,
-            subStage: "Building octree structure",
-            subProgress: 0,
-        });
-        
-        const octreeRoot = createOctreeBlock(
-            sceneRef.current,
-            getMinBounds(allMeshInfos),
-            getMaxBounds(allMeshInfos),
-            allMeshInfos,
-            0,
-            null
-        );
-        
-        const octreeInfo = createOctreeInfo(
-            octreeRoot,
-            getMinBounds(allMeshInfos),
-            getMaxBounds(allMeshInfos)
-        );
-        
-        await batchStoreInDB([
-            {
-                store: "octree",
-                key: "mainOctree",
-                data: octreeInfo,
-            },
-        ]);
-        
-        updateProgress({
-            stage: "Creating Octree",
-            processingStage: 3,
-            subStage: "Octree created successfully",
-            subProgress: 100,
-        });
-        
-        // Clear memory
-        allMeshInfos = [];
-        
-        // Step 4: Load Models with Worker
-        updateProgress({
-            stage: "Loading Models",
-            processingStage: 4,
-            subStage: "Initializing worker",
-            subProgress: 0,
-        });
-        
-        // Set up worker progress listener
-        const handleWorkerProgress = (event) => {
-            const { stage, progress } = event.detail;
-            updateProgress({
-                stage: "Processing Models",
-                processingStage: 4,
-                subStage: stage,
-                subProgress: progress,
-            });
-        };
-        
-        window.addEventListener('meshProcessingProgress', handleWorkerProgress);
-        
-        try {
-            // Call the worker-based loadModels function
-            await loadModels((progressData) => {
-                updateProgress({
-                    stage: progressData.stage,
-                    processingStage: 4,
-                    subStage: progressData.stage,
-                    subProgress: progressData.progress,
-                });
-            });
-        } finally {
-            window.removeEventListener('meshProcessingProgress', handleWorkerProgress);
-        }
-        
-        // Step 5: Complete
-        updateProgress({
-            stage: "Complete",
-            processingStage: 5,
-            subStage: "Processing complete",
-            subProgress: 100,
-        });
-        
-        setStatus("Processing completed successfully!");
-        
-    } catch (error) {
-        console.error("Error:", error);
-        setStatus("Error: " + error.message);
-        updateProgress({
-            stage: "Error",
-            subStage: error.message,
-            subProgress: 0,
-        });
+    // Reset processing state
+    setIsProcessing(false);
+    setStatus("");
+    setProcessProgress({
+      stage: "",
+      current: 0,
+      total: 0,
+      subStage: "",
+      subProgress: 0,
+      processingStage: 0,
+      startTime: null,
+    });
+    
+    // Update status to show files are selected
+    if (selectedFiles.length > 0) {
+      setStatus(`${selectedFiles.length} file(s) selected. Click "Create" to start processing.`);
     }
-}, []);
+  }, []);
+
+  // New function to handle the Create button click
+  const handleCreateClick = useCallback(async () => {
+    if (files.length === 0) {
+      setStatus("Please select files first.");
+      return;
+    }
+
+    if (isProcessing) {
+      setStatus("Processing already in progress.");
+      return;
+    }
+
+    setIsProcessing(true);
+    setStatus("Processing started...");
+    
+    try {
+      let allMeshInfos = [];
+      
+      // Step 1: Process Files (Main Thread)
+      updateProgress({
+        stage: "Processing Files",
+        current: 0,
+        total: files.length,
+        processingStage: 1,
+        subStage: "Initializing",
+        subProgress: 0,
+        startTime: Date.now(),
+      });
+      
+      // Process files in batches
+      for (let i = 0; i < files.length; i += BATCH_SIZE) {
+        const batch = files.slice(i, i + BATCH_SIZE);
+        const batchResults = await Promise.all(batch.map((file) => processFile(file)));
+        allMeshInfos = allMeshInfos.concat(batchResults.flat());
+        
+        const progress = Math.min(
+          Math.floor(((i + BATCH_SIZE) / files.length) * 100),
+          100
+        );
+        updateProgress({
+          stage: "Processing Files",
+          processingStage: 1,
+          current: i + batch.length,
+          total: files.length,
+          subStage: `Processing batch ${i / BATCH_SIZE + 1}`,
+          subProgress: progress,
+        });
+      }
+      
+      // Step 2: Store Meshes
+      updateProgress({
+        stage: "Storing Meshes",
+        processingStage: 2,
+        subStage: "Saving meshes to database",
+        subProgress: 0,
+      });
+      
+      updateProgress({
+        stage: "Storing Meshes",
+        processingStage: 2,
+        subStage: "Meshes stored successfully",
+        subProgress: 100,
+      });
+      
+      // Step 3: Create Octree
+      updateProgress({
+        stage: "Creating Octree",
+        processingStage: 3,
+        subStage: "Building octree structure",
+        subProgress: 0,
+      });
+      
+      const octreeRoot = createOctreeBlock(
+        sceneRef.current,
+        getMinBounds(allMeshInfos),
+        getMaxBounds(allMeshInfos),
+        allMeshInfos,
+        0,
+        null
+      );
+      
+      const octreeInfo = createOctreeInfo(
+        octreeRoot,
+        getMinBounds(allMeshInfos),
+        getMaxBounds(allMeshInfos)
+      );
+      
+      await batchStoreInDB([
+        {
+          store: "octree",
+          key: "mainOctree",
+          data: octreeInfo,
+        },
+      ]);
+      
+      updateProgress({
+        stage: "Creating Octree",
+        processingStage: 3,
+        subStage: "Octree created successfully",
+        subProgress: 100,
+      });
+      
+      // Clear memory
+      allMeshInfos = [];
+      
+      // Step 4: Load Models with Worker
+      updateProgress({
+        stage: "Loading Models",
+        processingStage: 4,
+        subStage: "Initializing worker",
+        subProgress: 0,
+      });
+      
+      // Set up worker progress listener
+      const handleWorkerProgress = (event) => {
+        const { stage, progress } = event.detail;
+        updateProgress({
+          stage: "Processing Models",
+          processingStage: 4,
+          subStage: stage,
+          subProgress: progress,
+        });
+      };
+      
+      window.addEventListener('meshProcessingProgress', handleWorkerProgress);
+      
+      try {
+        // Call the worker-based loadModels function
+        await loadModels((progressData) => {
+          updateProgress({
+            stage: progressData.stage,
+            processingStage: 4,
+            subStage: progressData.stage,
+            subProgress: progressData.progress,
+          });
+        });
+      } finally {
+        window.removeEventListener('meshProcessingProgress', handleWorkerProgress);
+      }
+      
+      // Step 5: Complete
+      updateProgress({
+        stage: "Complete",
+        processingStage: 5,
+        subStage: "Processing complete",
+        subProgress: 100,
+      });
+      
+      setStatus("Processing completed successfully!");
+      
+    } catch (error) {
+      console.error("Error:", error);
+      setStatus("Error: " + error.message);
+      updateProgress({
+        stage: "Error",
+        subStage: error.message,
+        subProgress: 0,
+      });
+    } finally {
+      setIsProcessing(false);
+    }
+  }, [files, isProcessing]);
   
   // Helper functions
   const getMinBounds = (meshInfos) => {
@@ -458,7 +499,7 @@ const fileId = fileNameWithoutExt; // Replace non-alphanumerics with "_"
     engineRef.current = engine;
 
     const scene = new BABYLON.Scene(engine);
-     scene.useRightHandedSystem = true;
+    scene.useRightHandedSystem = true;
     sceneRef.current = scene;
 
     const camera = new BABYLON.ArcRotateCamera(
@@ -505,398 +546,456 @@ const fileId = fileNameWithoutExt; // Replace non-alphanumerics with "_"
       canvas.remove();
     };
   }, []);
-  const handleloadModels=async()=>{
+
+  const handleloadModels = async () => {
     await loadModels();
   }
 
-// UPDATED: Enhanced octree analysis function with improved structure detection
-const analyzeOctree = async () => {
-  try {
-    const db = await initDB();
-    
-    // Get the main octree from the database
-    const octreeData = await new Promise((resolve, reject) => {
-      const transaction = db.transaction("octree", "readonly");
-      const store = transaction.objectStore("octree");
-      const request = store.get("mainOctree");
-      
-      request.onsuccess = () => resolve(request.result);
-      request.onerror = () => reject(request.error);
-    });
-    
-    if (!octreeData) {
-      console.error("No octree data found in the database");
-      return;
-    }
-    
-    // Debug: Log the high-level structure to examine it without overwhelming the console
-    console.log("Octree data structure:", 
-      JSON.stringify(
-        Object.keys(octreeData).reduce((obj, key) => {
-          obj[key] = typeof octreeData[key] === 'object' ? '[Object]' : octreeData[key];
-          return obj;
-        }, {})
-      )
-    );
-    
-    // Structure to hold node and mesh counts per depth
-    const stats = {
-      nodesByDepth: {}, // { depth: nodeCount }
-      meshesByDepth: {}, // { depth: Set of meshIds }
-      // Track processed nodes to avoid double-counting
-      processedNodes: new Set()
-    };
-    
-    // Initialize stats for depths 0-4
-    for (let i = 0; i <= 4; i++) {
-      stats.nodesByDepth[i] = 0;
-      stats.meshesByDepth[i] = new Set(); // Use Set to avoid duplicate mesh IDs
-    }
-    
-    // Improved recursive function to analyze octree structure
-    // Returns a boolean indicating if the object was identified as a block
-    const analyzeBlock = (block, depth = 0, path = '', nodeId = null) => {
-      if (!block || typeof block !== 'object') return false;
-      
-      // Try to identify a unique ID for this node to avoid double-counting
-      const id = nodeId || 
-                (block.properties && block.properties.nodeNumber) || 
-                (block.nodeNumber) || 
-                path;
-      
-      // Skip if we've already processed this node
-      if (stats.processedNodes.has(id)) {
-        return true; // Return true to indicate this was a block, but already processed
-      }
-      
-      // Check if this is a block node using multiple indicators
-      let isBlock = false;
-      
-      // Check for common block properties
-      if (
-        // Standard octree node structure
-        (block.bounds && (block.bounds.min || block.bounds.max)) ||
-        // Alternative structures
-        (block.min && block.max) ||
-        // Check for meshInfos
-        (block.meshInfos && Array.isArray(block.meshInfos)) ||
-        // Check for properties that indicate this is a node
-        (block.properties && block.properties.depth !== undefined) ||
-        // Check if it has child blocks
-        (block.relationships && block.relationships.childBlocks)
-      ) {
-        isBlock = true;
-        stats.processedNodes.add(id);
-        stats.nodesByDepth[depth] = (stats.nodesByDepth[depth] || 0) + 1;
-        
-        // Process meshInfos if present
-        if (block.meshInfos && Array.isArray(block.meshInfos)) {
-          const meshIds = block.meshInfos
-            .filter(mesh => mesh && mesh.id)
-            .map(mesh => mesh.id);
-          
-          if (meshIds.length > 0) {
-            meshIds.forEach(id => stats.meshesByDepth[depth].add(id));
-            console.log(`  Found ${meshIds.length} meshes at depth ${depth}, path: ${path}`);
-          }
-        }
-        
-        // Look for child blocks - check multiple possible child block properties
-        const childArrays = [
-          block.relationships?.childBlocks,
-          block.blocks,
-          block.children,
-          block.subdivisions,
-          block.subBlocks
-        ].filter(arr => arr && Array.isArray(arr));
-        
-        // Process all child arrays
-        childArrays.forEach(childArray => {
-          console.log(`  Processing ${childArray.length} children at depth ${depth}`);
-          
-          childArray.forEach((child, i) => {
-            if (child) {
-              const childNodeId = (child.properties && child.properties.nodeNumber) || 
-                                 (child.nodeNumber) || 
-                                 `${id}-child-${i}`;
-              analyzeBlock(child, depth + 1, `${path}[${i}]`, childNodeId);
-            }
-          });
-        });
-      }
-      
-      // If not explicitly a block, check if it contains a blockHierarchy
-      if (!isBlock && block.data && block.data.blockHierarchy) {
-        return analyzeBlock(block.data.blockHierarchy, depth, `${path}.data.blockHierarchy`);
-      }
-      
-      // If not explicitly a block, recursively check properties
-      if (!isBlock) {
-        // For arrays
-        if (Array.isArray(block)) {
-          block.forEach((item, i) => {
-            if (item && typeof item === 'object') {
-              const wasBlock = analyzeBlock(item, depth, `${path}[${i}]`);
-              isBlock = isBlock || wasBlock;
-            }
-          });
-        } 
-        // For objects
-        else {
-          for (const key of Object.keys(block)) {
-            if (block[key] && typeof block[key] === 'object') {
-              // Skip some properties that are unlikely to contain block structures
-              if (['min', 'max', 'bounds', 'transforms', 'boundingInfo'].includes(key)) continue;
-              
-              const wasBlock = analyzeBlock(block[key], depth, `${path}.${key}`);
-              isBlock = isBlock || wasBlock;
-            }
-          }
-        }
-      }
-      
-      return isBlock;
-    };
-    
-    // Start analysis from the root
-    console.log("Starting octree analysis...");
-    
-    // Try to analyze from different potential starting points
-    let foundStructure = false;
-    
-    // 1. Try the standard expected path
-    if (octreeData.data && octreeData.data.blockHierarchy) {
-      console.log("Analyzing from data.blockHierarchy...");
-      foundStructure = analyzeBlock(octreeData.data.blockHierarchy, 0, 'blockHierarchy');
-    }
-    
-    // 2. Try other common paths if the first attempt didn't find anything
-    if (!foundStructure && octreeData.blockHierarchy) {
-      console.log("Analyzing from blockHierarchy...");
-      foundStructure = analyzeBlock(octreeData.blockHierarchy, 0, 'blockHierarchy');
-    }
-    
-    // 3. As a last resort, start from the root
-    if (!foundStructure) {
-      console.log("Analyzing from root...");
-      foundStructure = analyzeBlock(octreeData, 0, 'root');
-    }
-    
-    // Log results
-    console.log("\n===== OCTREE ANALYSIS RESULTS =====");
-    console.log("Node counts by depth:");
-    
-    // Print node counts for depths 0-4
-    for (let depth = 0; depth <= 4; depth++) {
-      console.log(`  Depth ${depth}: ${stats.nodesByDepth[depth]} nodes`);
-    }
-    
-    console.log("\nMesh IDs by depth:");
-    
-    // Print mesh IDs for depths 0-4
-    for (let depth = 0; depth <= 4; depth++) {
-      const meshIds = Array.from(stats.meshesByDepth[depth] || []);
-      console.log(`  Depth ${depth}: ${meshIds.length} unique meshes`);
-      if (meshIds.length > 0) {
-        console.log(`    Mesh IDs: ${meshIds.slice(0, 10).join(', ')}${meshIds.length > 10 ? '...' : ''}`);
-      }
-      
-      // Check for shared meshes with other depths
-      for (let otherDepth = 0; otherDepth <= 4; otherDepth++) {
-        if (otherDepth !== depth) {
-          const otherMeshIds = stats.meshesByDepth[otherDepth];
-          if (otherMeshIds && otherMeshIds.size > 0) {
-            const shared = new Set([...meshIds].filter(id => otherMeshIds.has(id)));
-            if (shared.size > 0) {
-              console.log(`    WARNING: ${shared.size} meshes also appear at depth ${otherDepth}!`);
-              console.log(`    Shared IDs: ${Array.from(shared).slice(0, 5).join(', ')}${shared.size > 5 ? '...' : ''}`);
-            }
-          }
-        }
-      }
-    }
-    
-    // Calculate total metrics
-    const totalNodes = Object.values(stats.nodesByDepth).reduce((sum, count) => sum + count, 0);
-    const totalMeshes = new Set(
-      Object.values(stats.meshesByDepth).flatMap(set => Array.from(set))
-    ).size;
-    
-    console.log("\nSummary:");
-    console.log(`  Total nodes: ${totalNodes}`);
-    console.log(`  Total unique meshes: ${totalMeshes}`);
-    console.log(`  Processed node count: ${stats.processedNodes.size}`);
-    console.log("==================================");
-    
-    // Get the original mesh data for reference
+  // UPDATED: Enhanced octree analysis function with improved structure detection
+  const analyzeOctree = async () => {
     try {
-      const meshDataRequest = await new Promise((resolve, reject) => {
-        const transaction = db.transaction("originalMeshes", "readonly");
-        const store = transaction.objectStore("originalMeshes");
-        const request = store.get("meshData");
+      const db = await initDB();
+      
+      // Get the main octree from the database
+      const octreeData = await new Promise((resolve, reject) => {
+        const transaction = db.transaction("octree", "readonly");
+        const store = transaction.objectStore("octree");
+        const request = store.get("mainOctree");
         
         request.onsuccess = () => resolve(request.result);
         request.onerror = () => reject(request.error);
       });
       
-      if (meshDataRequest && Array.isArray(meshDataRequest)) {
-        console.log(`For reference: Total meshes in originalMeshes store: ${meshDataRequest.length}`);
+      if (!octreeData) {
+        console.error("No octree data found in the database");
+        return;
+      }
+      
+      // Debug: Log the high-level structure to examine it without overwhelming the console
+      console.log("Octree data structure:", 
+        JSON.stringify(
+          Object.keys(octreeData).reduce((obj, key) => {
+            obj[key] = typeof octreeData[key] === 'object' ? '[Object]' : octreeData[key];
+            return obj;
+          }, {})
+        )
+      );
+      
+      // Structure to hold node and mesh counts per depth
+      const stats = {
+        nodesByDepth: {}, // { depth: nodeCount }
+        meshesByDepth: {}, // { depth: Set of meshIds }
+        // Track processed nodes to avoid double-counting
+        processedNodes: new Set()
+      };
+      
+      // Initialize stats for depths 0-4
+      for (let i = 0; i <= 4; i++) {
+        stats.nodesByDepth[i] = 0;
+        stats.meshesByDepth[i] = new Set(); // Use Set to avoid duplicate mesh IDs
+      }
+      
+      // Improved recursive function to analyze octree structure
+      // Returns a boolean indicating if the object was identified as a block
+      const analyzeBlock = (block, depth = 0, path = '', nodeId = null) => {
+        if (!block || typeof block !== 'object') return false;
         
-        // Cross-check with octree
-        const originalMeshIds = new Set(
-          meshDataRequest
-            .filter(mesh => mesh && mesh.metadata && mesh.metadata.id)
-            .map(mesh => mesh.metadata.id)
-        );
+        // Try to identify a unique ID for this node to avoid double-counting
+        const id = nodeId || 
+                  (block.properties && block.properties.nodeNumber) || 
+                  (block.nodeNumber) || 
+                  path;
         
-        const octreeMeshIds = new Set(
-          Object.values(stats.meshesByDepth).flatMap(set => Array.from(set))
-        );
-        
-        const missingInOctree = new Set(
-          [...originalMeshIds].filter(id => !octreeMeshIds.has(id))
-        );
-        
-        const extraInOctree = new Set(
-          [...octreeMeshIds].filter(id => !originalMeshIds.has(id))
-        );
-        
-        console.log(`  Meshes missing from octree: ${missingInOctree.size}`);
-        if (missingInOctree.size > 0) {
-          console.log(`    Missing IDs: ${Array.from(missingInOctree).slice(0, 10).join(', ')}${missingInOctree.size > 10 ? '...' : ''}`);
+        // Skip if we've already processed this node
+        if (stats.processedNodes.has(id)) {
+          return true; // Return true to indicate this was a block, but already processed
         }
         
-        console.log(`  Extra meshes in octree: ${extraInOctree.size}`);
-        if (extraInOctree.size > 0) {
-          console.log(`    Extra IDs: ${Array.from(extraInOctree).slice(0, 10).join(', ')}${extraInOctree.size > 10 ? '...' : ''}`);
+        // Check if this is a block node using multiple indicators
+        let isBlock = false;
+        
+        // Check for common block properties
+        if (
+          // Standard octree node structure
+          (block.bounds && (block.bounds.min || block.bounds.max)) ||
+          // Alternative structures
+          (block.min && block.max) ||
+          // Check for meshInfos
+          (block.meshInfos && Array.isArray(block.meshInfos)) ||
+          // Check for properties that indicate this is a node
+          (block.properties && block.properties.depth !== undefined) ||
+          // Check if it has child blocks
+          (block.relationships && block.relationships.childBlocks)
+        ) {
+          isBlock = true;
+          stats.processedNodes.add(id);
+          stats.nodesByDepth[depth] = (stats.nodesByDepth[depth] || 0) + 1;
+          
+          // Process meshInfos if present
+          if (block.meshInfos && Array.isArray(block.meshInfos)) {
+            const meshIds = block.meshInfos
+              .filter(mesh => mesh && mesh.id)
+              .map(mesh => mesh.id);
+            
+            if (meshIds.length > 0) {
+              meshIds.forEach(id => stats.meshesByDepth[depth].add(id));
+              console.log(`  Found ${meshIds.length} meshes at depth ${depth}, path: ${path}`);
+            }
+          }
+          
+          // Look for child blocks - check multiple possible child block properties
+          const childArrays = [
+            block.relationships?.childBlocks,
+            block.blocks,
+            block.children,
+            block.subdivisions,
+            block.subBlocks
+          ].filter(arr => arr && Array.isArray(arr));
+          
+          // Process all child arrays
+          childArrays.forEach(childArray => {
+            console.log(`  Processing ${childArray.length} children at depth ${depth}`);
+            
+            childArray.forEach((child, i) => {
+              if (child) {
+                const childNodeId = (child.properties && child.properties.nodeNumber) || 
+                                   (child.nodeNumber) || 
+                                   `${id}-child-${i}`;
+                analyzeBlock(child, depth + 1, `${path}[${i}]`, childNodeId);
+              }
+            });
+          });
+        }
+        
+        // If not explicitly a block, check if it contains a blockHierarchy
+        if (!isBlock && block.data && block.data.blockHierarchy) {
+          return analyzeBlock(block.data.blockHierarchy, depth, `${path}.data.blockHierarchy`);
+        }
+        
+        // If not explicitly a block, recursively check properties
+        if (!isBlock) {
+          // For arrays
+          if (Array.isArray(block)) {
+            block.forEach((item, i) => {
+              if (item && typeof item === 'object') {
+                const wasBlock = analyzeBlock(item, depth, `${path}[${i}]`);
+                isBlock = isBlock || wasBlock;
+              }
+            });
+          } 
+          // For objects
+          else {
+            for (const key of Object.keys(block)) {
+              if (block[key] && typeof block[key] === 'object') {
+                // Skip some properties that are unlikely to contain block structures
+                if (['min', 'max', 'bounds', 'transforms', 'boundingInfo'].includes(key)) continue;
+                
+                const wasBlock = analyzeBlock(block[key], depth, `${path}.${key}`);
+                isBlock = isBlock || wasBlock;
+              }
+            }
+          }
+        }
+        
+        return isBlock;
+      };
+      
+      // Start analysis from the root
+      console.log("Starting octree analysis...");
+      
+      // Try to analyze from different potential starting points
+      let foundStructure = false;
+      
+      // 1. Try the standard expected path
+      if (octreeData.data && octreeData.data.blockHierarchy) {
+        console.log("Analyzing from data.blockHierarchy...");
+        foundStructure = analyzeBlock(octreeData.data.blockHierarchy, 0, 'blockHierarchy');
+      }
+      
+      // 2. Try other common paths if the first attempt didn't find anything
+      if (!foundStructure && octreeData.blockHierarchy) {
+        console.log("Analyzing from blockHierarchy...");
+        foundStructure = analyzeBlock(octreeData.blockHierarchy, 0, 'blockHierarchy');
+      }
+      
+      // 3. As a last resort, start from the root
+      if (!foundStructure) {
+        console.log("Analyzing from root...");
+        foundStructure = analyzeBlock(octreeData, 0, 'root');
+      }
+      
+      // Log results
+      console.log("\n===== OCTREE ANALYSIS RESULTS =====");
+      console.log("Node counts by depth:");
+      
+      // Print node counts for depths 0-4
+      for (let depth = 0; depth <= 4; depth++) {
+        console.log(`  Depth ${depth}: ${stats.nodesByDepth[depth]} nodes`);
+      }
+      
+      console.log("\nMesh IDs by depth:");
+      
+      // Print mesh IDs for depths 0-4
+      for (let depth = 0; depth <= 4; depth++) {
+        const meshIds = Array.from(stats.meshesByDepth[depth] || []);
+        console.log(`  Depth ${depth}: ${meshIds.length} unique meshes`);
+        if (meshIds.length > 0) {
+          console.log(`    Mesh IDs: ${meshIds.slice(0, 10).join(', ')}${meshIds.length > 10 ? '...' : ''}`);
+        }
+        
+        // Check for shared meshes with other depths
+        for (let otherDepth = 0; otherDepth <= 4; otherDepth++) {
+          if (otherDepth !== depth) {
+            const otherMeshIds = stats.meshesByDepth[otherDepth];
+            if (otherMeshIds && otherMeshIds.size > 0) {
+              const shared = new Set([...meshIds].filter(id => otherMeshIds.has(id)));
+              if (shared.size > 0) {
+                console.log(`    WARNING: ${shared.size} meshes also appear at depth ${otherDepth}!`);
+                console.log(`    Shared IDs: ${Array.from(shared).slice(0, 5).join(', ')}${shared.size > 5 ? '...' : ''}`);
+              }
+            }
+          }
         }
       }
+      
+      // Calculate total metrics
+      const totalNodes = Object.values(stats.nodesByDepth).reduce((sum, count) => sum + count, 0);
+      const totalMeshes = new Set(
+        Object.values(stats.meshesByDepth).flatMap(set => Array.from(set))
+      ).size;
+      
+      console.log("\nSummary:");
+      console.log(`  Total nodes: ${totalNodes}`);
+      console.log(`  Total unique meshes: ${totalMeshes}`);
+      console.log(`  Processed node count: ${stats.processedNodes.size}`);
+      console.log("==================================");
+      
+      // Get the original mesh data for reference
+      try {
+        const meshDataRequest = await new Promise((resolve, reject) => {
+          const transaction = db.transaction("originalMeshes", "readonly");
+          const store = transaction.objectStore("originalMeshes");
+          const request = store.get("meshData");
+          
+          request.onsuccess = () => resolve(request.result);
+          request.onerror = () => reject(request.error);
+        });
+        
+        if (meshDataRequest && Array.isArray(meshDataRequest)) {
+          console.log(`For reference: Total meshes in originalMeshes store: ${meshDataRequest.length}`);
+          
+          // Cross-check with octree
+          const originalMeshIds = new Set(
+            meshDataRequest
+              .filter(mesh => mesh && mesh.metadata && mesh.metadata.id)
+              .map(mesh => mesh.metadata.id)
+          );
+          
+          const octreeMeshIds = new Set(
+            Object.values(stats.meshesByDepth).flatMap(set => Array.from(set))
+          );
+          
+          const missingInOctree = new Set(
+            [...originalMeshIds].filter(id => !octreeMeshIds.has(id))
+          );
+          
+          const extraInOctree = new Set(
+            [...octreeMeshIds].filter(id => !originalMeshIds.has(id))
+          );
+          
+          console.log(`  Meshes missing from octree: ${missingInOctree.size}`);
+          if (missingInOctree.size > 0) {
+            console.log(`    Missing IDs: ${Array.from(missingInOctree).slice(0, 10).join(', ')}${missingInOctree.size > 10 ? '...' : ''}`);
+          }
+          
+          console.log(`  Extra meshes in octree: ${extraInOctree.size}`);
+          if (extraInOctree.size > 0) {
+            console.log(`    Extra IDs: ${Array.from(extraInOctree).slice(0, 10).join(', ')}${extraInOctree.size > 10 ? '...' : ''}`);
+          }
+        }
+      } catch (error) {
+        console.error("Error accessing mesh data:", error);
+      }
+      
     } catch (error) {
-      console.error("Error accessing mesh data:", error);
+      console.error("Error analyzing octree:", error);
+      console.error("Error stack:", error.stack);
     }
-    
-  } catch (error) {
-    console.error("Error analyzing octree:", error);
-    console.error("Error stack:", error.stack);
-  }
-};
+  };
 
-// React Progress Component
-const ProgressDisplay = ({ progress }) => {
+  // React Progress Component
+  const ProgressDisplay = ({ progress }) => {
     const { stage, processingStage, subStage, subProgress, current, total } = progress;
     
     return (
-        <div className="progress-container">
-            <div className="main-stage">
-                <h3>Stage {processingStage}: {stage}</h3>
-                <div className="progress-bar">
-                    <div 
-                        className="progress-fill" 
-                        style={{ width: `${subProgress}%` }}
-                    />
-                </div>
-                <p>{subProgress}% - {subStage}</p>
-                {current && total && (
-                    <p>{current} / {total} items processed</p>
-                )}
-            </div>
-            
-            <div className="stage-indicators">
-                {[
-                    "Processing Files",
-                    "Storing Meshes", 
-                    "Creating Octree",
-                    "Processing Models",
-                    "Complete"
-                ].map((stageName, index) => (
-                    <div 
-                        key={index}
-                        className={`stage-indicator ${
-                            index + 1 < processingStage ? 'completed' : 
-                            index + 1 === processingStage ? 'active' : 'pending'
-                        }`}
-                    >
-                        {stageName}
-                    </div>
-                ))}
-            </div>
-        </div>
-    );
-};
-
-  return (
-    <div className="p-4" style={{ position: "absolute", zIndex: "1000",bottom:'0',right:'0' }}>
-      <input
-        type="file"
-        accept=".glb"
-        multiple
-        onChange={handleFileChange}
-        className="ms-1" 
-      />
-      {/* <button onClick={handleloadModels}>load model</button> */}
-       {ProgressDisplay}
-
-      {status && <div className="mt-2 text-sm text-gray-600">{status}</div>}
-
-      {processProgress.processingStage > 0 && (
-        <div className="mt-4 space-y-2">
-          {/* Overall Progress */}
-          <div className="flex justify-between text-sm text-gray-600">
-            <span>{processProgress.stage}</span>
-            <span>{Math.round(calculateOverallProgress())}%</span>
-          </div>
-
-          {/* Main Progress Bar */}
-          <div className="w-full bg-gray-200 rounded-full h-2.5 mb-4">
-            <div
-              className="bg-blue-600 h-2.5 rounded-full transition-all duration-300"
-              style={{ width: `${calculateOverallProgress()}%` }}
+      <div className="progress-container">
+        <div className="main-stage">
+          <h3>Stage {processingStage}: {stage}</h3>
+          <div className="progress-bar">
+            <div 
+              className="progress-fill" 
+              style={{ width: `${subProgress}%` }}
             />
           </div>
-
-          {/* Sub-progress Section */}
-          {processProgress.subStage && (
-            <div className="text-sm text-gray-500">
-              <div className="flex justify-between">
-                <span>{processProgress.subStage}</span>
-                <span>{Math.round(processProgress.subProgress)}%</span>
-              </div>
-              <div className="w-full bg-gray-100 rounded-full h-1.5 mt-1">
-                <div
-                  className="bg-blue-400 h-1.5 rounded-full transition-all duration-300"
-                  style={{ width: `${processProgress.subProgress}%` }}
-                />
-              </div>
-            </div>
-          )}
-
-          {/* Statistics Display */}
-          {processProgress.processingStage === 4 && (
-            <div className="mt-4 p-4 bg-gray-50 rounded-lg">
-              <h3 className="text-sm font-medium text-gray-700">
-                Processing Statistics
-              </h3>
-              <div className="mt-2 grid grid-cols-2 gap-4 text-sm text-gray-600">
-                <div>
-                  <span className="font-medium">Total Files:</span>{" "}
-                  {files.length}
-                </div>
-                <div>
-                  <span className="font-medium">Processing Time:</span>
-                  {` ${(
-                    (Date.now() - processProgress.startTime) /
-                    1000
-                  ).toFixed(1)}s`}
-                </div>
-              </div>
-            </div>
+          <p>{subProgress}% - {subStage}</p>
+          {current && total && (
+            <p>{current} / {total} items processed</p>
           )}
         </div>
-      )}
+        
+        <div className="stage-indicators">
+          {[
+            "Processing Files",
+            "Storing Meshes", 
+            "Creating Octree",
+            "Processing Models",
+            "Complete"
+          ].map((stageName, index) => (
+            <div 
+              key={index}
+              className={`stage-indicator ${
+                index + 1 < processingStage ? 'completed' : 
+                index + 1 === processingStage ? 'active' : 'pending'
+              }`}
+            >
+              {stageName}
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
+  const OnTest=async()=>{
+    const response = await fetch(`http://localhost:5000/api/get-allfiles/${projectId}`);
+    console.log(response)
+  const files = await response.json();
+  console.log("Files:", files);
+  }
+
+  return (
+    <div
+      style={{
+        display: "flex",
+        justifyContent: "center",
+        alignItems: "center",
+      }}
+    >
+      <div id="bulkImportDiv">
+        <div className="page">
+          <section className="page-section">
+            <div className="row">
+              <h4>Create Global modal</h4>
+            </div>
+          </section>
+          <hr />
+          <section className="page-section">
+            <div className="row">
+              <div className="col-md-6">
+                <div
+                  className="dialog-input"
+                  style={{ fontSize: "13px", lineHeight: "30px" }}
+                >
+                  <label onClick={OnTest}>Folder Name *</label>
+                  <select style={{ width: '100%' }}>
+                    <option value="" disabled>Choose type</option>
+                    <option value="Tags">Assigned tags</option>
+                    <option value="unassigned_models">Unassigned models</option>
+                    <option value="Tags, unassigned_models">Both</option>
+                  </select>
+                  <p className="dialog-input text-center mt-4"> OR</p>
+                  <label htmlFor="">Choose file</label>
+                  <input
+                    type="file"
+                    accept=".glb"
+                    multiple
+                    onChange={handleFileChange}
+                    className="ms-1" 
+                    disabled={isProcessing}
+                  />
+
+                  {status && (
+                    <div className="mt-2 text-sm" style={{ 
+                      color: status.includes("Error") ? "red" : 
+                             status.includes("completed") ? "green" : 
+                             "gray" 
+                    }}>
+                      {status}
+                    </div>
+                  )}
+
+                  {processProgress.processingStage > 0 && (
+                    <div className="mt-4 space-y-2">
+                      {/* Overall Progress */}
+                      <div className="flex justify-between text-sm text-gray-600">
+                        <span>{processProgress.stage}</span>
+                        <span>{Math.round(calculateOverallProgress())}%</span>
+                      </div>
+
+                      {/* Main Progress Bar */}
+                      <div className="w-full bg-gray-200 rounded-full h-2.5 mb-4">
+                        <div
+                          className="bg-blue-600 h-2.5 rounded-full transition-all duration-300"
+                          style={{ width: `${calculateOverallProgress()}%` }}
+                        />
+                      </div>
+
+                      {/* Sub-progress Section */}
+                      {processProgress.subStage && (
+                        <div className="text-sm text-gray-500">
+                          <div className="flex justify-between">
+                            <span>{processProgress.subStage}</span>
+                            <span>{Math.round(processProgress.subProgress)}%</span>
+                          </div>
+                          <div className="w-full bg-gray-100 rounded-full h-1.5 mt-1">
+                            <div
+                              className="bg-blue-400 h-1.5 rounded-full transition-all duration-300"
+                              style={{ width: `${processProgress.subProgress}%` }}
+                            />
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Statistics Display */}
+                      {processProgress.processingStage === 4 && processProgress.startTime && (
+                        <div className="mt-4 p-4 bg-gray-50 rounded-lg">
+                          <h3 className="text-sm font-medium text-gray-700">
+                            Processing Statistics
+                          </h3>
+                          <div className="mt-2 grid grid-cols-2 gap-4 text-sm text-gray-600">
+                            <div>
+                              <span className="font-medium">Total Files:</span>{" "}
+                              {files.length}
+                            </div>
+                            <div>
+                              <span className="font-medium">Processing Time:</span>
+                              {` ${(
+                                (Date.now() - processProgress.startTime) /
+                                1000
+                              ).toFixed(1)}s`}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+            <hr />
+            <button
+              onClick={handleCreateClick}
+              className="btn btn-light"
+              style={{ fontSize: "12px" }}
+              disabled={isProcessing || files.length === 0}
+            >
+              {isProcessing ? "Processing..." : "Create"}
+            </button>
+          </section>
+        </div>
+      </div>
     </div>
   );
 }
 
 export default CreateGlobalModal;
-
-

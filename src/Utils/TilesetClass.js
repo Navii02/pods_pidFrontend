@@ -1563,6 +1563,7 @@ export class WebWorkerTilesetLODManager {
         const meshInfo = this.metadata.vertexMappings.find(
           (mapping) => mapping.meshIndex === mappingInfo.meshIndex
         );
+        console.log("meshInfo",meshInfo);
 
         return {
           ...mappingInfo,
