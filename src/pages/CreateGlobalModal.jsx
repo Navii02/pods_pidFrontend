@@ -15,10 +15,7 @@ import {
 import { GetTagDetails } from "../services/TagApi";
 import { getUnassignedmodel } from "../services/BulkImportApi";
 import { url } from "../services/Url";
-import {
-  GetTagFiles,
-  getUnassignedmodelFiles,
-} from "../services/GlobalModalApi";
+
 
 // Simplified configuration
 const BATCH_SIZE = 10;
