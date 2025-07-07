@@ -1,9 +1,14 @@
+import { SaveMergedMesh } from "../services/GlobalModalApi";
 import { initDB } from "./DbInit";
 import { processMeshDataOffline } from "./processMeshDataOffline";
 
 const STORE_CHUNK_SIZE = 25;
 const WORKER_CHUNK_SIZE = 1000; // Process models in chunks of 1000
+  const projectString = sessionStorage.getItem("selectedProject");
+  const project = projectString ? JSON.parse(projectString) : null;
+  const projectId = project?.projectId;
 
+  
 class MeshProcessingWorker {
     constructor() {
         this.worker = null;
@@ -497,221 +502,263 @@ function mergeFinalPlacement(target, source) {
 
 // Memory-efficient createAndMergeMeshes function - FIXED TRANSACTION HANDLING
 async function createAndMergeMeshes(finalPlacement, lowPolyModels, onProgress) {
-    console.log('Creating mesh placement map...');
-    
-    // Create model lookup for merging
-    const modelMap = {};
-    lowPolyModels.forEach(model => {
-        const id = model.fileName || model.data?.metadata?.id;
-        if (id) {
-            modelMap[id] = model;
-        }
-    });
-    
-    const meshPlacementMap = new Map();
-    
-    // Organize by node
-    for (let depth = 0; depth <= 4; depth++) {
-        const depthKey = `depth${depth}`;
-        finalPlacement[depthKey].forEach(meshInfo => {
-            const nodeKey = `node${meshInfo.placedNodeNumber}`;
-            
-            if (!meshPlacementMap.has(nodeKey)) {
-                meshPlacementMap.set(nodeKey, []);
-            }
-            
-            meshPlacementMap.get(nodeKey).push({
-                meshId: meshInfo.meshId,
-                category: meshInfo.category,
-                screenCoverage: meshInfo.screenCoverage,
-                originalNode: meshInfo.originalNodeNumber,
-                originalDepth: meshInfo.originalDepth
-            });
-        });
+  console.log("Creating mesh placement map...");
+
+  // Create model lookup for merging
+  const modelMap = {};
+  lowPolyModels.forEach((model) => {
+    const id = model.fileName || model.data?.metadata?.id;
+    if (id) {
+      modelMap[id] = model;
     }
-    
-    console.log(`Processing ${meshPlacementMap.size} nodes with streaming merge and store...`);
-    
-    // Track statistics
-    let totalStoredMeshes = 0;
-    let processedNodes = 0;
-    const totalNodes = meshPlacementMap.size;
-    const categoryStats = { small: 0, medium: 0, large: 0 };
-    const nodeList = [];
-    
-    // Get database connection
-    const db = await initDB();
-    
-    // Process nodes in batches to avoid transaction timeout
-    const BATCH_SIZE = 10; // Process 10 nodes per transaction
-    const nodeEntries = Array.from(meshPlacementMap.entries());
-    
-    for (let batchStart = 0; batchStart < nodeEntries.length; batchStart += BATCH_SIZE) {
-        // Create fresh transaction for each batch
-        console.log(`🔄 Starting batch ${Math.floor(batchStart / BATCH_SIZE) + 1}/${Math.ceil(nodeEntries.length / BATCH_SIZE)}`);
-        
-        const storeTx = db.transaction(['mergedMeshes'], 'readwrite');
-        const mergedStore = storeTx.objectStore('mergedMeshes');
-        
-        const batchEnd = Math.min(batchStart + BATCH_SIZE, nodeEntries.length);
-        
-        // Process nodes in this batch
-        for (let i = batchStart; i < batchEnd; i++) {
-            const [nodeKey, meshes] = nodeEntries[i];
-            const nodeNumber = parseInt(nodeKey.replace('node', ''));
-            
-            console.log(`  🔄 Processing node ${nodeNumber} with ${meshes.length} meshes... (${processedNodes + 1}/${totalNodes})`);
-            
-            const meshesToMerge = [];
-            const meshKeys = [];
-            
-            // Collect meshes for this node
-            for (const meshInfo of meshes) {
-                const model = modelMap[meshInfo.meshId];
-                
-                if (model && model.data) {
-                    const meshData = {
-                        positions: new Float32Array(model.data.positions),
-                        indices: new Uint32Array(model.data.indices),
-                        normals: model.data.normals ? 
-                            new Float32Array(model.data.normals) : null,
-                        transforms: model.data.transforms,
-                        color: model.data.color
-                    };
-                    
-                    meshesToMerge.push(meshData);
-                    meshKeys.push({
-                        meshId: meshInfo.meshId,
-                        category: meshInfo.category,
-                        screenCoverage: meshInfo.screenCoverage,
-                        originalNode: meshInfo.originalNode,
-                        originalDepth: meshInfo.originalDepth,
-                          fileName: model.fileName,
-                          parentFileName:model.data.metadata.fileId,
-                            metadataId: model.data.metadata.id,
-                            screenCoverage: model.data.metadata.screenCoverage,
-                            name:model.data.name
-                    });
-                    
-                    // Update category statistics
-                    categoryStats[meshInfo.category]++;
-                }
-            }
-            
-            if (meshesToMerge.length > 0) {
-                // Step 1: MERGE this node's meshes
-                console.log(`    🔨 Merging ${meshesToMerge.length} meshes...`);
-                const mergedVertexData = processMeshDataOffline(meshesToMerge);
-const detailedVertexMappings = mergedVertexData.vertexMappings.map((mapping, index) => ({
+  });
+
+  const meshPlacementMap = new Map();
+
+  // Organize by node
+  for (let depth = 0; depth <= 4; depth++) {
+    const depthKey = `depth${depth}`;
+    finalPlacement[depthKey].forEach((meshInfo) => {
+      const nodeKey = `node${meshInfo.placedNodeNumber}`;
+      if (!meshPlacementMap.has(nodeKey)) {
+        meshPlacementMap.set(nodeKey, []);
+      }
+      meshPlacementMap.get(nodeKey).push({
+        meshId: meshInfo.meshId,
+        category: meshInfo.category,
+        screenCoverage: meshInfo.screenCoverage,
+        originalNode: meshInfo.originalNodeNumber,
+        originalDepth: meshInfo.originalDepth,
+      });
+    });
+  }
+
+  console.log(
+    `Processing ${meshPlacementMap.size} nodes with streaming merge and store...`
+  );
+
+  // Track statistics
+  let totalStoredMeshes = 0;
+  let processedNodes = 0;
+  const totalNodes = meshPlacementMap.size;
+  const categoryStats = { small: 0, medium: 0, large: 0 };
+  const nodeList = [];
+  const meshesToSend = []; // Collect meshes for backend save outside transaction
+
+  // Get database connection
+  const db = await initDB();
+
+  // Process nodes in batches
+  const BATCH_SIZE = 10;
+  const nodeEntries = Array.from(meshPlacementMap.entries());
+
+  for (
+    let batchStart = 0;
+    batchStart < nodeEntries.length;
+    batchStart += BATCH_SIZE
+  ) {
+    console.log(
+      `🔄 Starting batch ${Math.floor(batchStart / BATCH_SIZE) + 1}/${Math.ceil(
+        nodeEntries.length / BATCH_SIZE
+      )}`
+    );
+
+    // Create a new transaction for this batch
+    const storeTx = db.transaction(["mergedMeshes"], "readwrite");
+    const mergedStore = storeTx.objectStore("mergedMeshes");
+
+    const batchEnd = Math.min(batchStart + BATCH_SIZE, nodeEntries.length);
+
+    // Process nodes in this batch
+    const batchPromises = [];
+    for (let i = batchStart; i < batchEnd; i++) {
+      const [nodeKey, meshes] = nodeEntries[i];
+      const nodeNumber = parseInt(nodeKey.replace("node", ""));
+
+      console.log(
+        `  🔄 Processing node ${nodeNumber} with ${meshes.length} meshes... (${
+          processedNodes + 1
+        }/${totalNodes})`
+      );
+
+      const meshesToMerge = [];
+      const meshKeys = [];
+
+      // Collect meshes for this node
+      for (const meshInfo of meshes) {
+        const model = modelMap[meshInfo.meshId];
+        if (model && model.data) {
+          const meshData = {
+            positions: new Float32Array(model.data.positions),
+            indices: new Uint32Array(model.data.indices),
+            normals: model.data.normals
+              ? new Float32Array(model.data.normals)
+              : null,
+            transforms: model.data.transforms,
+            color: model.data.color,
+          };
+
+          meshesToMerge.push(meshData);
+          meshKeys.push({
+            meshId: meshInfo.meshId,
+            category: meshInfo.category,
+            screenCoverage: meshInfo.screenCoverage,
+            originalNode: meshInfo.originalNode,
+            originalDepth: meshInfo.originalDepth,
+            fileName: model.fileName,
+            parentFileName: model.data.metadata.fileId,
+            metadataId: model.data.metadata.id,
+            screenCoverage: model.data.metadata.screenCoverage,
+            name: model.data.name,
+          });
+
+          categoryStats[meshInfo.category]++;
+        }
+      }
+
+      if (meshesToMerge.length > 0) {
+        // Merge meshes
+        console.log(`    🔨 Merging ${meshesToMerge.length} meshes...`);
+        const mergedVertexData = processMeshDataOffline(meshesToMerge);
+        const detailedVertexMappings = mergedVertexData.vertexMappings.map(
+          (mapping, index) => ({
             ...mapping,
             meshId: meshKeys[index].meshId,
             fileName: meshKeys[index].fileName,
             metadataId: meshKeys[index].metadataId,
             screenCoverage: meshKeys[index].screenCoverage,
-             parentFileName: meshKeys[index].parentFileName,
+            parentFileName: meshKeys[index].parentFileName,
             name: meshKeys[index].name,
-            start: mapping.startVertex,  // For compatibility with existing highlighting
-            count: mapping.vertexCount   // For compatibility with existing highlighting
-        }));
-      
-                const meshId = `merged_node${nodeNumber}`;
-                
-                const mergedMeshData = {
-                    id: meshId,
-                    name: meshId,
-                    vertexData: mergedVertexData,
-                    colors: mergedVertexData.colors,
-                    transforms: {
-                        position: { x: 0, y: 0, z: 0 },
-                        rotation: { x: 0, y: 0, z: 0 },
-                        scaling: { x: 1, y: 1, z: 1 },
-                        worldMatrix: [1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1]
-                    },
-                     parentFileName:mergedVertexData.parentFile,
-                   
-                    metadata: {
-                        nodeNumber: nodeNumber,
-                        meshCount: meshesToMerge.length,
-                        originalMeshKeys: meshKeys,
-                         vertexMappings: detailedVertexMappings ,
-                        categories: {
-                            small: meshKeys.filter(m => m.category === 'small').length,
-                            medium: meshKeys.filter(m => m.category === 'medium').length,
-                            large: meshKeys.filter(m => m.category === 'large').length
-                        },
-                    }
-                };
-                
-                // Step 2: STORE to database within this transaction
-                console.log(`    💾 Storing merged mesh to database...`);
-                await mergedStore.put(mergedMeshData, mergedMeshData.id);
-                
-                // Step 3: CLEAR from memory
-                nodeList.push({
-                    nodeNumber: nodeNumber,
-                    meshCount: meshesToMerge.length,
-                    categories: mergedMeshData.metadata.categories
-                });
-                
-                totalStoredMeshes++;
-                
-                // Clear large objects from memory
-                mergedMeshData.vertexData = null;
-                mergedMeshData.colors = null;
-                console.log(`    ✅ Node ${nodeNumber} completed and cleared from memory`);
-            }
-            
-            // Clear arrays
-            meshesToMerge.length = 0;
-            meshKeys.length = 0;
-            
-            processedNodes++;
-        }
-        
-        // Complete this batch transaction
-        await storeTx.done;
-        console.log(`  ✅ Batch completed - stored ${batchEnd - batchStart} nodes`);
-        
-        // Update progress
-        const progress = 85 + (processedNodes / totalNodes) * 10;
-        onProgress?.({ 
-            stage: `Merged & stored ${processedNodes}/${totalNodes} nodes (${totalStoredMeshes} meshes)`, 
-            progress 
+            start: mapping.startVertex,
+            count: mapping.vertexCount,
+          })
+        );
+
+        const meshId = `merged_node${nodeNumber}`;
+        const mergedMeshData = {
+          id: meshId,
+          name: meshId,
+          vertexData: mergedVertexData,
+          colors: mergedVertexData.colors,
+          transforms: {
+            position: { x: 0, y: 0, z: 0 },
+            rotation: { x: 0, y: 0, z: 0 },
+            scaling: { x: 1, y: 1, z: 1 },
+            worldMatrix: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1],
+          },
+          parentFileName: mergedVertexData.parentFile,
+          metadata: {
+            nodeNumber: nodeNumber,
+            meshCount: meshesToMerge.length,
+            originalMeshKeys: meshKeys,
+            vertexMappings: detailedVertexMappings,
+            categories: {
+              small: meshKeys.filter((m) => m.category === "small").length,
+              medium: meshKeys.filter((m) => m.category === "medium").length,
+              large: meshKeys.filter((m) => m.category === "large").length,
+            },
+          },
+        };
+
+        // Store to database within transaction
+        console.log(`    💾 Storing merged mesh to database...`);
+        batchPromises.push(mergedStore.put(mergedMeshData, mergedMeshData.id));
+
+        // Collect for backend save (outside transaction)
+        meshesToSend.push({
+          MergedMeshId: mergedMeshData.id,
+          data: mergedMeshData,
+          projectId,
         });
-        
-        // Force garbage collection hint
-        if (global.gc) {
-            global.gc();
-        }
-        
-        // Small delay between batches to prevent blocking
-        await new Promise(resolve => setTimeout(resolve, 10));
+
+        nodeList.push({
+          nodeNumber: nodeNumber,
+          meshCount: meshesToMerge.length,
+          categories: mergedMeshData.metadata.categories,
+        });
+
+        totalStoredMeshes++;
+
+        // Clear large objects from memory
+        mergedMeshData.vertexData = null;
+        mergedMeshData.colors = null;
+        console.log(
+          `    ✅ Node ${nodeNumber} completed and cleared from memory`
+        );
+      }
+
+      // Clear arrays
+      meshesToMerge.length = 0;
+      meshKeys.length = 0;
+
+      processedNodes++;
     }
-    
-    console.log(`🎉 Streaming merge completed! Processed ${totalStoredMeshes} merged meshes`);
-    
-    // Create lightweight summary
-    const placementSummary = {
-        totalMeshes: totalStoredMeshes,
-        totalNodes: processedNodes,
-        byCategory: categoryStats,
-        byDepth: {
-            depth0: finalPlacement.depth0.length,
-            depth1: finalPlacement.depth1.length,
-            depth2: finalPlacement.depth2.length,
-            depth3: finalPlacement.depth3.length,
-            depth4: finalPlacement.depth4.length
-        },
-        nodeList: nodeList,
-        processedAt: new Date().toISOString(),
-        streamingMode: true
-    };
-    
-    return { 
-        allMergedMeshes: [], // Empty - data is already in database
-        placementSummary: placementSummary,
-        totalStoredMeshes: totalStoredMeshes
-    };
+
+    // Wait for all put operations in this batch to complete
+    await Promise.all(batchPromises);
+
+    // Complete this batch transaction
+    await storeTx.done;
+    console.log(`  ✅ Batch completed - stored ${batchEnd - batchStart} nodes`);
+
+    // Update progress
+    const progress = 85 + (processedNodes / totalNodes) * 10;
+    onProgress?.({
+      stage: `Merged & stored ${processedNodes}/${totalNodes} nodes (${totalStoredMeshes} meshes)`,
+      progress,
+    });
+
+    // Force garbage collection hint
+    if (global.gc) {
+      global.gc();
+    }
+  }
+
+  // Save to backend outside transaction
+  console.log(`📤 Sending ${meshesToSend.length} merged meshes to backend...`);
+  for (const meshToSend of meshesToSend) {
+    try {
+      await SaveMergedMesh(meshToSend);
+      console.log(`    📤 Sent merged mesh ${meshToSend.id} to backend`);
+    } catch (err) {
+      console.error(
+        `    ❌ Failed to send merged mesh ${meshToSend.id} to backend`,
+        err
+      );
+    }
+  }
+
+  console.log(
+    `🎉 Streaming merge completed! Processed ${totalStoredMeshes} merged meshes`
+  );
+
+  // Create lightweight summary
+  const placementSummary = {
+    totalMeshes: totalStoredMeshes,
+    totalNodes: processedNodes,
+    byCategory: categoryStats,
+    byDepth: {
+      depth0: finalPlacement.depth0.length,
+      depth1: finalPlacement.depth1.length,
+      depth2: finalPlacement.depth2.length,
+      depth3: finalPlacement.depth3.length,
+      depth4: finalPlacement.depth4.length,
+    },
+    nodeList: nodeList,
+    processedAt: new Date().toISOString(),
+    streamingMode: true,
+  };
+
+  // Store placement summary in a separate transaction
+  const summaryTx = db.transaction(["mergedMeshes"], "readwrite");
+  await summaryTx.objectStore("mergedMeshes").put(placementSummary, "placementSummary");
+  await summaryTx.done;
+
+  return {
+    allMergedMeshes: [], // Empty - data is already in database
+    placementSummary: placementSummary,
+    totalStoredMeshes: totalStoredMeshes,
+  };
 }
 
 async function storeResults(db, allMergedMeshes, placementSummary, octreeData) {

@@ -15,6 +15,7 @@ import {
 import { GetTagDetails } from "../services/TagApi";
 import { getUnassignedmodel } from "../services/BulkImportApi";
 import { url } from "../services/Url";
+import { saveOctree, SaveOrginalMesh } from "../services/GlobalModalApi";
 
 
 // Simplified configuration
@@ -344,40 +345,51 @@ function CreateGlobalModal() {
   };
 
   const processFile = async (file) => {
-    validateFile(file);
-    const container = await loadFile(file);
-    const fileNameWithoutExt = file.name.replace(/\.glb$/i, ""); // Remove .glb (case-insensitive)
-    const fileId = fileNameWithoutExt; // Replace non-alphanumerics with "_"
-    const meshPromises = [];
-    const dbOperations = [];
+  validateFile(file);
 
-    try {
-      // Process meshes in parallel
-      for (const mesh of container.meshes) {
-        if (!mesh.geometry) continue;
-        meshPromises.push(processMesh(mesh, fileId, file.name));
-      }
+  const container = await loadFile(file);
+  const fileNameWithoutExt = file.name.replace(/\.glb$/i, ""); 
+  const fileId = fileNameWithoutExt;
+  const meshPromises = [];
+  const dbOperations = [];
 
-      const results = (await Promise.all(meshPromises)).filter(Boolean);
+  try {
+    // Process all meshes in parallel
+    for (const mesh of container.meshes) {
+      if (!mesh.geometry) continue;
+      meshPromises.push(processMesh(mesh, fileId, file.name));
+    }
 
-      results.forEach(({ meshInfo, meshData }) => {
-        dbOperations.push({
-          store: "originalMeshes",
-          key: meshData.fileName,
-          data: meshData,
-        });
+    const results = (await Promise.all(meshPromises)).filter(Boolean);
+
+    for (const { meshInfo, meshData } of results) {
+      dbOperations.push({
+        store: "originalMeshes",
+        key: meshData.fileName,
+        data: meshData,
       });
 
-      await batchStoreInDB(dbOperations);
-
-      return results.map((r) => r.meshInfo);
-    } catch (error) {
-      console.error(`Error processing file ${fileId}:`, error);
-      throw error;
-    } finally {
-      container.dispose();
+      const data = {
+        MeshId: meshData.fileName,
+        data: meshData,
+        projectId:projectId,
+      };
+ console.log(data);
+ 
+      await SaveOrginalMesh(data);
     }
-  };
+
+    await batchStoreInDB(dbOperations);
+
+    return results.map((r) => r.meshInfo);
+  } catch (error) {
+    console.error(`Error processing file ${fileId}:`, error);
+    throw error;
+  } finally {
+    container.dispose();
+  }
+};
+
 
   // Modified handleFileChange - only stores files, doesn't process
   const handleFileChange = useCallback((event) => {
@@ -501,6 +513,13 @@ function CreateGlobalModal() {
           data: octreeInfo,
         },
       ]);
+       const data ={
+         projectId,
+         OctreeId:"mainOctree",
+         data:octreeInfo
+
+       }
+       await saveOctree(data)
 
       updateProgress({
         stage: "Creating Octree",
