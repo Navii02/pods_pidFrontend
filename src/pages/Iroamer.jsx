@@ -86,6 +86,7 @@ const Iroamer = forwardRef(
       setViewHideThree,
       iroamerfieldEmpty,
       modalData,
+      setview
     } = useContext(iroamerContext);
     const location = useLocation();
 
@@ -4782,6 +4783,7 @@ const Iroamer = forwardRef(
         // Show success message
         setCustomAlert(true);
         setModalMessage(`View "${saveViewName}" saved successfully`);
+        setview(response)
 
         // Close dialog and reset name
         setSavedViewDialog(false);

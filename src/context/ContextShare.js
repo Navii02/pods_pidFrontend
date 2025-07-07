@@ -7,6 +7,7 @@ function ContextShare({ children }) {
   const [updateProject, setUpdateProject] = useState([]);
    const [modalData,setModaldata]=useState([])
   const [updateTree, setUpdatetree] = useState([]);
+   const [view,setview]=useState({})
   const [viewHideThree, setViewHideThree] = useState({});
   const [backgroundColorTag, setBackgroundColorTag] = useState({});
   const [highlightedTagKey, setHighlightedTagKey] = useState(null);
@@ -35,7 +36,9 @@ function ContextShare({ children }) {
               iroamerfieldEmpty,
               setIroamerfieldEmpty,
               modalData,
-              setModaldata
+              setModaldata,
+              view,
+              setview
             }}
           >
             {children}

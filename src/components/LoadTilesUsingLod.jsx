@@ -247,6 +247,7 @@ const BabylonLODManager = ({
        highlightedTagKeyGlobal,
       setHighlightedTagKeyGlobal,
       setBackgroundColorTag,
+      setview
      
     } = useContext(iroamerContext);  
     const fetchAllProjectData = async () => {
@@ -4865,6 +4866,7 @@ useEffect(() => {
         setSavedViewDialog(false);
         setSaveViewName("");
         getAllSavedViews(projectId);
+        setview(response)
 
         setTimeout(() => {
           setCustomAlert(false);

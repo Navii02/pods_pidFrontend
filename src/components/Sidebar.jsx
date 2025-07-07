@@ -6,7 +6,7 @@ import Arearegister from "../components/Tree/Arearegister";
 import DisciplineRegister from "../components/Tree/DisiplineRegister";
 import SystemRegister from "../components/Tree/SystemRegister";
 import ProjectDetails from "./ProjectDetails";
-import { updateProjectContext } from "../context/ContextShare";
+import { iroamerContext, updateProjectContext } from "../context/ContextShare";
 import { Modal } from "react-bootstrap";
 import {
   faFighterJet,
@@ -36,6 +36,7 @@ function Sidebar({
   onActiveLinkChange,
 }) {
   const { updateProject } = useContext(updateProjectContext);
+  const { view } = useContext(iroamerContext);
   const navigate = useNavigate();
   const [activeItem, setActiveItem] = useState(() => {
     return sessionStorage.getItem("activeItem") || "iRoamer";
@@ -406,7 +407,7 @@ const handleMoveToSavedView = (view) => {
 
   useEffect(() => {
     getAllSavedViews(projectId);
-  }, [updateProject]);
+  }, [updateProject,view]);
 
   const handleEditClick = (view) => {
     setEditingView(view);
