@@ -34,7 +34,6 @@ function CreateGlobalModal() {
   const projectString = sessionStorage.getItem("selectedProject");
   const project = projectString ? JSON.parse(projectString) : null;
   const projectId = project?.projectId;
-  console.log(files);
 
   const [processProgress, setProcessProgress] = useState({
     stage: "",
@@ -1063,14 +1062,6 @@ function CreateGlobalModal() {
     );
   };
 
-  const OnTest = async () => {
-    const response = await fetch(
-      `http://localhost:5000/api/get-allfiles/${projectId}`
-    );
-    console.log(response);
-    const files = await response.json();
-    console.log("Files:", files);
-  };
 
   return (
     <div
@@ -1095,7 +1086,7 @@ function CreateGlobalModal() {
                   className="dialog-input"
                   style={{ fontSize: "13px", lineHeight: "30px" }}
                 >
-                  <label onClick={OnTest}>Folder Name *</label>
+                  <label >Folder Name *</label>
                   <select style={{ width: "100%" }} onChange={handleTypeChange}>
                     <option value="">Choose type</option>
                     <option value="Tags">Assigned tags</option>
