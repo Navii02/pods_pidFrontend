@@ -501,6 +501,7 @@ function mergeFinalPlacement(target, source) {
 }
 
 // Memory-efficient createAndMergeMeshes function - FIXED TRANSACTION HANDLING
+// Updated createAndMergeMeshes function with proper data serialization for backend
 async function createAndMergeMeshes(finalPlacement, lowPolyModels, onProgress) {
   console.log("Creating mesh placement map...");
 
@@ -664,12 +665,47 @@ async function createAndMergeMeshes(finalPlacement, lowPolyModels, onProgress) {
         console.log(`    💾 Storing merged mesh to database...`);
         batchPromises.push(mergedStore.put(mergedMeshData, mergedMeshData.id));
 
-        // Collect for backend save (outside transaction)
-        meshesToSend.push({
+        // Prepare data for backend - ensure proper serialization
+        const backendData = {
           MergedMeshId: mergedMeshData.id,
-          data: mergedMeshData,
+          data: {
+          
+            ...mergedMeshData,
+            // Convert typed arrays to regular arrays for JSON serialization
+            vertexData: {
+              ...mergedVertexData,
+              positions: Array.from(mergedVertexData.positions),
+              indices: Array.from(mergedVertexData.indices),
+              normals: mergedVertexData.normals ? Array.from(mergedVertexData.normals) : null,
+              colors: mergedVertexData.colors ? Array.from(mergedVertexData.colors) : null,
+              vertexMappings: mergedVertexData.vertexMappings.map(mapping => ({
+                ...mapping,
+                startVertex: mapping.startVertex,
+                vertexCount: mapping.vertexCount
+              }))
+            },
+            // Ensure colors are properly serialized
+            colors: mergedVertexData.colors ? Array.from(mergedVertexData.colors) : null,
+            // Include all metadata
+            metadata: {
+              ...mergedMeshData.metadata,
+              originalMeshKeys: meshKeys.map(key => ({
+                ...key,
+                // Ensure no circular references
+                transforms: key.transforms ? JSON.parse(JSON.stringify(key.transforms)) : null
+              })),
+              vertexMappings: detailedVertexMappings.map(mapping => ({
+                ...mapping,
+                // Ensure no circular references
+                transforms: mapping.transforms ? JSON.parse(JSON.stringify(mapping.transforms)) : null
+              }))
+            }
+          },
           projectId,
-        });
+        };
+
+        // Collect for backend save (outside transaction)
+        meshesToSend.push(backendData);
 
         nodeList.push({
           nodeNumber: nodeNumber,
@@ -719,10 +755,10 @@ async function createAndMergeMeshes(finalPlacement, lowPolyModels, onProgress) {
   for (const meshToSend of meshesToSend) {
     try {
       await SaveMergedMesh(meshToSend);
-      console.log(`    📤 Sent merged mesh ${meshToSend.id} to backend`);
+      console.log(`    📤 Sent merged mesh ${meshToSend.MergedMeshId} to backend`);
     } catch (err) {
       console.error(
-        `    ❌ Failed to send merged mesh ${meshToSend.id} to backend`,
+        `    ❌ Failed to send merged mesh ${meshToSend.MergedMeshId} to backend`,
         err
       );
     }
@@ -760,7 +796,6 @@ async function createAndMergeMeshes(finalPlacement, lowPolyModels, onProgress) {
     totalStoredMeshes: totalStoredMeshes,
   };
 }
-
 async function storeResults(db, allMergedMeshes, placementSummary, octreeData) {
     const storeTx = db.transaction(['mergedMeshes', 'octree'], 'readwrite');
     const mergedStore = storeTx.objectStore('mergedMeshes');
