@@ -519,6 +519,8 @@ function CreateGlobalModal() {
          data:octreeInfo
 
        }
+       const data1= JSON.stringify(data);
+       console.log(data1);
        await saveOctree(data)
 
       updateProgress({
