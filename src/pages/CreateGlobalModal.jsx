@@ -374,7 +374,7 @@ function CreateGlobalModal() {
         data: meshData,
         projectId:projectId,
       };
- console.log(data);
+// console.log(data);
  
       await SaveOrginalMesh(data);
     }

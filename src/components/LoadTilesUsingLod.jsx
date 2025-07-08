@@ -49,6 +49,7 @@ import {
 } from "../services/TreeManagementApi";
 import { iroamerContext, TreeresponseContext } from "../context/ContextShare";
 import { BabylonVRHelper } from "../Utils/VrHelper";
+import { clearGlobalModal, getOctreeData } from "../services/GlobalModalApi";
 
 const BabylonLODManager = ({
   mode,
@@ -244,13 +245,12 @@ const BabylonLODManager = ({
     disciplines: "Discipline",
   };
   const {
-       highlightedTagKeyGlobal,
-      setHighlightedTagKeyGlobal,
-      setBackgroundColorTag,
-      setview
-     
-    } = useContext(iroamerContext);  
-    const fetchAllProjectData = async () => {
+    highlightedTagKeyGlobal,
+    setHighlightedTagKeyGlobal,
+    setBackgroundColorTag,
+    setview,
+  } = useContext(iroamerContext);
+  const fetchAllProjectData = async () => {
     try {
       const areasResponse = await getProjectArea(selectedProject.projectId, {
         type: "area",
@@ -329,36 +329,37 @@ const BabylonLODManager = ({
       fetchAllProjectData();
     }
   }, [selectedProject?.projectId, updateTree, updateProject]);
-    const lastHighlightedTagRef = useRef(null);
+  const lastHighlightedTagRef = useRef(null);
 
-      useEffect(() => {
-        console.log(highlightedTagKeyGlobal);  
-        if(lastHighlightedTagRef.current){
-          dehighlightMesh()
-        }
-          if (lodManagerRef.current) {
-      const result = lodManagerRef.current.selectTagInLOD(highlightedTagKeyGlobal);
-          lastHighlightedTagRef.current = highlightedTagKeyGlobal;
-        }
-  
-      }, [highlightedTagKeyGlobal]);
+  useEffect(() => {
+    console.log(highlightedTagKeyGlobal);
+    if (lastHighlightedTagRef.current) {
+      dehighlightMesh();
+    }
+    if (lodManagerRef.current) {
+      const result = lodManagerRef.current.selectTagInLOD(
+        highlightedTagKeyGlobal
+      );
+      lastHighlightedTagRef.current = highlightedTagKeyGlobal;
+    }
+  }, [highlightedTagKeyGlobal]);
 
-           useEffect(() => {
-              if (!sceneRef.current) return;
-              const scene = sceneRef.current;
-              scene.onPointerDown = function (evt, pickResult) {
-                if (evt.button === 0 && !pickResult.hit) {
-                  dehighlightMesh();
-                  setHighlightedTagKeyGlobal(""); // Or however you're clearing it
-                  selectedMeshRef.current = [];
-                  setFileInfoDetails(null); // Clear file info
-                  setSelectedMeshInfo({ });
-                  setIsMenuOpen(false);
-      
-                  lastHighlightedTagRef.current = null; // Clear last highlighted tag reference
-                }
-              };
-            });
+  useEffect(() => {
+    if (!sceneRef.current) return;
+    const scene = sceneRef.current;
+    scene.onPointerDown = function (evt, pickResult) {
+      if (evt.button === 0 && !pickResult.hit) {
+        dehighlightMesh();
+        setHighlightedTagKeyGlobal(""); // Or however you're clearing it
+        selectedMeshRef.current = [];
+        setFileInfoDetails(null); // Clear file info
+        setSelectedMeshInfo({});
+        setIsMenuOpen(false);
+
+        lastHighlightedTagRef.current = null; // Clear last highlighted tag reference
+      }
+    };
+  });
 
   const highlightTagByParentFileName = (parentFileName) => {
     console.log("🔍 Searching for parentFileName in tree:", parentFileName);
@@ -978,13 +979,13 @@ const BabylonLODManager = ({
     [cameraSpeed, multiplier]
   );
   // Add these state variables to your component
-const [isXRSupported, setIsXRSupported] = useState(false);
-const [isInXR, setIsInXR] = useState(false);
-const xrHelperRef = useRef(null);
-const fallbackCameraRef = useRef(null);
-const vrHelperRef = useRef(null); // Add this for VR Helper
+  const [isXRSupported, setIsXRSupported] = useState(false);
+  const [isInXR, setIsInXR] = useState(false);
+  const xrHelperRef = useRef(null);
+  const fallbackCameraRef = useRef(null);
+  const vrHelperRef = useRef(null); // Add this for VR Helper
 
-const [forceVRMode, setForceVRMode] = useState(false);
+  const [forceVRMode, setForceVRMode] = useState(false);
 
   // Emergency camera creation function
   const createEmergencyCamera = useCallback(
@@ -1013,216 +1014,246 @@ const [forceVRMode, setForceVRMode] = useState(false);
     [createOrbitCamera]
   );
   // Modified checkXRSupport function for testing
-const checkXRSupport = useCallback(async () => {
-  try {
-    if (forceVRMode) {
-      console.log("VR mode forced for testing");
-      setIsXRSupported(true);
-      return true;
-    }
-
-    if ("xr" in navigator) {
-      const isSupported = await navigator.xr.isSessionSupported("immersive-vr");
-      setIsXRSupported(isSupported);
-      return isSupported;
-    }
-    return false;
-  } catch (error) {
-    console.log("WebXR not supported:", error);
-    if (forceVRMode) {
-      setIsXRSupported(true);
-      return true;
-    }
-    return false;
-  }
-}, [forceVRMode]);
-
-const createWebXRCamera = useCallback(
-  async (scene, currentCamera) => {
+  const checkXRSupport = useCallback(async () => {
     try {
-      console.log("Setting up WebXR camera...");
-
-      // Store current camera state BEFORE any changes
-      const cameraState = {
-        position: currentCamera.position.clone(),
-        target: currentCamera.target
-          ? currentCamera.target.clone()
-          : currentCamera.getTarget().clone(),
-        rotation: currentCamera.rotation ? currentCamera.rotation.clone() : null,
-        alpha: currentCamera.alpha || 0,
-        beta: currentCamera.beta || 0,
-        radius: currentCamera.radius || 0,
-        fov: currentCamera.fov || Math.PI / 4,
-        type: currentCamera.constructor.name,
-      };
-
-      setPreVRCameraState(cameraState);
-      console.log("Stored camera state:", cameraState);
-
-      fallbackCameraRef.current = currentCamera;
-
-      if (forceVRMode && !("xr" in navigator)) {
-        return createMockVRExperienceWithPosition(scene, cameraState);
+      if (forceVRMode) {
+        console.log("VR mode forced for testing");
+        setIsXRSupported(true);
+        return true;
       }
 
-      // Create XR experience
-      const xrHelper = await scene.createDefaultXRExperienceAsync({
-        floorMeshes: [],
-        disableTeleportation: false,
-        useCustomVRButton: false,
-        optionalFeatures: ["local-floor", "bounded-floor"],
-      });
-
-      xrHelperRef.current = xrHelper;
-
-      // Force position IMMEDIATELY after creation
-      if (xrHelper.input.xrCamera) {
-        console.log("Setting XR camera position immediately");
-        setWebXRCameraPositionImmediate(xrHelper, cameraState);
+      if ("xr" in navigator) {
+        const isSupported = await navigator.xr.isSessionSupported(
+          "immersive-vr"
+        );
+        setIsXRSupported(isSupported);
+        return isSupported;
       }
+      return false;
+    } catch (error) {
+      console.log("WebXR not supported:", error);
+      if (forceVRMode) {
+        setIsXRSupported(true);
+        return true;
+      }
+      return false;
+    }
+  }, [forceVRMode]);
 
-      // Set up event handlers with position forcing
-      xrHelper.baseExperience.onInitialXRPoseSetObservable.add(() => {
-        console.log("XR pose set - forcing camera position again");
-        setWebXRCameraPositionImmediate(xrHelper, cameraState);
-      });
+  const createWebXRCamera = useCallback(
+    async (scene, currentCamera) => {
+      try {
+        console.log("Setting up WebXR camera...");
 
-      xrHelper.baseExperience.onStateChangedObservable.add((state) => {
-        switch (state) {
-          case BABYLON.WebXRState.IN_XR:
-            console.log("Entered XR - final position set");
-            setIsInXR(true);
-            
-            // Initialize VR Helper when entering VR
-            if (!vrHelperRef.current && xrHelper) {
-              const vrHelper = new BabylonVRHelper(scene, xrHelper.input.xrCamera);
-              vrHelper.initWithExistingXR(xrHelper);
-              
-              // Customize movement settings
-              vrHelper.setMovementSpeed(0.08);
-              vrHelper.setRotationSpeed(0.015);
-              vrHelper.setDeadZone(0.2);
-              
-              // Set VR change listener
-              vrHelper.setVRChangeListener((vrState) => {
-                if (vrState === BabylonVRHelper.VR.ENTER) {
-                  console.log("VR Helper: VR session started!");
-                } else {
-                  console.log("VR Helper: VR session ended");
-                }
-              });
-              
-              vrHelperRef.current = vrHelper;
-              console.log("VR Helper initialized and configured");
-            }
+        // Store current camera state BEFORE any changes
+        const cameraState = {
+          position: currentCamera.position.clone(),
+          target: currentCamera.target
+            ? currentCamera.target.clone()
+            : currentCamera.getTarget().clone(),
+          rotation: currentCamera.rotation
+            ? currentCamera.rotation.clone()
+            : null,
+          alpha: currentCamera.alpha || 0,
+          beta: currentCamera.beta || 0,
+          radius: currentCamera.radius || 0,
+          fov: currentCamera.fov || Math.PI / 4,
+          type: currentCamera.constructor.name,
+        };
 
-            setTimeout(() => {
-              setWebXRCameraPositionImmediate(xrHelper, cameraState);
-            }, 100);
+        setPreVRCameraState(cameraState);
+        console.log("Stored camera state:", cameraState);
 
-            if (lodManagerRef.current && xrHelper.input.xrCamera) {
-              lodManagerRef.current.camera = xrHelper.input.xrCamera;
-              lodManagerRef.current.lastCameraPosition = null;
-              lodManagerRef.current.update();
-            }
-            break;
+        fallbackCameraRef.current = currentCamera;
 
-          case BABYLON.WebXRState.EXITING_XR:
-            console.log("Exiting XR - restoring camera position");
-            setIsInXR(false);
-            
-            // Dispose VR Helper when exiting VR
-            if (vrHelperRef.current) {
-              vrHelperRef.current.dispose();
-              vrHelperRef.current = null;
-              console.log("VR Helper disposed");
-            }
-            
-            restoreCameraState(scene, cameraState);
-            break;
-
-          case BABYLON.WebXRState.NOT_IN_XR:
-            console.log("Not in XR");
-            setIsInXR(false);
-            break;
+        if (forceVRMode && !("xr" in navigator)) {
+          return createMockVRExperienceWithPosition(scene, cameraState);
         }
-      });
 
-      return xrHelper;
-    } catch (error) {
-      console.error("Failed to create WebXR camera:", error);
+        // Create XR experience
+        const xrHelper = await scene.createDefaultXRExperienceAsync({
+          floorMeshes: [],
+          disableTeleportation: false,
+          useCustomVRButton: false,
+          optionalFeatures: ["local-floor", "bounded-floor"],
+        });
 
-      if (forceVRMode && preVRCameraState) {
-        return createMockVRExperienceWithPosition(scene, preVRCameraState);
+        xrHelperRef.current = xrHelper;
+
+        // Force position IMMEDIATELY after creation
+        if (xrHelper.input.xrCamera) {
+          console.log("Setting XR camera position immediately");
+          setWebXRCameraPositionImmediate(xrHelper, cameraState);
+        }
+
+        // Set up event handlers with position forcing
+        xrHelper.baseExperience.onInitialXRPoseSetObservable.add(() => {
+          console.log("XR pose set - forcing camera position again");
+          setWebXRCameraPositionImmediate(xrHelper, cameraState);
+        });
+
+        xrHelper.baseExperience.onStateChangedObservable.add((state) => {
+          switch (state) {
+            case BABYLON.WebXRState.IN_XR:
+              console.log("Entered XR - final position set");
+              setIsInXR(true);
+
+              // Initialize VR Helper when entering VR
+              if (!vrHelperRef.current && xrHelper) {
+                const vrHelper = new BabylonVRHelper(
+                  scene,
+                  xrHelper.input.xrCamera
+                );
+                vrHelper.initWithExistingXR(xrHelper);
+
+                // Customize movement settings
+                vrHelper.setMovementSpeed(0.08);
+                vrHelper.setRotationSpeed(0.015);
+                vrHelper.setDeadZone(0.2);
+
+                // Set VR change listener
+                vrHelper.setVRChangeListener((vrState) => {
+                  if (vrState === BabylonVRHelper.VR.ENTER) {
+                    console.log("VR Helper: VR session started!");
+                  } else {
+                    console.log("VR Helper: VR session ended");
+                  }
+                });
+
+                vrHelperRef.current = vrHelper;
+                console.log("VR Helper initialized and configured");
+              }
+
+              setTimeout(() => {
+                setWebXRCameraPositionImmediate(xrHelper, cameraState);
+              }, 100);
+
+              if (lodManagerRef.current && xrHelper.input.xrCamera) {
+                lodManagerRef.current.camera = xrHelper.input.xrCamera;
+                lodManagerRef.current.lastCameraPosition = null;
+                lodManagerRef.current.update();
+              }
+              break;
+
+            case BABYLON.WebXRState.EXITING_XR:
+              console.log("Exiting XR - restoring camera position");
+              setIsInXR(false);
+
+              // Dispose VR Helper when exiting VR
+              if (vrHelperRef.current) {
+                vrHelperRef.current.dispose();
+                vrHelperRef.current = null;
+                console.log("VR Helper disposed");
+              }
+
+              restoreCameraState(scene, cameraState);
+              break;
+
+            case BABYLON.WebXRState.NOT_IN_XR:
+              console.log("Not in XR");
+              setIsInXR(false);
+              break;
+          }
+        });
+
+        return xrHelper;
+      } catch (error) {
+        console.error("Failed to create WebXR camera:", error);
+
+        if (forceVRMode && preVRCameraState) {
+          return createMockVRExperienceWithPosition(scene, preVRCameraState);
+        }
+
+        throw error;
+      }
+    },
+    [forceVRMode]
+  );
+
+  // Improved position setting function
+  const setWebXRCameraPositionImmediate = useCallback(
+    (xrHelper, cameraState) => {
+      if (!xrHelper.input.xrCamera || !cameraState) {
+        console.warn("Cannot set XR camera position: missing camera or state");
+        return;
       }
 
-      throw error;
-    }
-  },
-  [forceVRMode]
-);
+      try {
+        const xrCamera = xrHelper.input.xrCamera;
 
-// Improved position setting function
-const setWebXRCameraPositionImmediate = useCallback(
-  (xrHelper, cameraState) => {
-    if (!xrHelper.input.xrCamera || !cameraState) {
-      console.warn("Cannot set XR camera position: missing camera or state");
-      return;
-    }
+        console.log("Setting XR camera position to:", cameraState.position);
+        console.log("Setting XR camera target to:", cameraState.target);
 
-    try {
-      const xrCamera = xrHelper.input.xrCamera;
+        xrCamera.position.copyFrom(cameraState.position);
+        xrCamera.setTarget(cameraState.target);
+        xrCamera.minZ = 0.1;
+        xrCamera.maxZ = 1000000;
+        xrCamera.fov = cameraState.fov;
 
-      console.log("Setting XR camera position to:", cameraState.position);
-      console.log("Setting XR camera target to:", cameraState.target);
+        xrCamera.getViewMatrix(true);
 
-      xrCamera.position.copyFrom(cameraState.position);
-      xrCamera.setTarget(cameraState.target);
-      xrCamera.minZ = 0.1;
-      xrCamera.maxZ = 1000000;
-      xrCamera.fov = cameraState.fov;
+        console.log("XR camera positioned at:", xrCamera.position);
+        console.log("XR camera target:", xrCamera.getTarget());
+      } catch (error) {
+        console.error("Error setting XR camera position:", error);
+      }
+    },
+    []
+  );
 
-      xrCamera.getViewMatrix(true);
+  // Mock VR experience with preserved position
+  const createMockVRExperienceWithPosition = useCallback(
+    (scene, cameraState) => {
+      console.log("Creating mock VR experience with preserved position");
 
-      console.log("XR camera positioned at:", xrCamera.position);
-      console.log("XR camera target:", xrCamera.getTarget());
-    } catch (error) {
-      console.error("Error setting XR camera position:", error);
-    }
-  },
-  []
-);
+      const mockVRCamera = new BABYLON.UniversalCamera(
+        "mockVRCamera",
+        cameraState.position.clone(),
+        scene
+      );
+      mockVRCamera.setTarget(cameraState.target.clone());
+      mockVRCamera.fov = cameraState.fov;
+      mockVRCamera.minZ = 0.1;
+      mockVRCamera.maxZ = 1000000;
 
-// Mock VR experience with preserved position
-const createMockVRExperienceWithPosition = useCallback(
-  (scene, cameraState) => {
-    console.log("Creating mock VR experience with preserved position");
+      scene.activeCamera = mockVRCamera;
+      mockVRCamera.attachControl(canvasRef.current, false);
 
-    const mockVRCamera = new BABYLON.UniversalCamera(
-      "mockVRCamera",
-      cameraState.position.clone(),
-      scene
-    );
-    mockVRCamera.setTarget(cameraState.target.clone());
-    mockVRCamera.fov = cameraState.fov;
-    mockVRCamera.minZ = 0.1;
-    mockVRCamera.maxZ = 1000000;
+      console.log("Mock VR camera positioned at:", mockVRCamera.position);
+      console.log("Mock VR camera target:", mockVRCamera.getTarget());
 
-    scene.activeCamera = mockVRCamera;
-    mockVRCamera.attachControl(canvasRef.current, false);
+      setIsInXR(true);
+      setCameraType("webxr");
 
-    console.log("Mock VR camera positioned at:", mockVRCamera.position);
-    console.log("Mock VR camera target:", mockVRCamera.getTarget());
+      // Initialize VR Helper for mock VR too
+      if (!vrHelperRef.current) {
+        const mockXRHelper = {
+          input: { xrCamera: mockVRCamera },
+          baseExperience: {
+            camera: mockVRCamera,
+            onStateChangedObservable: {
+              add: (callback) => {
+                setTimeout(() => callback(BABYLON.WebXRState.ENTERING_XR), 100);
+                setTimeout(() => callback(BABYLON.WebXRState.IN_XR), 500);
+              },
+            },
+          },
+          dispose: () => mockVRCamera.dispose(),
+        };
 
-    setIsInXR(true);
-    setCameraType("webxr");
+        const vrHelper = new BabylonVRHelper(scene, mockVRCamera);
+        vrHelper.initWithExistingXR(mockXRHelper);
+        vrHelper.setMovementSpeed(0.08);
+        vrHelper.setRotationSpeed(0.015);
+        vrHelper.setDeadZone(0.2);
 
-    // Initialize VR Helper for mock VR too
-    if (!vrHelperRef.current) {
-      const mockXRHelper = {
+        vrHelperRef.current = vrHelper;
+        console.log("VR Helper initialized for mock VR");
+      }
+
+      return {
         input: { xrCamera: mockVRCamera },
         baseExperience: {
-          camera: mockVRCamera,
           onStateChangedObservable: {
             add: (callback) => {
               setTimeout(() => callback(BABYLON.WebXRState.ENTERING_XR), 100);
@@ -1232,259 +1263,236 @@ const createMockVRExperienceWithPosition = useCallback(
         },
         dispose: () => mockVRCamera.dispose(),
       };
+    },
+    []
+  );
 
-      const vrHelper = new BabylonVRHelper(scene, mockVRCamera);
-      vrHelper.initWithExistingXR(mockXRHelper);
-      vrHelper.setMovementSpeed(0.08);
-      vrHelper.setRotationSpeed(0.015);
-      vrHelper.setDeadZone(0.2);
-      
-      vrHelperRef.current = vrHelper;
-      console.log("VR Helper initialized for mock VR");
-    }
-
-    return {
-      input: { xrCamera: mockVRCamera },
-      baseExperience: {
-        onStateChangedObservable: {
-          add: (callback) => {
-            setTimeout(() => callback(BABYLON.WebXRState.ENTERING_XR), 100);
-            setTimeout(() => callback(BABYLON.WebXRState.IN_XR), 500);
-          },
-        },
-      },
-      dispose: () => mockVRCamera.dispose(),
-    };
-  },
-  []
-);
-
-// Function to restore camera state when exiting VR
-const restoreCameraState = useCallback(
-  (scene, cameraState) => {
-    if (!cameraState || !fallbackCameraRef.current) {
-      console.warn("Cannot restore camera state: missing state or fallback camera");
-      return;
-    }
-
-    try {
-      const camera = fallbackCameraRef.current;
-
-      console.log("Restoring camera to position:", cameraState.position);
-      console.log("Restoring camera target:", cameraState.target);
-
-      if (camera instanceof BABYLON.ArcRotateCamera) {
-        camera.setTarget(cameraState.target);
-        camera.alpha = cameraState.alpha;
-        camera.beta = cameraState.beta;
-        camera.radius = cameraState.radius;
-      } else if (camera instanceof BABYLON.UniversalCamera) {
-        camera.position.copyFrom(cameraState.position);
-        camera.setTarget(cameraState.target);
+  // Function to restore camera state when exiting VR
+  const restoreCameraState = useCallback(
+    (scene, cameraState) => {
+      if (!cameraState || !fallbackCameraRef.current) {
+        console.warn(
+          "Cannot restore camera state: missing state or fallback camera"
+        );
+        return;
       }
 
-      scene.activeCamera = camera;
-      cameraRef.current = camera;
+      try {
+        const camera = fallbackCameraRef.current;
 
-      if (canvasRef.current) {
-        camera.attachControl(canvasRef.current, false);
+        console.log("Restoring camera to position:", cameraState.position);
+        console.log("Restoring camera target:", cameraState.target);
+
+        if (camera instanceof BABYLON.ArcRotateCamera) {
+          camera.setTarget(cameraState.target);
+          camera.alpha = cameraState.alpha;
+          camera.beta = cameraState.beta;
+          camera.radius = cameraState.radius;
+        } else if (camera instanceof BABYLON.UniversalCamera) {
+          camera.position.copyFrom(cameraState.position);
+          camera.setTarget(cameraState.target);
+        }
+
+        scene.activeCamera = camera;
+        cameraRef.current = camera;
+
+        if (canvasRef.current) {
+          camera.attachControl(canvasRef.current, false);
+        }
+
+        setCameraType(cameraState.type.includes("ArcRotate") ? "orbit" : "fly");
+
+        if (lodManagerRef.current) {
+          lodManagerRef.current.camera = camera;
+          lodManagerRef.current.lastCameraPosition = null;
+          lodManagerRef.current.update();
+        }
+
+        console.log("Camera state restored successfully");
+      } catch (error) {
+        console.error("Error restoring camera state:", error);
+        createEmergencyCamera(scene);
+      }
+    },
+    [createEmergencyCamera]
+  );
+
+  // Updated toggleCamera function with proper camera management
+  const toggleCamera = useCallback(
+    async (type) => {
+      if (!sceneRef.current || !engineRef.current) return;
+
+      const scene = sceneRef.current;
+      const canvas = canvasRef.current;
+      const currentCamera = scene.activeCamera;
+
+      if (!currentCamera) {
+        console.error("No active camera found");
+        return;
       }
 
-      setCameraType(cameraState.type.includes("ArcRotate") ? "orbit" : "fly");
+      if (type === "webxr") {
+        if (!isXRSupported) {
+          alert("WebXR is not supported on this device/browser");
+          return;
+        }
+
+        try {
+          await createWebXRCamera(scene, currentCamera);
+          setCameraType("webxr");
+          return;
+        } catch (error) {
+          console.error("Failed to initialize WebXR:", error);
+          alert("Failed to initialize WebXR. Please try again.");
+          return;
+        }
+      }
+
+      // Handle exiting from WebXR
+      if (cameraType === "webxr" && xrHelperRef.current) {
+        try {
+          if (xrHelperRef.current.baseExperience.sessionManager.session) {
+            await xrHelperRef.current.baseExperience.sessionManager.exitXRAsync();
+          }
+
+          xrHelperRef.current.dispose();
+          xrHelperRef.current = null;
+
+          // Dispose VR Helper when manually exiting
+          if (vrHelperRef.current) {
+            vrHelperRef.current.dispose();
+            vrHelperRef.current = null;
+            console.log("VR Helper disposed on manual exit");
+          }
+
+          return;
+        } catch (error) {
+          console.error("Error exiting WebXR:", error);
+        }
+      }
+
+      // Store camera state before any operations
+      const cameraPosition = currentCamera.position.clone();
+      const cameraTarget = currentCamera.target
+        ? currentCamera.target.clone()
+        : currentCamera.getTarget().clone();
+
+      let newCamera;
+      if (type === "fly") {
+        newCamera = createFlyCamera(scene, cameraPosition, cameraTarget);
+      } else {
+        newCamera = createOrbitCamera(scene, cameraPosition, cameraTarget);
+      }
+
+      if (!newCamera) {
+        console.error("Failed to create new camera");
+        return;
+      }
+
+      scene.activeCamera = newCamera;
+      newCamera.attachControl(canvas, false);
+
+      if (orthoviewmode === "orthographic") {
+        newCamera.mode = BABYLON.Camera.ORTHOGRAPHIC_CAMERA;
+
+        const boundingMax = modelInfoRef.current.boundingBoxMax;
+        const boundingMin = modelInfoRef.current.boundingBoxMin;
+        const maxDimension = Math.max(
+          boundingMax.x - boundingMin.x,
+          boundingMax.y - boundingMin.y,
+          boundingMax.z - boundingMin.z
+        );
+
+        const orthoSize = maxDimension * 0.5;
+        const aspect = canvas.width / canvas.height;
+
+        newCamera.orthoLeft = -orthoSize * aspect;
+        newCamera.orthoRight = orthoSize * aspect;
+        newCamera.orthoTop = orthoSize;
+        newCamera.orthoBottom = -orthoSize;
+      } else {
+        newCamera.mode = BABYLON.Camera.PERSPECTIVE_CAMERA;
+      }
+
+      cameraRef.current = newCamera;
+
+      if (cameraType !== "webxr" && currentCamera !== newCamera) {
+        try {
+          currentCamera.dispose();
+        } catch (error) {
+          console.warn("Error disposing old camera:", error);
+        }
+      }
+
+      setCameraType(type);
 
       if (lodManagerRef.current) {
-        lodManagerRef.current.camera = camera;
+        lodManagerRef.current.camera = newCamera;
         lodManagerRef.current.lastCameraPosition = null;
         lodManagerRef.current.update();
       }
+    },
+    [
+      createFlyCamera,
+      createOrbitCamera,
+      createWebXRCamera,
+      isXRSupported,
+      cameraType,
+      orthoviewmode,
+    ]
+  );
 
-      console.log("Camera state restored successfully");
-    } catch (error) {
-      console.error("Error restoring camera state:", error);
-      createEmergencyCamera(scene);
-    }
-  },
-  [createEmergencyCamera]
-);
-
-
-
-// Updated toggleCamera function with proper camera management
-const toggleCamera = useCallback(
-  async (type) => {
-    if (!sceneRef.current || !engineRef.current) return;
-
-    const scene = sceneRef.current;
-    const canvas = canvasRef.current;
-    const currentCamera = scene.activeCamera;
-
-    if (!currentCamera) {
-      console.error("No active camera found");
-      return;
-    }
-
-    if (type === "webxr") {
-      if (!isXRSupported) {
-        alert("WebXR is not supported on this device/browser");
-        return;
-      }
-
+  // Updated initializeCameras function with safety checks
+  const initializeCameras = useCallback(
+    async (scene) => {
       try {
-        await createWebXRCamera(scene, currentCamera);
-        setCameraType("webxr");
-        return;
-      } catch (error) {
-        console.error("Failed to initialize WebXR:", error);
-        alert("Failed to initialize WebXR. Please try again.");
-        return;
-      }
-    }
+        await checkXRSupport();
 
-    // Handle exiting from WebXR
-    if (cameraType === "webxr" && xrHelperRef.current) {
-      try {
-        if (xrHelperRef.current.baseExperience.sessionManager.session) {
-          await xrHelperRef.current.baseExperience.sessionManager.exitXRAsync();
+        const orbitCamera = createOrbitCamera(scene);
+        if (!orbitCamera) {
+          throw new Error("Failed to create initial orbit camera");
         }
 
-        xrHelperRef.current.dispose();
-        xrHelperRef.current = null;
-
-        // Dispose VR Helper when manually exiting
-        if (vrHelperRef.current) {
-          vrHelperRef.current.dispose();
-          vrHelperRef.current = null;
-          console.log("VR Helper disposed on manual exit");
-        }
-
-        return;
-      } catch (error) {
-        console.error("Error exiting WebXR:", error);
-      }
-    }
-
-    // Store camera state before any operations
-    const cameraPosition = currentCamera.position.clone();
-    const cameraTarget = currentCamera.target
-      ? currentCamera.target.clone()
-      : currentCamera.getTarget().clone();
-
-    let newCamera;
-    if (type === "fly") {
-      newCamera = createFlyCamera(scene, cameraPosition, cameraTarget);
-    } else {
-      newCamera = createOrbitCamera(scene, cameraPosition, cameraTarget);
-    }
-
-    if (!newCamera) {
-      console.error("Failed to create new camera");
-      return;
-    }
-
-    scene.activeCamera = newCamera;
-    newCamera.attachControl(canvas, false);
-    
-    if (orthoviewmode === "orthographic") {
-      newCamera.mode = BABYLON.Camera.ORTHOGRAPHIC_CAMERA;
-
-      const boundingMax = modelInfoRef.current.boundingBoxMax;
-      const boundingMin = modelInfoRef.current.boundingBoxMin;
-      const maxDimension = Math.max(
-        boundingMax.x - boundingMin.x,
-        boundingMax.y - boundingMin.y,
-        boundingMax.z - boundingMin.z
-      );
-
-      const orthoSize = maxDimension * 0.5;
-      const aspect = canvas.width / canvas.height;
-
-      newCamera.orthoLeft = -orthoSize * aspect;
-      newCamera.orthoRight = orthoSize * aspect;
-      newCamera.orthoTop = orthoSize;
-      newCamera.orthoBottom = -orthoSize;
-    } else {
-      newCamera.mode = BABYLON.Camera.PERSPECTIVE_CAMERA;
-    }
-    
-    cameraRef.current = newCamera;
-
-    if (cameraType !== "webxr" && currentCamera !== newCamera) {
-      try {
-        currentCamera.dispose();
-      } catch (error) {
-        console.warn("Error disposing old camera:", error);
-      }
-    }
-
-    setCameraType(type);
-
-    if (lodManagerRef.current) {
-      lodManagerRef.current.camera = newCamera;
-      lodManagerRef.current.lastCameraPosition = null;
-      lodManagerRef.current.update();
-    }
-  },
-  [
-    createFlyCamera,
-    createOrbitCamera,
-    createWebXRCamera,
-    isXRSupported,
-    cameraType,
-    orthoviewmode,
-  ]
-);
-
-// Updated initializeCameras function with safety checks
-const initializeCameras = useCallback(
-  async (scene) => {
-    try {
-      await checkXRSupport();
-
-      const orbitCamera = createOrbitCamera(scene);
-      if (!orbitCamera) {
-        throw new Error("Failed to create initial orbit camera");
-      }
-
-      orbitCamera.attachControl(canvasRef.current, false);
-      scene.activeCamera = orbitCamera;
-      cameraRef.current = orbitCamera;
-      setCameraType("orbit");
-
-      console.log("Cameras initialized successfully");
-    } catch (error) {
-      console.error("Error initializing cameras:", error);
-      try {
-        const fallbackCamera = new BABYLON.ArcRotateCamera(
-          "fallbackCamera",
-          0,
-          0,
-          1000,
-          BABYLON.Vector3.Zero(),
-          scene
-        );
-        fallbackCamera.attachControl(canvasRef.current, false);
-        scene.activeCamera = fallbackCamera;
-        cameraRef.current = fallbackCamera;
+        orbitCamera.attachControl(canvasRef.current, false);
+        scene.activeCamera = orbitCamera;
+        cameraRef.current = orbitCamera;
         setCameraType("orbit");
-        console.log("Fallback camera created");
-      } catch (fallbackError) {
-        console.error("Failed to create fallback camera:", fallbackError);
-      }
-    }
-  },
-  [createOrbitCamera, checkXRSupport]
-);
 
-// Add cleanup effect for VR Helper
-useEffect(() => {
-  return () => {
-    if (vrHelperRef.current) {
-      vrHelperRef.current.dispose();
-      vrHelperRef.current = null;
-      console.log("VR Helper cleaned up on component unmount");
-    }
-  };
-}, []);
+        console.log("Cameras initialized successfully");
+      } catch (error) {
+        console.error("Error initializing cameras:", error);
+        try {
+          const fallbackCamera = new BABYLON.ArcRotateCamera(
+            "fallbackCamera",
+            0,
+            0,
+            1000,
+            BABYLON.Vector3.Zero(),
+            scene
+          );
+          fallbackCamera.attachControl(canvasRef.current, false);
+          scene.activeCamera = fallbackCamera;
+          cameraRef.current = fallbackCamera;
+          setCameraType("orbit");
+          console.log("Fallback camera created");
+        } catch (fallbackError) {
+          console.error("Failed to create fallback camera:", fallbackError);
+        }
+      }
+    },
+    [createOrbitCamera, checkXRSupport]
+  );
+
+  // Add cleanup effect for VR Helper
+  useEffect(() => {
+    return () => {
+      if (vrHelperRef.current) {
+        vrHelperRef.current.dispose();
+        vrHelperRef.current = null;
+        console.log("VR Helper cleaned up on component unmount");
+      }
+    };
+  }, []);
 
   // Add this useEffect in BabylonLODManager after the existing useEffects
   useEffect(() => {
@@ -2033,7 +2041,6 @@ useEffect(() => {
     const scene = sceneRef.current;
     const camera = cameraRef.current;
 
-    // Notify fly camera input about loading state
     if (camera instanceof BABYLON.UniversalCamera && camera.inputs) {
       const mouseInput = camera.inputs.attached.mouse;
       if (mouseInput && mouseInput.setLoadingState) {
@@ -2041,7 +2048,7 @@ useEffect(() => {
       }
     }
 
-    // Clear existing meshes and wireframes
+    // Clear scene
     console.log("Clearing existing scene content...");
     scene.meshes.slice().forEach((mesh) => {
       if (
@@ -2050,12 +2057,10 @@ useEffect(() => {
         !mesh.name.includes("ground") &&
         mesh.id !== "BackgroundPlane"
       ) {
-        console.log(`Disposing mesh: ${mesh.name}`);
         mesh.dispose();
       }
     });
 
-    // Reset octree display counters
     setMeshState({
       nodesAtDepth: new Array(MAX_DEPTH + 1).fill(0),
       nodeNumbersByDepth: Array.from({ length: MAX_DEPTH + 1 }, () => []),
@@ -2070,23 +2075,85 @@ useEffect(() => {
     try {
       const db = await initDB();
 
-      const octreeCheckTx = db.transaction(["octree"], "readonly");
-      const octreeStore = octreeCheckTx.objectStore("octree");
-      let octreeData = await new Promise((resolve, reject) => {
-        const request = octreeStore.get("mainOctree");
+      const checkStoreHasData = (storeName) => {
+        return new Promise((resolve, reject) => {
+          const tx = db.transaction([storeName], "readonly");
+          const store = tx.objectStore(storeName);
+          const countRequest = store.count();
+          countRequest.onsuccess = () => resolve(countRequest.result > 0);
+          countRequest.onerror = () => reject(countRequest.error);
+        });
+      };
+
+      const hasOctree = await checkStoreHasData("octree");
+      const hasMerged = await checkStoreHasData("mergedMeshes");
+      const hasOriginal = await checkStoreHasData("originalMeshes");
+
+      if (!hasOctree || !hasMerged || !hasOriginal) {
+        console.log("One or more stores are empty, fetching from backend...");
+        const response = await getOctreeData(projectId);
+        if (response.status === 200) {
+          const { octree, mergedMeshes, originalMeshes } = response.data;
+          console.log(octree, mergedMeshes, originalMeshes);
+
+          if (octree?.OctreeId === "mainOctree" && octree.data) {
+            // Save octree
+            const tx = db.transaction(["octree"], "readwrite");
+            const store = tx.objectStore("octree");
+            await new Promise((resolve, reject) => {
+              const request = store.put(octree.data, "mainOctree");
+              request.onsuccess = () => resolve();
+              request.onerror = () => reject(request.error);
+            });
+            await tx.done;
+          }
+
+          // Save merged meshes
+          if (Array.isArray(mergedMeshes)) {
+            const tx = db.transaction(["mergedMeshes"], "readwrite");
+            const store = tx.objectStore("mergedMeshes");
+            for (const mesh of mergedMeshes) {
+              await new Promise((resolve, reject) => {
+                const request = store.put(mesh.data, mesh.MergedMeshId);
+                request.onsuccess = () => resolve();
+                request.onerror = () => reject(request.error);
+              });
+            }
+            await tx.done;
+          }
+
+          // Save original meshes
+          if (Array.isArray(originalMeshes)) {
+            const tx = db.transaction(["originalMeshes"], "readwrite");
+            const store = tx.objectStore("originalMeshes");
+            for (const mesh of originalMeshes) {
+              await new Promise((resolve, reject) => {
+                const value = {
+                  fileName: mesh.MeshId,
+                  data: mesh.data,
+                };
+                const request = store.put(mesh.data, mesh.MeshId);
+                request.onsuccess = () => resolve();
+                request.onerror = () => reject(request.error);
+              });
+            }
+            await tx.done;
+          }
+        } else {
+          throw new Error("Failed to fetch global model data from backend");
+        }
+      }
+
+      // Load octree from IndexedDB
+      const tx = db.transaction(["octree"], "readonly");
+      const store = tx.objectStore("octree");
+      const octreeData = await new Promise((resolve, reject) => {
+        const request = store.get("mainOctree");
         request.onsuccess = () => resolve(request.result);
         request.onerror = () => reject(request.error);
       });
 
-      if (!octreeData) {
-        throw new Error("No octree data found");
-      }
-
-      if (
-        !octreeData.bounds ||
-        !octreeData.bounds.min ||
-        !octreeData.bounds.max
-      ) {
+      if (!octreeData?.bounds?.min || !octreeData.bounds?.max) {
         throw new Error("Octree bounds are missing or incomplete");
       }
 
@@ -2104,32 +2171,25 @@ useEffect(() => {
 
       createWireframeBox(minVector, maxVector);
 
-      // Initialize the enhanced web worker LOD manager
       const lodManager = new WebWorkerTilesetLODManager(scene, camera, {
         currentHighlightedMeshRef,
         currentHighlightedMeshIdRef,
       });
       lodManagerRef.current = lodManager;
 
-      // Calculate distance thresholds
       const maxDistance = fitCameraToOctree(camera, maxVector, minVector);
       lodManager.setDistanceThresholds(maxDistance);
 
-      // Initialize octree data in LOD manager
       await lodManager.initWithOctreeData(octreeData);
-
-      // Load all depth 2 meshes initially
       await lodManager.loadAllDepth2Meshes();
 
-      // Force an immediate update of visibility
       lodManager.lastCameraPosition = null;
       lodManager.frameCounter = lodManager.updateFrequency;
       lodManager.update();
-      // Add the LOD manager to the scene's render loop
+
       scene.onBeforeRenderObservable.add(() => {
         lodManager.update();
 
-        // Update LOD info for React state
         const activeLOD = lodManager.getActiveLODLevel
           ? lodManager.getActiveLODLevel()
           : 0;
@@ -2154,15 +2214,12 @@ useEffect(() => {
           workerLoads: memUsage.workerLoads || {},
         });
 
-        // Update loading state based on queue status and worker activity
         const isCurrentlyLoading =
           (memUsage.queuedLoads || 0) > 0 ||
           Object.values(memUsage.workerLoads || {}).some((load) => load > 0);
 
         if (isCurrentlyLoading !== isLoading) {
           setIsLoading(isCurrentlyLoading);
-
-          // Update fly camera input loading state
           if (camera instanceof BABYLON.UniversalCamera && camera.inputs) {
             const mouseInput = camera.inputs.attached.mouse;
             if (mouseInput && mouseInput.setLoadingState) {
@@ -2177,11 +2234,8 @@ useEffect(() => {
       );
     } catch (error) {
       console.error("Error loading merged models with progressive LOD:", error);
-      console.log(`Error: ${error.message}`);
     } finally {
       setIsLoading(false);
-
-      // Reset camera input loading state
       const camera = cameraRef.current;
       if (camera instanceof BABYLON.UniversalCamera && camera.inputs) {
         const mouseInput = camera.inputs.attached.mouse;
@@ -2874,9 +2928,14 @@ useEffect(() => {
         };
       });
 
-      transaction.oncomplete = () => {
-        alert("All data cleared from the 'piping' database.");
+      transaction.oncomplete = async () => {
         db.close();
+        const response = await clearGlobalModal(projectId);
+        if (response.status === 200) {
+          alert("All data cleared from the 'piping' database.");
+        } else {
+          alert("Something went wrong");
+        }
       };
     };
 
@@ -2963,7 +3022,6 @@ useEffect(() => {
       currentHighlightedMeshRef.current &&
       currentHighlightedMeshIdRef.current
     ) {
-
       // For merged meshes, we need to remove the specific individual mesh highlight
       if (
         typeof currentHighlightedMeshRef.current.removeHighlight === "function"
@@ -2982,18 +3040,15 @@ useEffect(() => {
     setSelectedMeshInfo(null);
     setTagInfo(null);
     setBackgroundColorTag({});
-
   };
 
   // Enhanced clearSelection function
   const clearSelection = () => {
-
     // Use the enhanced dehighlightMesh function
     dehighlightMesh();
 
     // Exit selection mode
     setSelectedItem(false);
-
   };
 
   const pointerObserverRef = useRef(null);
@@ -5275,7 +5330,7 @@ const hideUnselectedIndividualMeshesForTag = useCallback(
         setSavedViewDialog(false);
         setSaveViewName("");
         getAllSavedViews(projectId);
-        setview(response)
+        setview(response);
 
         setTimeout(() => {
           setCustomAlert(false);
