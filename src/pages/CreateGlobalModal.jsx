@@ -16,6 +16,7 @@ import { GetTagDetails } from "../services/TagApi";
 import { getUnassignedmodel } from "../services/BulkImportApi";
 import { url } from "../services/Url";
 import { saveOctree, SaveOrginalMesh } from "../services/GlobalModalApi";
+import axios from "axios";
 
 
 // Simplified configuration
@@ -344,11 +345,13 @@ function CreateGlobalModal() {
     }
   };
 
-  const processFile = async (file) => {
+const CHUNK_SIZE = 100;
+
+const processFile = async (file) => {
   validateFile(file);
 
   const container = await loadFile(file);
-  const fileNameWithoutExt = file.name.replace(/\.glb$/i, ""); 
+  const fileNameWithoutExt = file.name.replace(/\.glb$/i, "");
   const fileId = fileNameWithoutExt;
   const meshPromises = [];
   const dbOperations = [];
@@ -362,23 +365,32 @@ function CreateGlobalModal() {
 
     const results = (await Promise.all(meshPromises)).filter(Boolean);
 
-    for (const { meshInfo, meshData } of results) {
+    // Prepare DB and IndexedDB operations
+    for (const { meshData } of results) {
       dbOperations.push({
         store: "originalMeshes",
         key: meshData.fileName,
         data: meshData,
       });
-
-      const data = {
-        MeshId: meshData.fileName,
-        data: meshData,
-        projectId:projectId,
-      };
-// console.log(data);
- 
-      await SaveOrginalMesh(data);
     }
 
+    // ✅ Batching mesh data for server API
+    const chunks = [];
+    for (let i = 0; i < results.length; i += CHUNK_SIZE) {
+      const chunk = results.slice(i, i + CHUNK_SIZE).map(({ meshData }) => ({
+        MeshId: meshData.fileName,
+        data: meshData,
+        projectId: projectId,
+      }));
+      chunks.push(chunk);
+    }
+
+    // ✅ Send each chunk sequentially (or use Promise.all for parallel)
+    for (const chunk of chunks) {
+      await SaveOrginalMesh({ meshes: chunk });
+    }
+
+    // ✅ Save locally (IndexedDB or similar)
     await batchStoreInDB(dbOperations);
 
     return results.map((r) => r.meshInfo);
@@ -512,14 +524,9 @@ function CreateGlobalModal() {
           key: "mainOctree",
           data: octreeInfo,
         },
-      ]);
-       const data ={
-         projectId,
-         OctreeId:"mainOctree",
-         data:octreeInfo
-
-       }
-       await saveOctree(data)
+      ]);    
+      
+      await sendOctreeToBackend(octreeInfo);
 
       updateProgress({
         stage: "Creating Octree",
@@ -591,6 +598,95 @@ function CreateGlobalModal() {
     }
   }, [files, isProcessing]);
 
+  const serializeOctree = (octreeInfo) => {
+  // Create a more efficient serialization format
+  const serialized = {
+    name: octreeInfo.name,
+    bounds: octreeInfo.bounds,
+    properties: octreeInfo.properties,
+    statistics: octreeInfo.statistics,
+    timestamp: octreeInfo.timestamp,
+    data: {
+      blockHierarchy: {
+        bounds: octreeInfo.data.blockHierarchy.bounds,
+        properties: octreeInfo.data.blockHierarchy.properties,
+        relationships: octreeInfo.data.blockHierarchy.relationships,
+        meshInfos: octreeInfo.data.blockHierarchy.meshInfos.map(mesh => ({
+          id: mesh.id,
+          bounds: mesh.bounds,
+          vertexCount: mesh.vertexCount,
+          // Include only necessary mesh data
+          metadata: mesh.metadata || null
+        }))
+      }
+    }
+  };
+
+  // Stringify with circular reference handling
+  const seen = new WeakSet();
+  return JSON.stringify(serialized, (key, value) => {
+    if (typeof value === "object" && value !== null) {
+      if (seen.has(value)) return '[Circular]';
+      seen.add(value);
+    }
+    return value;
+  });
+};
+
+const sendOctreeToBackend = async (octreeInfo) => {
+  try {
+    // Use a proper serialization library for circular references
+    const serializeOctree = (data) => {
+      const seen = new WeakSet();
+      return JSON.stringify(data, (key, value) => {
+        if (typeof value === 'object' && value !== null) {
+          if (seen.has(value)) return '[Circular]';
+          seen.add(value);
+        }
+        return value;
+      });
+    };
+
+    const CHUNK_SIZE = 1 * 1024 * 1024; // 1MB chunks
+    const serializedData = serializeOctree(octreeInfo);
+    const totalChunks = Math.ceil(serializedData.length / CHUNK_SIZE);
+
+    // Upload chunks
+    for (let i = 0; i < totalChunks; i++) {
+      const chunk = serializedData.slice(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE);
+      const formData = new FormData();
+      formData.append('projectId', projectId);
+      formData.append('octreeId', octreeInfo.name);
+      formData.append('chunkIndex', i);
+      formData.append('totalChunks', totalChunks);
+      formData.append('chunkData', new Blob([chunk]));
+
+      await axios.post(`${url}/api/octree/chunk`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+        onUploadProgress: (progress) => {
+          const percent = Math.round((progress.loaded / progress.total) * 100);
+          updateProgress({
+            stage: "Uploading Octree",
+            subStage: `Chunk ${i+1}/${totalChunks}`,
+            subProgress: percent
+          });
+        }
+      });
+    }
+
+    // Finalize upload
+    await axios.post(`${url}/api/octree/finalize`, {
+      projectId,
+      octreeId: octreeInfo.name,
+      totalChunks
+    },{timeout:6000});
+
+    return { success: true };
+  } catch (error) {
+    console.error('Upload failed:', error);
+    throw error;
+  }
+};
   // Helper functions
   const getMinBounds = (meshInfos) => {
     return meshInfos.reduce((min, info) => {

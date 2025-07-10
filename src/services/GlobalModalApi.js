@@ -14,6 +14,8 @@ try {
 
 export const saveOctree = async(data)=>{
 try {
+    console.log(data);
+    
    const response = await commonApi(`POST`,`${url}/api/save-octree`,data) 
    console.log(response);
    
