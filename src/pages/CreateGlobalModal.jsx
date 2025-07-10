@@ -374,7 +374,7 @@ function CreateGlobalModal() {
         data: meshData,
         projectId:projectId,
       };
-// console.log(data);
+ console.log(data);
  
       await SaveOrginalMesh(data);
     }
@@ -418,180 +418,456 @@ function CreateGlobalModal() {
   }, []);
 
   // New function to handle the Create button click
-  const handleCreateClick = useCallback(async () => {
-    if (files.length === 0) {
-      setStatus("Please select files first.");
-      return;
-    }
+  // const handleCreateClick = useCallback(async () => {
+  //   if (files.length === 0) {
+  //     setStatus("Please select files first.");
+  //     return;
+  //   }
 
-    if (isProcessing) {
-      setStatus("Processing already in progress.");
-      return;
-    }
+  //   if (isProcessing) {
+  //     setStatus("Processing already in progress.");
+  //     return;
+  //   }
 
-    setIsProcessing(true);
-    setStatus("Processing started...");
+  //   setIsProcessing(true);
+  //   setStatus("Processing started...");
 
-    try {
-      let allMeshInfos = [];
+  //   try {
+  //     let allMeshInfos = [];
 
-      // Step 1: Process Files (Main Thread)
+  //     // Step 1: Process Files (Main Thread)
+  //     updateProgress({
+  //       stage: "Processing Files",
+  //       current: 0,
+  //       total: files.length,
+  //       processingStage: 1,
+  //       subStage: "Initializing",
+  //       subProgress: 0,
+  //       startTime: Date.now(),
+  //     });
+
+  //     // Process files in batches
+  //     for (let i = 0; i < files.length; i += BATCH_SIZE) {
+  //       const batch = files.slice(i, i + BATCH_SIZE);
+  //       const batchResults = await Promise.all(
+  //         batch.map((file) => processFile(file))
+  //       );
+  //       allMeshInfos = allMeshInfos.concat(batchResults.flat());
+
+  //       const progress = Math.min(
+  //         Math.floor(((i + BATCH_SIZE) / files.length) * 100),
+  //         100
+  //       );
+  //       updateProgress({
+  //         stage: "Processing Files",
+  //         processingStage: 1,
+  //         current: i + batch.length,
+  //         total: files.length,
+  //         subStage: `Processing batch ${i / BATCH_SIZE + 1}`,
+  //         subProgress: progress,
+  //       });
+  //     }
+
+  //     // Step 2: Store Meshes
+  //     updateProgress({
+  //       stage: "Storing Meshes",
+  //       processingStage: 2,
+  //       subStage: "Saving meshes to database",
+  //       subProgress: 0,
+  //     });
+
+  //     updateProgress({
+  //       stage: "Storing Meshes",
+  //       processingStage: 2,
+  //       subStage: "Meshes stored successfully",
+  //       subProgress: 100,
+  //     });
+
+  //     // Step 3: Create Octree
+  //     updateProgress({
+  //       stage: "Creating Octree",
+  //       processingStage: 3,
+  //       subStage: "Building octree structure",
+  //       subProgress: 0,
+  //     });
+
+  //     const octreeRoot = createOctreeBlock(
+  //       sceneRef.current,
+  //       getMinBounds(allMeshInfos),
+  //       getMaxBounds(allMeshInfos),
+  //       allMeshInfos,
+  //       0,
+  //       null
+  //     );
+
+  //     const octreeInfo = createOctreeInfo(
+  //       octreeRoot,
+  //       getMinBounds(allMeshInfos),
+  //       getMaxBounds(allMeshInfos)
+  //     );
+
+  //     await batchStoreInDB([
+  //       {
+  //         store: "octree",
+  //         key: "mainOctree",
+  //         data: octreeInfo,
+  //       },
+  //     ]);
+  //      const data ={
+  //        projectId,
+  //        OctreeId:"mainOctree",
+  //        data:octreeInfo
+
+  //      }
+     
+  //      await saveOctree(data)
+
+  //     updateProgress({
+  //       stage: "Creating Octree",
+  //       processingStage: 3,
+  //       subStage: "Octree created successfully",
+  //       subProgress: 100,
+  //     });
+
+  //     // Clear memory
+  //     allMeshInfos = [];
+
+  //     // Step 4: Load Models with Worker
+  //     updateProgress({
+  //       stage: "Loading Models",
+  //       processingStage: 4,
+  //       subStage: "Initializing worker",
+  //       subProgress: 0,
+  //     });
+
+  //     // Set up worker progress listener
+  //     const handleWorkerProgress = (event) => {
+  //       const { stage, progress } = event.detail;
+  //       updateProgress({
+  //         stage: "Processing Models",
+  //         processingStage: 4,
+  //         subStage: stage,
+  //         subProgress: progress,
+  //       });
+  //     };
+
+  //     window.addEventListener("meshProcessingProgress", handleWorkerProgress);
+
+  //     try {
+  //       // Call the worker-based loadModels function
+  //       await loadModels((progressData) => {
+  //         updateProgress({
+  //           stage: progressData.stage,
+  //           processingStage: 4,
+  //           subStage: progressData.stage,
+  //           subProgress: progressData.progress,
+  //         });
+  //       });
+  //     } finally {
+  //       window.removeEventListener(
+  //         "meshProcessingProgress",
+  //         handleWorkerProgress
+  //       );
+  //     }
+
+  //     // Step 5: Complete
+  //     updateProgress({
+  //       stage: "Complete",
+  //       processingStage: 5,
+  //       subStage: "Processing complete",
+  //       subProgress: 100,
+  //     });
+
+  //     setStatus("Processing completed successfully!");
+  //   } catch (error) {
+  //     console.error("Error:", error);
+  //     setStatus("Error: " + error.message);
+  //     updateProgress({
+  //       stage: "Error",
+  //       subStage: error.message,
+  //       subProgress: 0,
+  //     });
+  //   } finally {
+  //     setIsProcessing(false);
+  //   }
+  // }, [files, isProcessing]);
+
+  // Replace your existing handleCreateClick function with this updated version:
+
+const handleCreateClick = useCallback(async () => {
+  if (files.length === 0) {
+    setStatus("Please select files first.");
+    return;
+  }
+
+  if (isProcessing) {
+    setStatus("Processing already in progress.");
+    return;
+  }
+
+  setIsProcessing(true);
+  setStatus("Processing started...");
+
+  try {
+    let allMeshInfos = [];
+
+    // Step 1: Process Files (Main Thread)
+    updateProgress({
+      stage: "Processing Files",
+      current: 0,
+      total: files.length,
+      processingStage: 1,
+      subStage: "Initializing",
+      subProgress: 0,
+      startTime: Date.now(),
+    });
+
+    // Process files in batches
+    for (let i = 0; i < files.length; i += BATCH_SIZE) {
+      const batch = files.slice(i, i + BATCH_SIZE);
+      const batchResults = await Promise.all(
+        batch.map((file) => processFile(file))
+      );
+      allMeshInfos = allMeshInfos.concat(batchResults.flat());
+
+      const progress = Math.min(
+        Math.floor(((i + BATCH_SIZE) / files.length) * 100),
+        100
+      );
       updateProgress({
         stage: "Processing Files",
-        current: 0,
-        total: files.length,
         processingStage: 1,
-        subStage: "Initializing",
-        subProgress: 0,
-        startTime: Date.now(),
+        current: i + batch.length,
+        total: files.length,
+        subStage: `Processing batch ${i / BATCH_SIZE + 1}`,
+        subProgress: progress,
       });
+    }
 
-      // Process files in batches
-      for (let i = 0; i < files.length; i += BATCH_SIZE) {
-        const batch = files.slice(i, i + BATCH_SIZE);
-        const batchResults = await Promise.all(
-          batch.map((file) => processFile(file))
-        );
-        allMeshInfos = allMeshInfos.concat(batchResults.flat());
+    // Step 2: Store Meshes
+    updateProgress({
+      stage: "Storing Meshes",
+      processingStage: 2,
+      subStage: "Saving meshes to database",
+      subProgress: 0,
+    });
 
-        const progress = Math.min(
-          Math.floor(((i + BATCH_SIZE) / files.length) * 100),
-          100
-        );
-        updateProgress({
-          stage: "Processing Files",
-          processingStage: 1,
-          current: i + batch.length,
-          total: files.length,
-          subStage: `Processing batch ${i / BATCH_SIZE + 1}`,
-          subProgress: progress,
-        });
-      }
+    updateProgress({
+      stage: "Storing Meshes",
+      processingStage: 2,
+      subStage: "Meshes stored successfully",
+      subProgress: 100,
+    });
 
-      // Step 2: Store Meshes
-      updateProgress({
-        stage: "Storing Meshes",
-        processingStage: 2,
-        subStage: "Saving meshes to database",
-        subProgress: 0,
-      });
+    // Step 3: Create Octree
+    updateProgress({
+      stage: "Creating Octree",
+      processingStage: 3,
+      subStage: "Building octree structure",
+      subProgress: 0,
+    });
 
-      updateProgress({
-        stage: "Storing Meshes",
-        processingStage: 2,
-        subStage: "Meshes stored successfully",
-        subProgress: 100,
-      });
+    const octreeRoot = createOctreeBlock(
+      sceneRef.current,
+      getMinBounds(allMeshInfos),
+      getMaxBounds(allMeshInfos),
+      allMeshInfos,
+      0,
+      null
+    );
 
-      // Step 3: Create Octree
-      updateProgress({
-        stage: "Creating Octree",
-        processingStage: 3,
-        subStage: "Building octree structure",
-        subProgress: 0,
-      });
+    const octreeInfo = createOctreeInfo(
+      octreeRoot,
+      getMinBounds(allMeshInfos),
+      getMaxBounds(allMeshInfos)
+    );
 
-      const octreeRoot = createOctreeBlock(
-        sceneRef.current,
-        getMinBounds(allMeshInfos),
-        getMaxBounds(allMeshInfos),
-        allMeshInfos,
-        0,
-        null
-      );
+    // Store in IndexedDB first
+    await batchStoreInDB([
+      {
+        store: "octree",
+        key: "mainOctree",
+        data: octreeInfo,
+      },
+    ]);
 
-      const octreeInfo = createOctreeInfo(
-        octreeRoot,
-        getMinBounds(allMeshInfos),
-        getMaxBounds(allMeshInfos)
-      );
-
-      await batchStoreInDB([
-        {
-          store: "octree",
-          key: "mainOctree",
-          data: octreeInfo,
-        },
-      ]);
-       const data ={
-         projectId,
-         OctreeId:"mainOctree",
-         data:octreeInfo
-
-       }
-       const data1= JSON.stringify(data);
-       console.log(data1);
-       await saveOctree(data)
-
-      updateProgress({
-        stage: "Creating Octree",
-        processingStage: 3,
-        subStage: "Octree created successfully",
-        subProgress: 100,
-      });
-
-      // Clear memory
-      allMeshInfos = [];
-
-      // Step 4: Load Models with Worker
-      updateProgress({
-        stage: "Loading Models",
-        processingStage: 4,
-        subStage: "Initializing worker",
-        subProgress: 0,
-      });
-
-      // Set up worker progress listener
-      const handleWorkerProgress = (event) => {
-        const { stage, progress } = event.detail;
-        updateProgress({
-          stage: "Processing Models",
-          processingStage: 4,
-          subStage: stage,
-          subProgress: progress,
-        });
+    // UPDATED: Safe octree saving with optimization
+    try {
+      console.log('Preparing octree data for server save...');
+      
+      // Helper function to optimize octree data
+      const optimizeOctreeForSaving = (octreeData) => {
+        const optimized = JSON.parse(JSON.stringify(octreeData));
+        
+        const cleanOctreeNode = (node) => {
+          if (!node || typeof node !== 'object') return node;
+          
+          // Remove large mesh data arrays - keep only essential metadata
+          if (node.meshInfos && Array.isArray(node.meshInfos)) {
+            node.meshInfos = node.meshInfos.map(mesh => ({
+              id: mesh.metadata?.id || mesh.id,
+              fileId: mesh.metadata?.fileId || mesh.fileId,
+              screenCoverage: mesh.metadata?.screenCoverage || mesh.screenCoverage,
+              ParentFile: mesh.metadata?.ParentFile || mesh.ParentFile,
+              // Keep only essential metadata, remove large arrays
+              metadata: mesh.metadata ? {
+                id: mesh.metadata.id,
+                fileId: mesh.metadata.fileId,
+                screenCoverage: mesh.metadata.screenCoverage,
+                geometryInfo: mesh.metadata.geometryInfo
+              } : undefined
+            }));
+          }
+          
+          // Clean child blocks recursively
+          if (node.relationships?.childBlocks) {
+            node.relationships.childBlocks = node.relationships.childBlocks.map(cleanOctreeNode);
+          }
+          
+          // Handle other possible child structures
+          ['blocks', 'children', 'subdivisions', 'subBlocks'].forEach(prop => {
+            if (node[prop] && Array.isArray(node[prop])) {
+              node[prop] = node[prop].map(cleanOctreeNode);
+            }
+          });
+          
+          return node;
+        };
+        
+        return cleanOctreeNode(optimized);
       };
 
-      window.addEventListener("meshProcessingProgress", handleWorkerProgress);
-
+      // Test the size first
+      let dataToSave = octreeInfo;
+      let sizeTest;
+      
       try {
-        // Call the worker-based loadModels function
-        await loadModels((progressData) => {
-          updateProgress({
-            stage: progressData.stage,
-            processingStage: 4,
-            subStage: progressData.stage,
-            subProgress: progressData.progress,
-          });
-        });
-      } finally {
-        window.removeEventListener(
-          "meshProcessingProgress",
-          handleWorkerProgress
-        );
+        sizeTest = JSON.stringify(octreeInfo);
+        console.log(`Original octree size: ${sizeTest.length} characters (${(sizeTest.length / 1024 / 1024).toFixed(2)} MB)`);
+        
+        // If too large (over 200MB), optimize it
+        if (sizeTest.length > 200 * 1024 * 1024) {
+          console.log('Octree data too large, applying optimization...');
+          dataToSave = optimizeOctreeForSaving(octreeInfo);
+          
+          const optimizedSize = JSON.stringify(dataToSave);
+          console.log(`Optimized octree size: ${optimizedSize.length} characters (${(optimizedSize.length / 1024 / 1024).toFixed(2)} MB)`);
+        }
+      } catch (stringifyError) {
+        console.log('Octree too large for direct stringification, applying optimization...');
+        dataToSave = optimizeOctreeForSaving(octreeInfo);
       }
 
-      // Step 5: Complete
-      updateProgress({
-        stage: "Complete",
-        processingStage: 5,
-        subStage: "Processing complete",
-        subProgress: 100,
-      });
+      const data = {
+        projectId,
+        OctreeId: "mainOctree",
+        data: dataToSave
+      };
 
-      setStatus("Processing completed successfully!");
-    } catch (error) {
-      console.error("Error:", error);
-      setStatus("Error: " + error.message);
+      console.log('Saving octree to server...');
+      await saveOctree(data);
+      console.log('Octree saved successfully');
+
+    } catch (octreeError) {
+      console.error('Error saving octree to server:', octreeError);
+      
+      // Fallback: save minimal octree structure
+      console.log('Attempting to save minimal octree structure...');
+      try {
+        const minimalData = {
+          projectId,
+          OctreeId: "mainOctree",
+          data: {
+            bounds: {
+              min: getMinBounds(allMeshInfos),
+              max: getMaxBounds(allMeshInfos)
+            },
+            nodeCount: allMeshInfos.length,
+            meshCount: allMeshInfos.length,
+            created: new Date().toISOString(),
+            structure: "octree_structure_saved_locally_only",
+            note: "Full octree data available in local IndexedDB"
+          }
+        };
+        
+        await saveOctree(minimalData);
+        console.log('Saved minimal octree metadata to server');
+        setStatus("Warning: Full octree too large for server, saved minimal structure only");
+      } catch (minimalError) {
+        console.error('Failed to save even minimal octree data:', minimalError);
+        setStatus("Warning: Could not save octree to server, but local IndexedDB storage successful");
+      }
+    }
+
+    updateProgress({
+      stage: "Creating Octree",
+      processingStage: 3,
+      subStage: "Octree created successfully",
+      subProgress: 100,
+    });
+
+    // Clear memory
+    allMeshInfos = [];
+
+    // Step 4: Load Models with Worker
+    updateProgress({
+      stage: "Loading Models",
+      processingStage: 4,
+      subStage: "Initializing worker",
+      subProgress: 0,
+    });
+
+    // Set up worker progress listener
+    const handleWorkerProgress = (event) => {
+      const { stage, progress } = event.detail;
       updateProgress({
-        stage: "Error",
-        subStage: error.message,
-        subProgress: 0,
+        stage: "Processing Models",
+        processingStage: 4,
+        subStage: stage,
+        subProgress: progress,
+      });
+    };
+
+    window.addEventListener("meshProcessingProgress", handleWorkerProgress);
+
+    try {
+      // Call the worker-based loadModels function
+      await loadModels((progressData) => {
+        updateProgress({
+          stage: progressData.stage,
+          processingStage: 4,
+          subStage: progressData.stage,
+          subProgress: progressData.progress,
+        });
       });
     } finally {
-      setIsProcessing(false);
+      window.removeEventListener(
+        "meshProcessingProgress",
+        handleWorkerProgress
+      );
     }
-  }, [files, isProcessing]);
+
+    // Step 5: Complete
+    updateProgress({
+      stage: "Complete",
+      processingStage: 5,
+      subStage: "Processing complete",
+      subProgress: 100,
+    });
+
+    setStatus("Processing completed successfully!");
+  } catch (error) {
+    console.error("Error:", error);
+    setStatus("Error: " + error.message);
+    updateProgress({
+      stage: "Error",
+      subStage: error.message,
+      subProgress: 0,
+    });
+  } finally {
+    setIsProcessing(false);
+  }
+}, [files, isProcessing]);
 
   // Helper functions
   const getMinBounds = (meshInfos) => {
