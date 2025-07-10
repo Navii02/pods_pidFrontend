@@ -1,4 +1,5 @@
 import { SaveMergedMesh } from "../services/GlobalModalApi";
+import { url } from "../services/Url";
 import { initDB } from "./DbInit";
 import { processMeshDataOffline } from "./processMeshDataOffline";
 
@@ -502,6 +503,30 @@ function mergeFinalPlacement(target, source) {
 
 // Memory-efficient createAndMergeMeshes function - FIXED TRANSACTION HANDLING
 // Updated createAndMergeMeshes function with proper data serialization for backend
+
+
+ const sendMergedMeshToBackend = async (meshToSend) => {
+  const { MergedMeshId, data, projectId } = meshToSend;
+
+  const blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
+
+  const formData = new FormData();
+  formData.append("MergedMeshId", MergedMeshId);
+  formData.append("projectId", projectId);
+  formData.append("file", blob, `${MergedMeshId}.json`);
+
+  const response = await fetch(`${url}/api/save-merged-mesh`, {
+    method: "POST",
+    body: formData,
+  });
+
+  const result = await response.json();
+  if (!result.success) {
+    throw new Error(result.message || "Failed to save merged mesh");
+  }
+
+  return result;
+};
 async function createAndMergeMeshes(finalPlacement, lowPolyModels, onProgress) {
   console.log("Creating mesh placement map...");
 
@@ -754,7 +779,7 @@ async function createAndMergeMeshes(finalPlacement, lowPolyModels, onProgress) {
   console.log(`📤 Sending ${meshesToSend.length} merged meshes to backend...`);
   for (const meshToSend of meshesToSend) {
     try {
-      await SaveMergedMesh(meshToSend);
+      await sendMergedMeshToBackend(meshToSend);
       console.log(`    📤 Sent merged mesh ${meshToSend.MergedMeshId} to backend`);
     } catch (err) {
       console.error(
@@ -767,6 +792,8 @@ async function createAndMergeMeshes(finalPlacement, lowPolyModels, onProgress) {
   console.log(
     `🎉 Streaming merge completed! Processed ${totalStoredMeshes} merged meshes`
   );
+ 
+
 
   // Create lightweight summary
   const placementSummary = {
