@@ -825,6 +825,7 @@ const loadFiles = async (selectedFiles) => {
       formData,
       {
         "Content-Type": "multipart/form-data",
+        "projectId":projectId
       },
       (event) => {
         const percent = Math.round((event.loaded * 100) / event.total);

@@ -29,6 +29,7 @@ import {
   UpdateSavedView,
 } from "../services/CommonApis";
 import DeleteConfirm from "./DeleteConfirm";
+import { clearGlobalModal } from "../services/GlobalModalApi";
 
 function Sidebar({
   onToggle,
@@ -118,10 +119,13 @@ function Sidebar({
     }));
   };
 
-  const handleSubItemClick = (label, path, isModal = false, modalName = "") => {
+  const handleSubItemClick = (label, path, isModal = false, modalName = "",action=null) => {
     setActiveItem(label);
     setActiveTab(label);
-    if (isModal) {
+    if(action && actionMap[action]) {
+    actionMap[action](); 
+    }
+    else if (isModal) {
       handleOpenModal(modalName);
     } else {
       navigate(path);
@@ -225,6 +229,49 @@ const handleMoveToSavedView = (view) => {
       }
     };
   }, []);
+    function clearAllPipingStores() {
+      const confirmClear = window.confirm(
+        "Are you sure you want to Delete Global modal ?. The This action cannot be undone."
+      );
+  
+      if (!confirmClear) return; // ❌ User canceled
+  
+      const request = indexedDB.open("piping");
+  
+      request.onsuccess = function (event) {
+        const db = event.target.result;
+        const storeNames = Array.from(db.objectStoreNames);
+  
+        const transaction = db.transaction(storeNames, "readwrite");
+  
+        storeNames.forEach((storeName) => {
+          const store = transaction.objectStore(storeName);
+          store.clear().onsuccess = () => {};
+          store.clear().onerror = (e) => {
+            console.error(`Error clearing store ${storeName}:`, e);
+          };
+        });
+  
+        transaction.oncomplete = async () => {
+          db.close();
+          const response = await clearGlobalModal(projectId);
+          if (response.status === 200) {
+            alert(response.data.message);
+          } else {
+            alert("Something went wrong");
+          }
+        };
+      };
+  
+      request.onerror = function (event) {
+        console.error("❌ Failed to open database:", event.target.error);
+        alert("Failed to open the 'piping' database.");
+      };
+    }
+const actionMap = {
+  clearAllPipingStores: clearAllPipingStores,
+  // Add more actions here if needed in future
+};
 
   const menuItems = [
     {
@@ -304,7 +351,7 @@ const handleMoveToSavedView = (view) => {
       subItems: [
         { name: "Open Global Model", path: "/global-model/open" },
         { name: "Create Global Model", path: "/global-model/create" },
-        { name: "Delete Global Model", path: "/global-model/delete" },
+        { name: "Delete Global Model", action: "clearAllPipingStores",},
       ],
     },
     {
@@ -586,7 +633,8 @@ const handleMoveToSavedView = (view) => {
                           subItem.name,
                           subItem.path,
                           subItem.isModal,
-                          subItem.modalName
+                          subItem.modalName,
+                          subItem.action
                         )
                       }
                       style={{ cursor: "pointer" }}
