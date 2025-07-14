@@ -3,6 +3,8 @@
   "version": "0.1.0",
   "private": true,
   "dependencies": {
+    "@azure/msal-browser": "^4.15.0",
+    "@azure/msal-react": "^3.0.15",
     "@babylonjs/core": "^8.2.0",
     "@babylonjs/gui": "^8.2.0",
     "@babylonjs/loaders": "^8.2.0",

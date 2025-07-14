@@ -22,18 +22,22 @@ import CreateGlobalModal from "./pages/CreateGlobalModal";
 import EquipmentList from "./pages/EquipmentList";
 import UnAssignedtags from "./pages/UnAssignedtags";
 import GeneralTagInfoTable from "./pages/GeneralTagInfoTable";
+import LandingPage from "./pages/LandingPage";
+import SuperAdmin from "./pages/SuperAdmin";
+import SuperAdminAssignProject from "./pages/SuperAdminAssignProject";
+import AdminPanel from "./pages/AdminPanel";
+import AdminFeatureAssign from "./pages/AdminFeatureAssign";
 
-
-// import Login from './pages/Login';
 
 function App() {
   return (
     <Routes>
-      {/* <Route path="/login" element={<Login />} /> */}
+      <Route path="/" element={<LandingPage />} />
 
-      {/* All pages that use the shared layout */}
+      {/* All pages after login using shared layout */}
       <Route element={<HomePage />}>
-        <Route path="/" element={<Iroamer />} />
+        {/* Move Iroamer route to its own path */}
+        <Route path="/iroamer" element={<Iroamer />} />
         <Route path="/spid" element={<Spid />} />
         <Route path="/documents/review" element={<DocumentReview />} />
         <Route path="/documents/register" element={<DocumentRegister />} />
@@ -52,6 +56,10 @@ function App() {
         <Route path="/line-list" element={<LineList />} />
         <Route path="/assign-tag-models" element={<UnAssignedtags />} />
         <Route path="/tag-info/review" element={<GeneralTagInfoTable />} />
+        <Route path="/superadmin" element={<SuperAdmin />} />
+        <Route path="/superadmin/assignProjects" element={<SuperAdminAssignProject />} />
+        <Route path="/admin" element={<AdminPanel />} />
+        <Route path="/admin/featureAssign" element={<AdminFeatureAssign />} />
 
 
       </Route>

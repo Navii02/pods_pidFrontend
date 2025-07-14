@@ -66,7 +66,7 @@ const SpidCanvas = ({ initialZoom = 1, maxZoom = 10, minZoom = 0.5 }) => {
   const tagId = searchParams.get("tagId");
   console.log(tagId);
 
-  const { isSidebarCollapsed } = useOutletContext();
+  // const { isSidebarCollapsed } = useOutletContext();
 
   const [mode, setMode] = useState("select");
   const [selectedItems, setSelectedItems] = useState([]);
@@ -555,7 +555,7 @@ drawingLayer.current.activate();
       paperScopeRef.current.view.zoom = initialZoom;
       setZoomLevel(initialZoom);
     }, 50),
-    [initialZoom, minZoom, maxZoom, isSidebarCollapsed]
+    [initialZoom, minZoom, maxZoom]
   );
 
   const setupEventListeners = useCallback(() => {
@@ -698,7 +698,7 @@ drawingLayer.current.activate();
         sidebarEl.removeEventListener("transitionend", onTransitionEnd);
       }
     };
-  }, [handleResize, isSidebarCollapsed]);
+  }, [handleResize]);
 
   function captureSnapshot() {
     if (!paperScopeRef.current) return;

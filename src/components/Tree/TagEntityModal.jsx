@@ -294,15 +294,19 @@ const TagEntityModal = ({ showTagModalFor, setShowTagModalFor, selectedProject, 
             ) : (
               <ul className="alltags" style={{ padding: "5px", listStyleType: "none", margin: "0" }}>
                 {/* Select All Checkbox */}
-                <li style={{ marginBottom: "10px", display: "flex", alignItems: "center" ,justifyContent: "space-between", }}>
-                  <div className="d-flex">
-                    <input
+                <li  style={{
+              marginBottom: "10px",
+              display: "flex",
+              alignItems: "center",
+            }}>
+                  <div style={{display:'flex'}}>
+                    <input 
                       type="checkbox"
-                      style={{ marginRight: "5px" }}
+                      style={{ width:'10px',height:'10px' }}
                       checked={filteredTags.length > 0 && filteredTags.every((tag) => selectedTags.includes(tag.number))}
                       onChange={(e) => (e.target.checked ? handleSelectAll() : handleClearAll())}
                     />
-                    <p style={{ fontWeight: "bold" }}>Select All</p>
+                    <p className="ms-2" style={{ fontWeight: "bold" }}>Select All</p>
                   </div>
                 </li>
 

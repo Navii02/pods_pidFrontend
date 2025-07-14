@@ -1,5 +1,4 @@
 import React, { useRef, useState } from "react";
-import "../styles/DocumentRegister.css";
 import { saveDocument } from "../services/CommonApis";
 import AlertModal from "../components/AlertModal";
 
@@ -141,90 +140,77 @@ function Documentregister() {
       });
     }
   };
-
+  const handleButtonClick = () => {
+    fileInputRef.current?.click();
+  };
   return (
-    <div className="document-registration-container">
-      <div className="document-registration-wrapper">
-        <h2>Document registration</h2>
-         <form onSubmit={handleSubmit} className="document-registration-form">
-          <div className="mb-3">
-            <label htmlFor="documentNumber" className="form-label">
-              Document number <span className="required">*</span>
-            </label>
-            <input
-              type="text"
-              id="documentNumber"
-              className="form-control"
-              value={documentNumber}
-              onChange={(e) => setDocumentNumber(e.target.value)}
-              required
-            />
-          </div>
-
-          <div className="mb-3">
-            <label htmlFor="title" className="form-label">
-              Title
-            </label>
-            <input
-              type="text"
-              id="title"
-              className="form-control"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-            />
-          </div>
-
-          <div className="mb-3">
-            <label htmlFor="description" className="form-label">
-              Description
-            </label>
-            <textarea
-              id="description"
-              className="form-control"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              rows="3"
-            />
-          </div>
-
-          <div className="mb-3">
-            <label htmlFor="type" className="form-label">
-              Type <span className="required">*</span>
-            </label>
-            <select
-              id="type"
-              className="form-select custom-select"
-              value={type}
+  
+     <div
+      style={{
+        zIndex: "1",
+        position: "absolute",
+        width: "100%",
+        backgroundColor: "#33334c",
+      }}
+    >
+       <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+                <div id="bulkImportDiv">
+                    <div className="page">
+                        <section className="page-section">
+                            <div className="row">
+                                <h4>Document registration</h4>
+                            </div>
+                        </section>
+                        <hr />
+                        <section className="page-section">
+                            <div className="row">
+                                <div className="col-md-8">
+                                    <div className="reg-input" style={{ fontSize: '13px', lineHeight: '30px' }}>
+                                        <label>Document number<span required style={{ fontSize: '11px' }}>*</span></label>
+                                        <input type="text"  value={documentNumber}  onChange={(e) => setDocumentNumber(e.target.value)} />
+                                        <label>Title</label>
+                                        <input type="text"  value={title}
+              onChange={(e) => setTitle(e.target.value)} />
+                                        <label>Description</label>
+                                        <textarea type="text" value={description}
+              onChange={(e) => setDescription(e.target.value)}/>
+                                        <label>Type<span required style={{ fontSize: '11px' }}>*</span></label>
+                                        <select  value={type}
               onChange={(e) => setType(e.target.value)}
-              required
-            >
-              <option value="">Select type</option>
-              {docs.types.map((docType) => (
-                <option key={docType.code} value={docType.code}>
-                  {docType.code} - {docType.name}
-                </option>
-              ))}
-            </select>
-          </div>
+              required style={{ width: '100%' }}>
+                                            <option value="" disabled>Select document type</option>
+                                            {docs.types.map((type) => (
+                                                <option key={type.code} value={type.code}>{type.name}</option>
+                                            ))}
+                                        </select>
+                                        <label>Model file</label> <br />
+                                          <input
+        type="file"
+        accept=".pdf,.doc,.docx,.zip,.svg"
+        ref={fileInputRef}
+        onChange={handleFileChange}
+        style={{ display: 'none' }}
+      />
 
-          <div className="mb-3">
-            <label htmlFor="file" className="form-label">
-              Document file
-            </label>
-            <input
-              type="file"
-              id="file"
-              className="form-control"
-              onChange={handleFileChange}
-              accept=".pdf,.doc,.docx,.zip,.svg"
-                ref={fileInputRef} 
-            />
-          </div>
-
-          <button type="submit" className="btn register-button">
-            Register
-          </button>
-        </form>
+      {/* Styled button that triggers click */}
+      <button style={{ fontSize: "13px" }}
+                      className="btn mt-1 btn-light" onClick={handleButtonClick}>
+       Choose File
+      </button>
+       <p style={{ fontSize: "13px" }}>
+                      {" "}
+                      {file? file.name : "No file selected"}
+                    </p>
+                                    </div>
+                                </div>
+                            </div>
+                            <hr />
+                            <button onClick={handleSubmit} className="btn btn-light" style={{ fontSize: '12px' }}>Register</button>
+                        </section>
+                    </div>
+                </div>
+            </div>
+   
 
         {isModalOpen && (
           <div
@@ -282,7 +268,6 @@ function Documentregister() {
           />
         )}
       </div>
-    </div>
   );
 }
 

@@ -274,7 +274,7 @@ const TagRegister = () => {
                     style={{ fontSize: "13px", lineHeight: "30px" }}
                   >
                     <label>
-                      Tag number<span style={{ fontSize: "11px" }}>*</span>
+                      Tag number<span required style={{ fontSize: "11px" }}>*</span>
                     </label>
                     <input
                       type="text"
@@ -306,7 +306,7 @@ const TagRegister = () => {
                       onChange={handleChange}
                     />
                     <label>
-                      Type<span style={{ fontSize: "11px" }}>*</span>
+                      Type<span required style={{ fontSize: "11px" }}>*</span>
                     </label>
     
                     <select

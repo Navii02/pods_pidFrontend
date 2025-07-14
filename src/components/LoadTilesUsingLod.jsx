@@ -4065,10 +4065,6 @@ const hideByRemovingIndices = useCallback((mergedMesh, mapping, meshId) => {
       });
       throw new Error("Invalid index range against original mesh");
     }
-
-    // ENHANCED APPROACH: Find what indices to remove from current mesh
-    // We need to find which indices in the current mesh correspond to the original range
-    
     const indicesToRemove = new Set();
     
     // Build a map of original index positions to current positions

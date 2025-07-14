@@ -307,10 +307,67 @@ const ProjectDetails = ({
 
     setEyeState(newEyeState);
     setViewHideThree((prev) => ({ ...prev, ...newViewHideThree }));
-
-    if (!isOpen) {
-      try {
-        setTagsToRemove([]);
+ if (!isOpen) {
+    try {
+      setTagsToRemove([]);
+      
+      // LOOP-BASED SOLUTION: Process data in chunks
+      const CHUNK_SIZE = 50; // Adjust this based on your URL length limits
+      const allData = [];
+      
+      // If tagIds is large, chunk it. Otherwise, process normally
+      if (ids.tagIds.length > CHUNK_SIZE) {
+        console.log(`Processing ${ids.tagIds.length} tags in chunks of ${CHUNK_SIZE}`);
+        
+        // Split tagIds into chunks
+        const tagChunks = [];
+        for (let i = 0; i < ids.tagIds.length; i += CHUNK_SIZE) {
+          tagChunks.push(ids.tagIds.slice(i, i + CHUNK_SIZE));
+        }
+        
+        // Process each chunk in a loop
+        for (let i = 0; i < tagChunks.length; i++) {
+          const chunk = tagChunks[i];
+          console.log(`Processing chunk ${i + 1}/${tagChunks.length} with ${chunk.length} tags`);
+          
+          try {
+            const response = await GetAllmodals(
+              selectedProject.projectId,
+              ids.areaIds,
+              ids.discIds,
+              ids.systemIds,
+              chunk // Use chunk instead of full tagIds array
+            );
+            
+            if (response.status === 200 && response.data.data) {
+              allData.push(...response.data.data);
+              console.log(`Chunk ${i + 1} completed. Total data items: ${allData.length}`);
+            }
+          } catch (chunkError) {
+            console.error(`Error processing chunk ${i + 1}:`, chunkError);
+            // Continue with next chunk instead of failing completely
+          }
+        }
+        
+        // Create final response object
+        const finalResponse = {
+          status: 200,
+          data: { data: allData }
+        };
+        
+        if (finalResponse.status === 200 && allData.length > 0) {
+          setModaldata(allData);
+          setActiveItem("iRoamer");
+          setActiveLink("three");
+          navigate("/iroamer");
+        } else {
+          setModalMessage("No Records Found");
+          setCustomAlert(true);
+          resetEyeState();
+        }
+        
+      } else {
+        // Process normally for small datasets
         const response = await GetAllmodals(
           selectedProject.projectId,
           ids.areaIds,
@@ -318,66 +375,53 @@ const ProjectDetails = ({
           ids.systemIds,
           ids.tagIds
         );
-        if (response.status === 200) {
-          //console.log(response.data)
-          //   localStorage.setItem("modalData",JSON.stringify(response.data.data))
         
-              setModaldata(response.data.data)
-          // navigate("/iroamer", {
-          //   state: { modalData: response.data.data, timestamp: Date.now() },
-          // });
-              setActiveItem("iRoamer");
-      setActiveLink("three");
-          navigate("/iroamer" );
+        if (response.status === 200) {
+          setModaldata(response.data.data);
+          setActiveItem("iRoamer");
+          setActiveLink("three");
+          navigate("/iroamer");
         } else if (response.status === 400) {
-    setModalMessage("No Records Found");
-  setCustomAlert(true);
-          setEyeState((prev) => ({
-            ...prev,
-            [entityKey]: false,
-            ...(entityType !== "Tag" &&
-              Object.keys(newEyeState).reduce((acc, key) => {
-                if (key !== entityKey && newEyeState[key] === true) {
-                  acc[key] = false;
-                }
-                return acc;
-              }, {})),
-          }));
-          setViewHideThree((prev) => ({
-            ...prev,
-            ...Object.keys(newViewHideThree).reduce((acc, key) => {
-              acc[key] = false;
-              return acc;
-            }, {}),
-          }));
+          setModalMessage("No Records Found");
+          setCustomAlert(true);
+          resetEyeState();
         }
-      } catch (error) {
-        console.error("Failed to fetch modal data", error);
-        setModalMessage("Failed to fetch data");
-  setCustomAlert(true);
-        setEyeState((prev) => ({
-          ...prev,
-          [entityKey]: false,
-          ...(entityType !== "Tag" &&
-            Object.keys(newEyeState).reduce((acc, key) => {
-              if (key !== entityKey && newEyeState[key] === true) {
-                acc[key] = false;
-              }
-              return acc;
-            }, {})),
-        }));
-        setViewHideThree((prev) => ({
-          ...prev,
-          ...Object.keys(newViewHideThree).reduce((acc, key) => {
-            acc[key] = false;
-            return acc;
-          }, {}),
-        }));
       }
-    } else {
-      setTagsToRemove(ids.tagIds);
+
+      
+      
+    } catch (error) {
+      console.error("Failed to fetch modal data", error);
+      setModalMessage("Failed to fetch data");
+      setCustomAlert(true);
+      resetEyeState();
     }
+      function resetEyeState() {
+    setEyeState((prev) => ({
+      ...prev,
+      [entityKey]: false,
+      ...(entityType !== "Tag" &&
+        Object.keys(newEyeState).reduce((acc, key) => {
+          if (key !== entityKey && newEyeState[key] === true) {
+            acc[key] = false;
+          }
+          return acc;
+        }, {})),
+    }));
+    setViewHideThree((prev) => ({
+      ...prev,
+      ...Object.keys(newViewHideThree).reduce((acc, key) => {
+        acc[key] = false;
+        return acc;
+      }, {}),
+    }));
+  }
+  } else {
+    setTagsToRemove(ids.tagIds);
+  }
+   
   };
+
 
    const handleConfirmDelete = async () => {
     setShowConfirm(false);

@@ -65,7 +65,7 @@ const Iroamer = forwardRef(
       leftNavVisible,
       allViews,
       setViewHideThreeunassigned,
-      currentProjectId,  
+      currentProjectId,
       applyViewSaved,
       setshowDisc,
       setShowTag,
@@ -86,7 +86,7 @@ const Iroamer = forwardRef(
       setViewHideThree,
       iroamerfieldEmpty,
       modalData,
-      setview
+      setview,
     } = useContext(iroamerContext);
     const location = useLocation();
 
@@ -611,29 +611,29 @@ const Iroamer = forwardRef(
       });
     };
 
-        useEffect(() => {
-        if (!sceneRef.current) return;
-        const scene = sceneRef.current;
-        scene.onPointerDown = function (evt, pickResult) {
-          if (evt.button === 0 && !pickResult.hit) {
-            dehighlightMesh();
-            setHighlightedTagKey(""); // Or however you're clearing it
-            selectedMeshRef.current = [];
-            setFileInfoDetails(null); // Clear file info
-            settaginfo({
-              filename: "",
-              meshname: "",
-              linelistDetails: null,
-              equipmentlistDetails: null,
-              UsertagInfoDetails: {},
-              originalUsertagInfoDetails: null,
-            });
-            setIsMenuOpen(false);
+    useEffect(() => {
+      if (!sceneRef.current) return;
+      const scene = sceneRef.current;
+      scene.onPointerDown = function (evt, pickResult) {
+        if (evt.button === 0 && !pickResult.hit) {
+          dehighlightMesh();
+          setHighlightedTagKey(""); // Or however you're clearing it
+          selectedMeshRef.current = [];
+          setFileInfoDetails(null); // Clear file info
+          settaginfo({
+            filename: "",
+            meshname: "",
+            linelistDetails: null,
+            equipmentlistDetails: null,
+            UsertagInfoDetails: {},
+            originalUsertagInfoDetails: null,
+          });
+          setIsMenuOpen(false);
 
-            lastHighlightedTagRef.current = null; // Clear last highlighted tag reference
-          }
-        };
-      });
+          lastHighlightedTagRef.current = null; // Clear last highlighted tag reference
+        }
+      };
+    });
 
     useEffect(() => {
       AlltagsPID();
@@ -1771,32 +1771,50 @@ const Iroamer = forwardRef(
     useEffect(() => {
       getAllSavedViews(projectId);
     }, [updateProject]);
+    useEffect(()=>{
+      const scene=sceneRef.current;
+ let observer = null;
+    observer = scene.onPointerObservable.add((pointerInfo) => {
+          const { event, type } = pointerInfo;
+
+          if (type === BABYLON.PointerEventTypes.POINTERDOWN) {
+            const isRightClick = event.button === 2;
+             if (isRightClick) {
+              console.log("rihhtttt")
+             }
+          }
+        })
+    },[])
 
     useEffect(() => {
       let observer = null;
       if (selectedItem) {
         if (!sceneRef.current) return;
         const scene = sceneRef.current;
-  const canvas = scene.getEngine().getRenderingCanvas();
-  const canvasParent = canvas?.parentElement;
+        const canvas = scene.getEngine().getRenderingCanvas();
+        const canvasParent = canvas?.parentElement;
 
-  // === Prevent native browser context menu ===
-  const preventContextMenu = (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    e.stopImmediatePropagation();
-    return false;
-  };
+        // === Prevent native browser context menu ===
+        const preventContextMenu = (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          e.stopImmediatePropagation();
+          return false;
+        };
 
-  // Add context menu preventers
-  canvas?.addEventListener("contextmenu", preventContextMenu, true);
-  canvas.oncontextmenu = preventContextMenu;
+        // Add context menu preventers
+        canvas?.addEventListener("contextmenu", preventContextMenu, true);
+        canvas.oncontextmenu = preventContextMenu;
 
-  if (canvasParent) {
-    canvasParent.addEventListener("contextmenu", preventContextMenu, true);
-  }
+        if (canvasParent) {
+          canvasParent.addEventListener(
+            "contextmenu",
+            preventContextMenu,
+            true
+          );
+        }
 
-  document.addEventListener("contextmenu", preventContextMenu, true);
+        document.addEventListener("contextmenu", preventContextMenu, true);
         observer = scene.onPointerObservable.add((pointerInfo) => {
           const { event, type, pickInfo } = pointerInfo;
 
@@ -2052,17 +2070,13 @@ const Iroamer = forwardRef(
         setGroundSettingParameter(response.data);
       }
     };
-    useEffect(
-      () => {
-        if (projectId) {
-          fetchBaseSettinngs(projectId);
-          fetchGroundsettings(projectId);
-          fetchwatersettings(projectId);
-        }
-      },
-     [ projectId,
-      modalData]
-    );
+    useEffect(() => {
+      if (projectId) {
+        fetchBaseSettinngs(projectId);
+        fetchGroundsettings(projectId);
+        fetchwatersettings(projectId);
+      }
+    }, [projectId, modalData]);
 
     useEffect(() => {
       if (projectId) {
@@ -2150,8 +2164,8 @@ const Iroamer = forwardRef(
 
       // Add new labels
       const newLabels = [];
-      commentsToAdd?.forEach((comment,index) => {
-        const labelElement = createCommentLabel(comment, scene,index);
+      commentsToAdd?.forEach((comment, index) => {
+        const labelElement = createCommentLabel(comment, scene, index);
 
         // Set background color based on status
         const labelColor =
@@ -2979,7 +2993,7 @@ const Iroamer = forwardRef(
     // };
 
     // Function to create a comment label with plane geometry instead of box
-    const createCommentLabel = (comment, scene,index) => {
+    const createCommentLabel = (comment, scene, index) => {
       // Create a simple position mesh (invisible) to anchor the label
       const position = BABYLON.MeshBuilder.CreateBox(
         `marker-position-${comment.number}`,
@@ -3251,21 +3265,21 @@ const Iroamer = forwardRef(
       setActiveButton(null);
     };
 
-  const handleZoomSelected = () => {
-        if (!sceneRef.current) return;
-        const scene = sceneRef.current;
+    const handleZoomSelected = () => {
+      if (!sceneRef.current) return;
+      const scene = sceneRef.current;
 
-        const selectedMeshes = selectedMeshRef.current;
-        if (!selectedMeshes || selectedMeshes.length === 0) {
-          setCustomAlert(true);
-          setModalMessage("Please select object..");
-          setIsMenuOpen(false);
-        } else {
-          console.log(selectedMeshes);
-          zoomOnSelectedMesh(scene,selectedMeshes);
-          setIsMenuOpen(false);
-        }
-      };
+      const selectedMeshes = selectedMeshRef.current;
+      if (!selectedMeshes || selectedMeshes.length === 0) {
+        setCustomAlert(true);
+        setModalMessage("Please select object..");
+        setIsMenuOpen(false);
+      } else {
+        console.log(selectedMeshes);
+        zoomOnSelectedMesh(scene, selectedMeshes);
+        setIsMenuOpen(false);
+      }
+    };
 
     const handleAddComment = () => {
       // Implement logic to add a comment
@@ -4783,13 +4797,12 @@ const Iroamer = forwardRef(
         // Show success message
         setCustomAlert(true);
         setModalMessage(`View "${saveViewName}" saved successfully`);
-        setview(response)
+        setview(response);
 
         // Close dialog and reset name
         setSavedViewDialog(false);
         setSaveViewName("");
         getAllSavedViews(projectId);
-
       }
 
       // Hide message after a delay

@@ -10,6 +10,8 @@ export const commonApi = async (httpRequest, url, reqBody, reqHeaderRaw, params)
     data: reqBody,
     headers: headers || { "Content-Type": "application/json" },
     params: params,
+      maxContentLength: Infinity,
+      maxBodyLength: Infinity,
   };
 
   if (onUploadProgress) {
