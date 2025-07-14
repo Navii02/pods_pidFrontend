@@ -280,31 +280,31 @@ const actionMap = {
       path: "/iroamer",
       activeLink: "three",
     },
-     {
-      icon: faUsersLine,
-      name: "Super admin panel",
-      path: "/superadmin",
-      activeLink: "superAdmin",
-      toggleMenu: "superAdmin",
-      activeLink: "superAdmin",
-      subItems: [
-        { name: "Assign Tokens", path: "/superadmin" },
-        { name: "Assign Projects", path: "/superadmin/assignProjects" },
+    //  {
+    //   icon: faUsersLine,
+    //   name: "Super admin panel",
+    //   path: "/superadmin",
+    //   activeLink: "superAdmin",
+    //   toggleMenu: "superAdmin",
+    //   activeLink: "superAdmin",
+    //   subItems: [
+    //     { name: "Assign Tokens", path: "/superadmin" },
+    //     { name: "Assign Projects", path: "/superadmin/assignProjects" },
 
-      ],
-    },
-     {
-      icon: faUserTie,
-      name: "Admin panel",
-      path: "/admin",
-      activeLink: "admin",
-       toggleMenu: "admin",
-      subItems: [
-        { name: "Project Details", path: "/admin" },
-        { name: "Features assign", path: "/admin/featureAssign" },
+    //   ],
+    // },
+    //  {
+    //   icon: faUserTie,
+    //   name: "Admin panel",
+    //   path: "/admin",
+    //   activeLink: "admin",
+    //    toggleMenu: "admin",
+    //   subItems: [
+    //     { name: "Project Details", path: "/admin" },
+    //     { name: "Features assign", path: "/admin/featureAssign" },
 
-      ],
-    },
+    //   ],
+    // },
     {
       icon: faArchive,
       name: "Bulk Model Import",
