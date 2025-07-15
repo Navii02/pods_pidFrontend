@@ -1,10 +1,8 @@
 import React, { useState, useEffect, useRef, useContext } from "react";
 import Modal from "react-bootstrap/Modal";
-import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faTimes } from "@fortawesome/free-solid-svg-icons";
-import "../../styles/TreeRegistration.css";
 import { RegisterSystem } from "../../services/TreeManagementApi";
 import { TreeresponseContext } from "../../context/ContextShare";
+import Alert from "../Alert";
 
 function SystemRegister({ onClose, isOpen }) {
   const { setUpdatetree } = useContext(TreeresponseContext);
@@ -14,7 +12,6 @@ function SystemRegister({ onClose, isOpen }) {
   const [customAlert, setCustomAlert] = useState(false);
   const [modalMessage, setModalMessage] = useState("");
   const codeInputRef = useRef(null);
-  //console.log(code,name);
 
   useEffect(() => {
     if (isOpen) {
@@ -36,25 +33,39 @@ function SystemRegister({ onClose, isOpen }) {
     onClose();
   };
 
-  const handleOk = async () => {
-    if (!code.trim()) {
-      setCustomAlert(true);
-      setModalMessage("Code is mandatory");
-      return;
-    }
+const handleOk = async () => {
+  if (!code.trim()) {
+    setCustomAlert(true);
+    setModalMessage("Code is mandatory");
+    return;
+  }
+
+  try {
     const projectString = sessionStorage.getItem("selectedProject");
     const project = projectString ? JSON.parse(projectString) : null;
-    const projectId = project.projectId;
+    const projectId = project?.projectId;
+
     const data = { code, name, projectId };
-    console.log(data);
+
     const response = await RegisterSystem(data);
+
     if (response.status === 200) {
       setUpdatetree(response);
       handleClose();
     } else {
-      console.log("something Went wrong", response.status);
+      console.error("Something went wrong. Status:", response.status);
+      setCustomAlert(true);
+      setModalMessage("Failed to register system");
     }
-  };
+  } catch (error) {
+    console.error("Error in handleOk:", error);
+    if (error.status === 406 || error.status === 409 ) {
+    setCustomAlert(true);
+    setModalMessage("Registering System already exist");
+     }
+  }
+};
+
 
   return (
     <Modal
@@ -88,7 +99,12 @@ function SystemRegister({ onClose, isOpen }) {
             onChange={(e) => setName(e.target.value)}
           />
         </div>
-
+ {customAlert && (
+        <Alert
+          message={modalMessage}
+          onAlertClose={() => setCustomAlert(false)}
+        />
+      )}
          <Modal.Footer className="custom-modal-footer">
         <button
           className="btn btn-secondary"

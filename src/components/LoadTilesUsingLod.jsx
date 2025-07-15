@@ -178,6 +178,8 @@ const BabylonLODManager = ({
   const [fileInfoDetails, setFileInfoDetails] = useState(null);
   const commentPositionRef = useRef({ x: 0, y: 0, z: 0 });
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isMenuOpenNormal, setIsMenuOpenNormal] = useState(false);
+  
   const [menuPosition, setMenuPosition] = useState({
     top: 0,
     left: 0,
@@ -352,6 +354,8 @@ const BabylonLODManager = ({
     scene.onPointerDown = function (evt, pickResult) {
       if (evt.button === 0 && !pickResult.hit) {
         dehighlightMesh();
+                    setIsMenuOpenNormal(false);
+
         setHighlightedTagKeyGlobal(""); // Or however you're clearing it
         selectedMeshRef.current = [];
         setFileInfoDetails(null); // Clear file info
@@ -362,6 +366,41 @@ const BabylonLODManager = ({
       }
     };
   });
+
+useEffect(() => {
+  const scene = sceneRef.current;
+  if (!scene) return; // ✅ Exit early if scene is not ready
+
+  const observer = scene.onPointerObservable.add((pointerInfo) => {
+    const { event, type } = pointerInfo;
+    if (type === BABYLON.PointerEventTypes.POINTERDOWN) {
+      const isRightClick = event.button === 2;
+      if (isRightClick) {
+        console.log("Right click detected");
+
+        const windowHeight = window.innerHeight;
+        const windowWidth = window.innerWidth;
+
+        const isSpaceBelow = event.clientY + 200 <= windowHeight;
+        const isSpaceRight = event.clientX + 180 <= windowWidth;
+        const top = isSpaceBelow ? event.clientY : event.clientY - 200;
+        const left = isSpaceRight ? event.clientX : event.clientX - 180;
+
+        setMenuPosition({ top, left });
+        setIsMenuOpenNormal(true);
+
+        event.preventDefault(); // Prevent default context menu
+      }
+    }
+  });
+
+  return () => {
+    if (observer && scene) {
+      scene.onPointerObservable.remove(observer);
+    }
+  };
+}, [sceneRef.current]); // 👈 rerun when sceneRef.current changes
+
 
   const highlightTagByParentFileName = (parentFileName) => {
     console.log("🔍 Searching for parentFileName in tree:", parentFileName);
@@ -3182,6 +3221,7 @@ const BabylonLODManager = ({
       );
     } else {
       setIsMenuOpen(false);
+
       setActiveButton(null);
     }
 
@@ -3250,6 +3290,8 @@ const BabylonLODManager = ({
     // if (selectedItem) {
     setRightClickCoordinates({ x: top, y: left });
     setIsMenuOpen(true);
+    setIsMenuOpenNormal(false);
+
     // } else {
     //   console.log("No mesh selected for context menu");
     // }
@@ -4961,11 +5003,15 @@ const BabylonLODManager = ({
         case "Hide all":
           hideAllEnhanced();
           setIsMenuOpen(false);
+          setIsMenuOpenNormal(false);
+
           break;
 
         case "Unhide all":
           unhideAllEnhanced();
           setIsMenuOpen(false);
+          setIsMenuOpenNormal(false);
+
           break;
 
         case "Deselect":
@@ -5030,6 +5076,16 @@ const BabylonLODManager = ({
       handleShowlineEqpInfo,
     ]
   );
+    const menuOptionsOne = [
+  {
+          label: "Hide all",
+          action: () => handleMenuOptionClick({ label: "Hide all" }),
+        },
+        {
+          label: "Unhide all",
+          action: () => handleMenuOptionClick({ label: "Unhide all" }),
+        },
+    ];
 
   const menuOptions = [
     { label: selectedItemName ? `${selectedItemName.parentFileName}` : "" },
@@ -6407,8 +6463,45 @@ const BabylonLODManager = ({
           </div>
         )}
       </div>
+            {/* Right click menu with out select*/}
 
-      {/* Right click menu */}
+
+          {isMenuOpenNormal && (
+            <div
+              className="menu"
+              style={{
+                position: "absolute",
+                maxWidth: "250px",
+                top: `${menuPosition.top - 200}px`,
+                left: `${menuPosition.left - 300}px`,
+                fontSize: "14px",
+                zIndex: 100,
+              }}
+            >
+              {menuOptionsOne?.map((option, index) => (
+                <div
+                  key={index}
+                  className="menu-option"
+                  onClick={option.action}
+                  onMouseEnter={() => setHoveredIndex(index)}
+                  onMouseLeave={() => setHoveredIndex(null)}
+                  style={{
+                    position: "relative",
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    cursor: option.action ? "pointer" : "default",
+                    paddingLeft: "10px",
+                    paddingRight: "10px",
+                  }}
+                >
+                  <span>{option.label}</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+      {/* Right click menu with select*/}
       {isMenuOpen && (
         <div
           className="menu"

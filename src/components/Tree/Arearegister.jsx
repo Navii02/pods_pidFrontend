@@ -33,28 +33,41 @@ function Arearegister({ onClose, isOpen }) {
     onClose();
   };
 
-  const handleOk = async () => {
-    if (!code) {
-      // setCustomAlert(true);
-      // setModalMessage("Code is mandatory");
-      alert("Code is mandatory");
+const handleOk = async () => {
+  if (!code) {
+    setCustomAlert(true);
+    setModalMessage("Code is mandatory");
+    return;
+  }
 
-      return;
-    }
-
+  try {
     const projectString = sessionStorage.getItem("selectedProject");
     const project = projectString ? JSON.parse(projectString) : null;
-    const projectId = project.projectId;
+    const projectId = project?.projectId;
+
     const data = { code, name, projectId };
-    console.log(data);
+    console.log("Registering area:", data);
+
     const response = await RegisterArea(data);
+
     if (response.status === 200) {
       handleClose();
       setUpdatetree(response);
     } else {
-      console.log("something Went wrong", response.status);
+      console.error("Something went wrong. Status:", response.status);
+      setCustomAlert(true);
+      setModalMessage("Failed to register area");
     }
-  };
+  } catch (error) {
+    console.error("Error in handleOk:", error);
+     if (error.status === 406 || error.status === 409 ) {
+    setCustomAlert(true);
+    setModalMessage("Registering area already exist");
+     }
+    
+  }
+};
+
 
   return (
     <>
@@ -89,6 +102,13 @@ function Arearegister({ onClose, isOpen }) {
               onChange={(e) => setName(e.target.value)}
             />
           </div>
+          
+      {customAlert && (
+        <Alert
+          message={modalMessage}
+          onAlertClose={() => setCustomAlert(false)}
+        />
+      )}
               <Modal.Footer className="custom-modal-footer">
         <button
           className="btn btn-secondary"
@@ -108,12 +128,6 @@ function Arearegister({ onClose, isOpen }) {
         </div>
       </Modal>
 
-      {customAlert && (
-        <Alert
-          message={modalMessage}
-          onAlertClose={() => setCustomAlert(false)}
-        />
-      )}
     </>
   );
 }

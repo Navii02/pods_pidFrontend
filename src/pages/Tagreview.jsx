@@ -10,29 +10,44 @@ import {
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import React, { useContext, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { deleteTag, getdocumentsbyTags, GetTagDetails, updateTags } from "../services/TagApi";
-import { TreeresponseContext, updateProjectContext } from "../context/ContextShare";
+import {
+  deleteTag,
+  getdocumentsbyTags,
+  GetTagDetails,
+  updateTags,
+} from "../services/TagApi";
+import {
+  TreeresponseContext,
+  updateProjectContext,
+} from "../context/ContextShare";
 import { Modal } from "react-bootstrap";
 import Alert from "../components/Alert";
 import DeleteConfirm from "../components/DeleteConfirm";
 
 const Tagreview = () => {
-  const {updateProject} = useContext(updateProjectContext);
-    const {  setUpdatetree } = useContext(TreeresponseContext);
-  
+  const { updateProject } = useContext(updateProjectContext);
+  const { setUpdatetree } = useContext(TreeresponseContext);
+
   const [tags, setTags] = useState([]);
   const [editingId, setEditingId] = useState(null);
   const [editData, setEditData] = useState({});
   const [searchTerm, setSearchTerm] = useState("");
   const [parentTagOptions, setParentTagOptions] = useState([]);
-  const [popupData, setPopupData] = useState({ visible: false, tagId: null, documents: [], x: 0, y: 0 });
+  const [popupData, setPopupData] = useState({
+    visible: false,
+    tagId: null,
+    documents: [],
+    x: 0,
+    y: 0,
+  });
   const [hoveredRow, setHoveredRow] = useState(null);
   const [showConfirm, setShowConfirm] = useState(false);
   const [tagToDelete, setTagToDelete] = useState(null);
   const [customAlert, setCustomAlert] = useState(false);
   const [modalMessage, setModalMessage] = useState("");
   const navigate = useNavigate();
-  
+  const [selectedTagIds, setSelectedTagIds] = useState([]);
+
   const projectString = sessionStorage.getItem("selectedProject");
   const project = projectString ? JSON.parse(projectString) : null;
   const projectId = project?.projectId;
@@ -79,7 +94,7 @@ const Tagreview = () => {
       if (response.status === 200) {
         setModalMessage("The Tag is updated Successfully");
         setCustomAlert(true);
-         setUpdatetree(Date.now()); 
+        setUpdatetree(Date.now());
         GetTags();
       }
       setEditingId(null);
@@ -94,25 +109,46 @@ const Tagreview = () => {
     setTagToDelete(tagId);
     setShowConfirm(true);
   };
+const handleMultipleDelete = () => {
+  if (selectedTagIds.length === 0) {
+    setModalMessage("No tags selected for deletion");
+    setCustomAlert(true);
+    return;
+  }
+  setTagToDelete([...selectedTagIds]); // store array
+  setShowConfirm(true);
+};
 
-  const handleConfirmDelete = async () => {
-    try {
-      const response = await deleteTag(tagToDelete);
-      if (response.status === 200) {
-        GetTags();
-         setUpdatetree(Date.now()); 
-        setModalMessage("Tag deleted successfully");
-        setCustomAlert(true);
-      } else {
-        setModalMessage("Something Went Wrong");
-        setCustomAlert(true);
+const handleConfirmDelete = async () => {
+  try {
+    const tagIds = Array.isArray(tagToDelete) ? tagToDelete : [tagToDelete];
+
+    for (const id of tagIds) {
+      const response = await deleteTag(id);
+      if (response.status !== 200) {
+        throw new Error(`Failed to delete tag ${id}`);
       }
-    } catch (error) {
-      console.error("Error deleting tag:", error);
     }
-    setShowConfirm(false);
-    setTagToDelete(null);
-  };
+
+    setModalMessage(
+      tagIds.length > 1
+        ? "Tags deleted successfully"
+        : "Tag deleted successfully"
+    );
+    setCustomAlert(true);
+    setUpdatetree(Date.now());
+    GetTags();
+  } catch (error) {
+    console.error("Error deleting tags:", error);
+    setModalMessage("Error deleting tag(s)");
+    setCustomAlert(true);
+  }
+
+  setShowConfirm(false);
+  setTagToDelete(null);
+  setSelectedTagIds([]); // clear selection
+};
+
 
   const handleCancelDelete = () => {
     setShowConfirm(false);
@@ -140,7 +176,13 @@ const Tagreview = () => {
           y: event.clientY,
         });
       } else {
-        setPopupData({ visible: false, tagId: null, documents: [], x: 0, y: 0 });
+        setPopupData({
+          visible: false,
+          tagId: null,
+          documents: [],
+          x: 0,
+          y: 0,
+        });
         setModalMessage("No documents assigned to this tag");
         setCustomAlert(true);
       }
@@ -156,31 +198,78 @@ const Tagreview = () => {
     setPopupData({ visible: false, tagId: null, documents: [], x: 0, y: 0 });
   };
 
-  const filteredTags = tags.filter((tag) =>
-    tag.number.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    tag.type.toLowerCase().includes(searchTerm.toLowerCase())
+  const filteredTags = tags.filter(
+    (tag) =>
+      tag.number.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      tag.type.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  const handleSelectAllCheckbox = (e) => {
+    if (e.target.checked) {
+      setSelectedTagIds(filteredTags.map((tag) => tag.tagId));
+    } else {
+      setSelectedTagIds([]);
+    }
+  };
+
+  const handleTagCheckboxChange = (tagId, isChecked) => {
+    if (isChecked) {
+      setSelectedTagIds((prev) => [...prev, tagId]);
+    } else {
+      setSelectedTagIds((prev) => prev.filter((id) => id !== tagId));
+    }
+  };
+
   return (
-    <div style={{ width: '100%', height: '100vh', backgroundColor: 'white', zIndex: '1', position: 'absolute' }}>
+    <div
+      style={{
+        width: "100%",
+        height: "100vh",
+        backgroundColor: "white",
+        zIndex: "1",
+        position: "absolute",
+      }}
+    >
       <div className="table-container">
-        <table className='tagTable'>
+        <table className="tagTable">
           <thead>
             <tr>
               <th>#</th>
+              <th className="mediumHead">
+                <input
+                  type="checkbox"
+                  onChange={handleSelectAllCheckbox}
+                  checked={
+                    filteredTags.length > 0 &&
+                    filteredTags.every((tag) =>
+                      selectedTagIds.includes(tag.tagId)
+                    )
+                  }
+                />
+              </th>
               <th>Tag number</th>
               <th>Name</th>
               <th>Type</th>
               <th>Parent tag</th>
               <th>Model</th>
               <th>
-                <FontAwesomeIcon icon={faDownload} className="me-2" title="Export" />
-                <FontAwesomeIcon icon={faUpload} className="me-2" title="Import" />
-                <FontAwesomeIcon icon={faTrash} title="Delete" />
+                <FontAwesomeIcon
+                  icon={faDownload}
+                  className="me-2"
+                  title="Export"
+                />
+                <FontAwesomeIcon
+                  icon={faUpload}
+                  className="me-2"
+                  title="Import"
+                />
+                <FontAwesomeIcon  onClick={handleMultipleDelete}
+  icon={faTrash}
+  title="Delete all" />
               </th>
             </tr>
             <tr>
-              <th colSpan="7">
+              <th colSpan="8">
                 <input
                   type="text"
                   placeholder="Search by Tag Number or Type"
@@ -194,13 +283,22 @@ const Tagreview = () => {
           <tbody>
             {filteredTags.length > 0 ? (
               filteredTags.map((tag, index) => (
-                <tr 
+                <tr
                   key={tag.tagId}
                   onMouseEnter={() => setHoveredRow(index)}
                   onMouseLeave={() => setHoveredRow(null)}
-                  style={{ position: 'relative', color: 'black' }}
+                  style={{ position: "relative", color: "black" }}
                 >
-                  <td style={{ backgroundColor: '#f0f0f0' }}>{index + 1}</td>
+                  <td style={{ backgroundColor: "#f0f0f0" }}>{index + 1}</td>
+                  <td >
+                    <input
+                      type="checkbox"
+                      checked={selectedTagIds.includes(tag.tagId)}
+                      onChange={(e) =>
+                        handleTagCheckboxChange(tag.tagId, e.target.checked)
+                      }
+                    />
+                  </td>
                   <td>
                     {editingId === tag.tagId ? (
                       <input
@@ -280,55 +378,58 @@ const Tagreview = () => {
                       tag.filename || "-"
                     )}
                   </td>
-                  <td style={{ backgroundColor: '#f0f0f0' }} className="text-center">
+                  <td
+                    style={{ backgroundColor: "#f0f0f0" }}
+                    className="text-center"
+                  >
                     {editingId === tag.tagId ? (
                       <>
-                        <FontAwesomeIcon 
-                          icon={faSave} 
-                          className="text-success me-3" 
+                        <FontAwesomeIcon
+                          icon={faSave}
+                          className="text-success me-3"
                           onClick={() => handleSave(tag.tagId)}
                           title="Save"
                         />
-                        <FontAwesomeIcon 
-                          icon={faTimes} 
-                          className="text-danger" 
+                        <FontAwesomeIcon
+                          icon={faTimes}
+                          className="text-danger"
                           onClick={handleCancel}
                           title="Cancel"
                         />
                       </>
                     ) : (
                       <>
-                        <FontAwesomeIcon 
-                          icon={faEdit} 
-                          className="me-3" 
+                        <FontAwesomeIcon
+                          icon={faEdit}
+                          className="me-3"
                           onClick={() => handleEdit(tag)}
                           title="Edit"
                         />
-                        <FontAwesomeIcon 
-                          icon={faTrash} 
+                        <FontAwesomeIcon
+                          icon={faTrash}
                           onClick={() => handleDelete(tag.tagId)}
                           title="Delete"
                         />
                       </>
                     )}
                   </td>
-                  
+
                   {hoveredRow === index && (
-                    <div 
+                    <div
                       className="tooltip"
                       style={{
-                        position: 'absolute',
-                        top: '100%',
-                        left: '50%',
-                        transform: 'translateX(-50%)',
-                        backgroundColor: '#333',
-                        color: '#fff',
-                        padding: '5px 10px',
-                        borderRadius: '4px',
-                        fontSize: '12px',
-                        whiteSpace: 'nowrap',
+                        position: "absolute",
+                        top: "100%",
+                        left: "50%",
+                        transform: "translateX(-50%)",
+                        backgroundColor: "#333",
+                        color: "#fff",
+                        padding: "5px 10px",
+                        borderRadius: "4px",
+                        fontSize: "12px",
+                        whiteSpace: "nowrap",
                         zIndex: 2000,
-                        pointerEvents: 'none'
+                        pointerEvents: "none",
                       }}
                     >
                       Click tag name to view assigned documents
@@ -364,12 +465,34 @@ const Tagreview = () => {
             }}
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="popup-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <h6 style={{ margin: 0, fontSize: "16px", fontWeight: "600", color: "#1f2937" }}>
+            <div
+              className="popup-header"
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+              }}
+            >
+              <h6
+                style={{
+                  margin: 0,
+                  fontSize: "16px",
+                  fontWeight: "600",
+                  color: "#1f2937",
+                }}
+              >
                 Documents for Tag
               </h6>
               <button
-                onClick={() => setPopupData({ visible: false, tagId: null, documents: [], x: 0, y: 0 })}
+                onClick={() =>
+                  setPopupData({
+                    visible: false,
+                    tagId: null,
+                    documents: [],
+                    x: 0,
+                    y: 0,
+                  })
+                }
                 className="popup-close"
                 title="Close"
               >
@@ -380,20 +503,27 @@ const Tagreview = () => {
             <hr style={{ margin: "12px 0", borderColor: "#e5e7eb" }} />
 
             {popupData.documents.length > 0 ? (
-              <ul className="document-list" style={{ listStyle: "none", padding: 0, margin: 0 }}>
+              <ul
+                className="document-list"
+                style={{ listStyle: "none", padding: 0, margin: 0 }}
+              >
                 {popupData.documents.map((doc) => (
                   <li
                     key={doc.documentId}
-                    onClick={() => handleDocumentClick(doc.documentId, popupData.tagId)}
+                    onClick={() =>
+                      handleDocumentClick(doc.documentId, popupData.tagId)
+                    }
                     className="document-item"
                   >
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                      <span className="document-number">
-                        {doc.number}
-                      </span>
-                      <span className="document-title">
-                        {doc.title}
-                      </span>
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                      }}
+                    >
+                      <span className="document-number">{doc.number}</span>
+                      <span className="document-title">{doc.title}</span>
                     </div>
                   </li>
                 ))}

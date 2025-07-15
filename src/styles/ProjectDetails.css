@@ -33,7 +33,7 @@
 }
 
 .folder-icon {
-  color: #5e5ce6;
+ color: #0d6efd;
   margin: 0 6px;
   font-size: 12px;
   width: 12px;
@@ -63,7 +63,7 @@
 }
 
 .entity-icons button:hover {
-  color: #5e5ce6;
+  color: #0d6efd;
 }
 
 .add-area-btn {

@@ -1,5 +1,6 @@
 import React, { useContext, useEffect, useState } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import ReactDOM from 'react-dom';
 import {
   faTrash,
   faPlus,
@@ -35,7 +36,8 @@ const ProjectDetails = ({
   showProjectDetails,
   setShowProjectDetails,
   activeTab,
-  setActiveItem,setActiveLink
+  setActiveItem,
+  setActiveLink
 }) => {
   const { updateTree } = useContext(TreeresponseContext);
   const {
@@ -55,14 +57,17 @@ const ProjectDetails = ({
   const [showSystemModalFor, setShowSystemModalFor] = useState(null);
   const [showTagModalFor, setShowTagModalFor] = useState(null);
   const [areas, setAreas] = useState([]);
-  const [expandedArea, setExpandedArea] = useState(null);
+  
+  // Changed: Using Sets to track multiple expanded items
+  const [expandedAreas, setExpandedAreas] = useState(new Set());
+  const [expandedDisciplines, setExpandedDisciplines] = useState(new Set());
+  const [expandedSystems, setExpandedSystems] = useState(new Set());
+  
   const [disciplinesMap, setDisciplinesMap] = useState({});
   const [systemsMap, setSystemsMap] = useState({});
   const [tagsMap, setTagsMap] = useState({});
-  const [expandedDiscipline, setExpandedDiscipline] = useState(null);
-  const [expandedSystem, setExpandedSystem] = useState(null);
   const [eyeState, setEyeState] = useState({});
- const [customAlert, setCustomAlert] = useState(false);
+  const [customAlert, setCustomAlert] = useState(false);
   const [modalMessage, setModalMessage] = useState("");
   const [showConfirm, setShowConfirm] = useState(false);
   const [confirmData, setConfirmData] = useState({ type: "", id: "", code: "" });
@@ -75,6 +80,43 @@ const ProjectDetails = ({
     disciplines: "Discipline",
   };
   const currentEntityType = entityTypes[activeTab] || "Area";
+
+  // Helper functions to toggle expansion state
+  const toggleAreaExpansion = (areaKey) => {
+    setExpandedAreas(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(areaKey)) {
+        newSet.delete(areaKey);
+      } else {
+        newSet.add(areaKey);
+      }
+      return newSet;
+    });
+  };
+
+  const toggleDisciplineExpansion = (disciplineKey) => {
+    setExpandedDisciplines(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(disciplineKey)) {
+        newSet.delete(disciplineKey);
+      } else {
+        newSet.add(disciplineKey);
+      }
+      return newSet;
+    });
+  };
+
+  const toggleSystemExpansion = (systemKey) => {
+    setExpandedSystems(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(systemKey)) {
+        newSet.delete(systemKey);
+      } else {
+        newSet.add(systemKey);
+      }
+      return newSet;
+    });
+  };
 
   const fetchAllProjectData = async () => {
     try {
@@ -307,123 +349,121 @@ const ProjectDetails = ({
 
     setEyeState(newEyeState);
     setViewHideThree((prev) => ({ ...prev, ...newViewHideThree }));
- if (!isOpen) {
-    try {
-      setTagsToRemove([]);
-      
-      // LOOP-BASED SOLUTION: Process data in chunks
-      const CHUNK_SIZE = 50; // Adjust this based on your URL length limits
-      const allData = [];
-      
-      // If tagIds is large, chunk it. Otherwise, process normally
-      if (ids.tagIds.length > CHUNK_SIZE) {
-        console.log(`Processing ${ids.tagIds.length} tags in chunks of ${CHUNK_SIZE}`);
+    
+    if (!isOpen) {
+      try {
+        setTagsToRemove([]);
         
-        // Split tagIds into chunks
-        const tagChunks = [];
-        for (let i = 0; i < ids.tagIds.length; i += CHUNK_SIZE) {
-          tagChunks.push(ids.tagIds.slice(i, i + CHUNK_SIZE));
-        }
+        // LOOP-BASED SOLUTION: Process data in chunks
+        const CHUNK_SIZE = 50; // Adjust this based on your URL length limits
+        const allData = [];
         
-        // Process each chunk in a loop
-        for (let i = 0; i < tagChunks.length; i++) {
-          const chunk = tagChunks[i];
-          console.log(`Processing chunk ${i + 1}/${tagChunks.length} with ${chunk.length} tags`);
+        // If tagIds is large, chunk it. Otherwise, process normally
+        if (ids.tagIds.length > CHUNK_SIZE) {
+          console.log(`Processing ${ids.tagIds.length} tags in chunks of ${CHUNK_SIZE}`);
           
-          try {
-            const response = await GetAllmodals(
-              selectedProject.projectId,
-              ids.areaIds,
-              ids.discIds,
-              ids.systemIds,
-              chunk // Use chunk instead of full tagIds array
-            );
+          // Split tagIds into chunks
+          const tagChunks = [];
+          for (let i = 0; i < ids.tagIds.length; i += CHUNK_SIZE) {
+            tagChunks.push(ids.tagIds.slice(i, i + CHUNK_SIZE));
+          }
+          
+          // Process each chunk in a loop
+          for (let i = 0; i < tagChunks.length; i++) {
+            const chunk = tagChunks[i];
+            console.log(`Processing chunk ${i + 1}/${tagChunks.length} with ${chunk.length} tags`);
             
-            if (response.status === 200 && response.data.data) {
-              allData.push(...response.data.data);
-              console.log(`Chunk ${i + 1} completed. Total data items: ${allData.length}`);
+            try {
+              const response = await GetAllmodals(
+                selectedProject.projectId,
+                ids.areaIds,
+                ids.discIds,
+                ids.systemIds,
+                chunk // Use chunk instead of full tagIds array
+              );
+              
+              if (response.status === 200 && response.data.data) {
+                allData.push(...response.data.data);
+                console.log(`Chunk ${i + 1} completed. Total data items: ${allData.length}`);
+              }
+            } catch (chunkError) {
+              console.error(`Error processing chunk ${i + 1}:`, chunkError);
+              // Continue with next chunk instead of failing completely
             }
-          } catch (chunkError) {
-            console.error(`Error processing chunk ${i + 1}:`, chunkError);
-            // Continue with next chunk instead of failing completely
           }
-        }
-        
-        // Create final response object
-        const finalResponse = {
-          status: 200,
-          data: { data: allData }
-        };
-        
-        if (finalResponse.status === 200 && allData.length > 0) {
-          setModaldata(allData);
-          setActiveItem("iRoamer");
-          setActiveLink("three");
-          navigate("/iroamer");
+          
+          // Create final response object
+          const finalResponse = {
+            status: 200,
+            data: { data: allData }
+          };
+          
+          if (finalResponse.status === 200 && allData.length > 0) {
+            setModaldata(allData);
+            setActiveItem("iRoamer");
+            setActiveLink("three");
+            navigate("/iroamer");
+          } else {
+            setModalMessage("No Records Found");
+            setCustomAlert(true);
+            resetEyeState();
+          }
+          
         } else {
-          setModalMessage("No Records Found");
-          setCustomAlert(true);
-          resetEyeState();
-        }
-        
-      } else {
-        // Process normally for small datasets
-        const response = await GetAllmodals(
-          selectedProject.projectId,
-          ids.areaIds,
-          ids.discIds,
-          ids.systemIds,
-          ids.tagIds
-        );
-        
-        if (response.status === 200) {
-          setModaldata(response.data.data);
-          setActiveItem("iRoamer");
-          setActiveLink("three");
-          navigate("/iroamer");
-        } else if (response.status === 400) {
-          setModalMessage("No Records Found");
-          setCustomAlert(true);
-          resetEyeState();
-        }
-      }
-
-      
-      
-    } catch (error) {
-      console.error("Failed to fetch modal data", error);
-      setModalMessage("Failed to fetch data");
-      setCustomAlert(true);
-      resetEyeState();
-    }
-      function resetEyeState() {
-    setEyeState((prev) => ({
-      ...prev,
-      [entityKey]: false,
-      ...(entityType !== "Tag" &&
-        Object.keys(newEyeState).reduce((acc, key) => {
-          if (key !== entityKey && newEyeState[key] === true) {
-            acc[key] = false;
+          // Process normally for small datasets
+          const response = await GetAllmodals(
+            selectedProject.projectId,
+            ids.areaIds,
+            ids.discIds,
+            ids.systemIds,
+            ids.tagIds
+          );
+          
+          if (response.status === 200) {
+            setModaldata(response.data.data);
+            setActiveItem("iRoamer");
+            setActiveLink("three");
+            navigate("/iroamer");
+          } else if (response.status === 400) {
+            setModalMessage("No Records Found");
+            setCustomAlert(true);
+            resetEyeState();
           }
-          return acc;
-        }, {})),
-    }));
-    setViewHideThree((prev) => ({
-      ...prev,
-      ...Object.keys(newViewHideThree).reduce((acc, key) => {
-        acc[key] = false;
-        return acc;
-      }, {}),
-    }));
-  }
-  } else {
-    setTagsToRemove(ids.tagIds);
-  }
-   
+        }
+        
+      } catch (error) {
+        console.error("Failed to fetch modal data", error);
+        setModalMessage("Failed to fetch data");
+        setCustomAlert(true);
+        resetEyeState();
+      }
+      
+      function resetEyeState() {
+        setEyeState((prev) => ({
+          ...prev,
+          [entityKey]: false,
+          ...(entityType !== "Tag" &&
+            Object.keys(newEyeState).reduce((acc, key) => {
+              if (key !== entityKey && newEyeState[key] === true) {
+                acc[key] = false;
+              }
+              return acc;
+            }, {})),
+        }));
+        setViewHideThree((prev) => ({
+          ...prev,
+          ...Object.keys(newViewHideThree).reduce((acc, key) => {
+            acc[key] = false;
+            return acc;
+          }, {}),
+        }));
+      }
+    } else {
+      setTagsToRemove(ids.tagIds);
+    }
   };
 
-
-   const handleConfirmDelete = async () => {
+  const handleConfirmDelete = async () => {
     setShowConfirm(false);
     try {
       let deleteCode = confirmData.code;
@@ -490,8 +530,6 @@ const ProjectDetails = ({
 
   const shouldHighlightTag = (area, disc, sys, tag) => {
     const tagPath = `${area}-${disc}-${sys}-${tag}`.trim();
-    //console.log(tagPath);
-
     return highlightedTagPaths.includes(tagPath);
   };
 
@@ -555,7 +593,7 @@ const ProjectDetails = ({
             </div>
 
             {areas.map((area) => {
-              const isExpanded = expandedArea === area.area;
+              const isExpanded = expandedAreas.has(area.area); // Changed: Using Set.has()
               const areaKey = `area_${area.area}`;
               return (
                 <div key={area.area}>
@@ -563,9 +601,7 @@ const ProjectDetails = ({
                     <div className="entity-line">
                       <FontAwesomeIcon
                         icon={isExpanded ? faMinus : faPlus}
-                        onClick={() =>
-                          setExpandedArea(isExpanded ? null : area.area)
-                        }
+                        onClick={() => toggleAreaExpansion(area.area)} // Changed: Using toggle function
                       />
                       <FontAwesomeIcon
                         icon={isExpanded ? faFolderOpen : faFolder}
@@ -595,7 +631,7 @@ const ProjectDetails = ({
                   {isExpanded &&
                     disciplinesMap[area.area]?.map((disc) => {
                       const systemKey = `${area.area}_${disc.disc}`;
-                      const isDiscExpanded = expandedDiscipline === systemKey;
+                      const isDiscExpanded = expandedDisciplines.has(systemKey); // Changed: Using Set.has()
                       const discKey = `disc_${systemKey}`;
 
                       return (
@@ -604,11 +640,7 @@ const ProjectDetails = ({
                             <div className="entity-line">
                               <FontAwesomeIcon
                                 icon={isDiscExpanded ? faMinus : faPlus}
-                                onClick={() =>
-                                  setExpandedDiscipline(
-                                    isDiscExpanded ? null : systemKey
-                                  )
-                                }
+                                onClick={() => toggleDisciplineExpansion(systemKey)} // Changed: Using toggle function
                               />
                               <FontAwesomeIcon
                                 icon={isDiscExpanded ? faFolderOpen : faFolder}
@@ -661,7 +693,7 @@ const ProjectDetails = ({
                           {isDiscExpanded &&
                             systemsMap[systemKey]?.map((sys) => {
                               const tagKey = `${area.area}_${disc.disc}_${sys.sys}`;
-                              const isSysExpanded = expandedSystem === tagKey;
+                              const isSysExpanded = expandedSystems.has(tagKey); // Changed: Using Set.has()
                               const sysKey = `sys_${tagKey}`;
 
                               return (
@@ -670,11 +702,7 @@ const ProjectDetails = ({
                                     <div className="entity-line">
                                       <FontAwesomeIcon
                                         icon={isSysExpanded ? faMinus : faPlus}
-                                        onClick={() =>
-                                          setExpandedSystem(
-                                            isSysExpanded ? null : tagKey
-                                          )
-                                        }
+                                        onClick={() => toggleSystemExpansion(tagKey)} // Changed: Using toggle function
                                       />
                                       <FontAwesomeIcon
                                         icon={
@@ -828,22 +856,24 @@ const ProjectDetails = ({
         )}
       </div>
       
-      {customAlert && (
+      {customAlert && ReactDOM.createPortal(
         <Alert
           message={modalMessage}
           onAlertClose={() => setCustomAlert(false)}
           show={customAlert}
-        />
+        />,
+        document.getElementById('modal-root')
       )}
 
-      {showConfirm && (
-        <DeleteConfirm
-          message={modalMessage}
-          onConfirm={handleConfirmDelete}
-          onCancel={handleCancelDelete}
-          show={showConfirm}
-        />
-      )}
+      {showConfirm &&
+        ReactDOM.createPortal(
+          <DeleteConfirm
+            message={modalMessage}
+            onConfirm={handleConfirmDelete}
+            onCancel={handleCancelDelete}
+          />,
+          document.getElementById('modal-root')
+        )}
     </div>
   );
 };

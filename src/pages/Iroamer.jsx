@@ -77,8 +77,7 @@ const Iroamer = forwardRef(
     const {
       highlightedTagKey,
       setHighlightedTagKey,
-      highlightedTagKeyGlobal,
-      setHighlightedTagKeyGlobal,
+
       setBackgroundColorTag,
       tagsToRemove,
       setTagsToRemove,
@@ -279,6 +278,8 @@ const Iroamer = forwardRef(
     const [showAllViews, setShowAllViews] = useState(false);
     const [selectedTags, setSelectedTags] = useState([]);
     const [isMenuOpen, setIsMenuOpen] = useState(false);
+    const [isMenuOpenNormal, setIsMenuOpenNormal] = useState(false);
+
     const [menuPosition, setMenuPosition] = useState({
       top: 0,
       left: 0,
@@ -453,6 +454,8 @@ const Iroamer = forwardRef(
         lastHighlightedTagRef.current &&
         highlightedTagKey !== lastHighlightedTagRef.current
       ) {
+        console.log("highlightedTagKey", highlightedTagKey);
+
         const parts = lastHighlightedTagRef.current.split("-");
         const prevTag = parts.slice(3).join("-");
         const prevMatchFilename = selectedTags?.find(
@@ -462,8 +465,11 @@ const Iroamer = forwardRef(
             t.sys === parts[2] &&
             t.tag === prevTag
         )?.filename;
+        console.log("prevMatchFilename.", prevMatchFilename);
 
         if (prevMatchFilename) {
+          console.log("remove");
+
           removeHighlightForTag(prevMatchFilename);
         }
       }
@@ -616,7 +622,10 @@ const Iroamer = forwardRef(
       const scene = sceneRef.current;
       scene.onPointerDown = function (evt, pickResult) {
         if (evt.button === 0 && !pickResult.hit) {
+          setIsMenuOpenNormal(false);
+
           dehighlightMesh();
+          clearAllHighlights();
           setHighlightedTagKey(""); // Or however you're clearing it
           selectedMeshRef.current = [];
           setFileInfoDetails(null); // Clear file info
@@ -1771,20 +1780,40 @@ const Iroamer = forwardRef(
     useEffect(() => {
       getAllSavedViews(projectId);
     }, [updateProject]);
-    useEffect(()=>{
-      const scene=sceneRef.current;
- let observer = null;
-    observer = scene.onPointerObservable.add((pointerInfo) => {
-          const { event, type } = pointerInfo;
+    useEffect(() => {
+      const scene = sceneRef.current;
+      let observer = null;
+      observer = scene.onPointerObservable.add((pointerInfo) => {
+        const { event, type } = pointerInfo;
+        if (type === BABYLON.PointerEventTypes.POINTERDOWN) {
+          const isRightClick = event.button === 2;
+          if (isRightClick) {
+            console.log("Right click detected");
 
-          if (type === BABYLON.PointerEventTypes.POINTERDOWN) {
-            const isRightClick = event.button === 2;
-             if (isRightClick) {
-              console.log("rihhtttt")
-             }
+            // ✅ Set the menu position based on mouse coordinates
+            const windowHeight = window.innerHeight;
+            const windowWidth = window.innerWidth;
+
+            const isSpaceBelow = event.clientY + 200 <= windowHeight;
+            const isSpaceRight = event.clientX + 180 <= windowWidth;
+            const top = isSpaceBelow ? event.clientY : event.clientY - 200;
+            const left = isSpaceRight ? event.clientX : event.clientX - 180;
+
+            setMenuPosition({ top, left });
+            setIsMenuOpenNormal(true);
+
+            // Prevent default browser context menu
+            event.preventDefault();
           }
-        })
-    },[])
+        }
+      });
+
+      return () => {
+        if (observer && scene) {
+          scene.onPointerObservable.remove(observer);
+        }
+      };
+    }, []);
 
     useEffect(() => {
       let observer = null;
@@ -3174,50 +3203,51 @@ const Iroamer = forwardRef(
         setIsMenuOpen(false);
       }
     };
+    const colorInputRef = useRef(null);
 
-    const handleColorChange = () => {
-      if (!sceneRef.current || !selectedMeshRef.current) {
-        console.warn("Scene or selected mesh is not available.");
-        return;
-      }
 
-      const scene = sceneRef.current;
-      const meshes = selectedMeshRef.current;
+  const handleColorChange = () => {
+  if (!sceneRef.current || !selectedMeshRef.current) {
+    console.warn("Scene or selected mesh is not available.");
+    return;
+  }
 
-      // Generate random color
-      const randomColor = Math.floor(Math.random() * 16777215);
-      const color3 = BABYLON.Color3.FromInts(
-        (randomColor >> 16) & 255,
-        (randomColor >> 8) & 255,
-        randomColor & 255
-      );
+  // Trigger the hidden color picker input
+  if (colorInputRef.current) {
+    colorInputRef.current.click();
+  }
+};
+const handleColorSelected = (event) => {
+  const selectedColor = event.target.value; // hex color like "#ff00ff"
 
-      let material;
-      meshes?.forEach((mesh) => {
-        // Handle PBRMaterial
-        if (mesh.material && mesh.material instanceof BABYLON.PBRMaterial) {
-          // Clone material to avoid affecting others
-          const originalMaterial = mesh.material;
-          material = originalMaterial.clone("clonedPBR");
-          material.albedoColor = color3;
-          mesh.material = material;
-        }
-        // Handle StandardMaterial or no material
-        else {
-          material = new BABYLON.StandardMaterial("mat", scene);
-          material.diffuseColor = color3;
-          mesh.material = material;
-        }
+  const scene = sceneRef.current;
+  const meshes = selectedMeshRef.current;
 
-        // Store metadata
-        mesh.metadata = {
-          ...mesh.metadata,
-          color: color3.toHexString(),
-        };
+  if (!scene || !meshes) return;
 
-        setIsMenuOpen(false);
-      });
+  const color3 = BABYLON.Color3.FromHexString(selectedColor);
+
+  meshes.forEach((mesh) => {
+    let material;
+    if (mesh.material && mesh.material instanceof BABYLON.PBRMaterial) {
+      material = mesh.material.clone("clonedPBR");
+      material.albedoColor = color3;
+      mesh.material = material;
+    } else {
+      material = new BABYLON.StandardMaterial("mat", scene);
+      material.diffuseColor = color3;
+      mesh.material = material;
+    }
+
+    mesh.metadata = {
+      ...mesh.metadata,
+      color: color3.toHexString(),
     };
+  });
+
+  setIsMenuOpen(false);
+};
+
 
     const handleSelectTag = () => {
       if (!selectedItemName || !selectedItemName.name) {
@@ -3370,6 +3400,7 @@ const Iroamer = forwardRef(
           mesh.setEnabled(false);
         }
       });
+      setIsMenuOpenNormal(false);
     };
 
     const unhideAllItems = () => {
@@ -3379,6 +3410,7 @@ const Iroamer = forwardRef(
       scene.meshes?.forEach((mesh) => {
         mesh.setEnabled(true);
       });
+      setIsMenuOpenNormal(false);
     };
 
     const handleReload = () => {
@@ -3395,7 +3427,10 @@ const Iroamer = forwardRef(
       setViewHideThreeunassigned({});
       setIsMenuOpen(false);
     };
-
+    const menuOptionsOne = [
+      { label: "Hide all", action: hideAllItems },
+      { label: "Unhide all", action: unhideAllItems },
+    ];
     const menuOptions = [
       { label: taginfo.filename ? `${taginfo.filename}` : "" },
       { label: selectedItemName ? `${selectedItemName.name}` : "" },
@@ -3514,18 +3549,18 @@ const Iroamer = forwardRef(
             mesh.metadata.isHighlighted = true;
           }
 
-          // Bounding box
-          const boundingBox = mesh.getBoundingInfo().boundingBox;
-          const meshMin = boundingBox.minimumWorld;
-          const meshMax = boundingBox.maximumWorld;
+          // // Bounding box
+          // const boundingBox = mesh.getBoundingInfo().boundingBox;
+          // const meshMin = boundingBox.minimumWorld;
+          // const meshMax = boundingBox.maximumWorld;
 
-          if (!min || !max) {
-            min = meshMin.clone();
-            max = meshMax.clone();
-          } else {
-            min = BABYLON.Vector3.Minimize(min, meshMin);
-            max = BABYLON.Vector3.Maximize(max, meshMax);
-          }
+          // if (!min || !max) {
+          //   min = meshMin.clone();
+          //   max = meshMax.clone();
+          // } else {
+          //   min = BABYLON.Vector3.Minimize(min, meshMin);
+          //   max = BABYLON.Vector3.Maximize(max, meshMax);
+          // }
 
           // ✅ Save tagNo for info extraction
           if (!foundTagNo && mesh.metadata?.tagNo) {
@@ -3540,27 +3575,27 @@ const Iroamer = forwardRef(
       }
 
       // ✅ Set camera
-      if (meshesToHighlight.length > 0 && min && max) {
-        const center = min.add(max).scale(0.5);
-        const size = max.subtract(min);
-        const distance = Math.max(size.x, size.y, size.z) * 2;
-        const offset = distance / Math.sqrt(3);
+      // if (meshesToHighlight.length > 0 && min && max) {
+      //   const center = min.add(max).scale(0.5);
+      //   const size = max.subtract(min);
+      //   const distance = Math.max(size.x, size.y, size.z) * 2;
+      //   const offset = distance / Math.sqrt(3);
 
-        const cam = sceneRef.current.activeCamera;
-        if (cam) {
-          cam.position = new BABYLON.Vector3(
-            center.x + offset,
-            center.y + offset,
-            center.z + distance
-          );
-          cam.setTarget(center);
-          //console.log(
-          //   `Camera positioned on highlighted tag group: ${filename}`
-          // );
-        } else {
-          console.warn("No active camera found.");
-        }
-      }
+      //   const cam = sceneRef.current.activeCamera;
+      //   if (cam) {
+      //     cam.position = new BABYLON.Vector3(
+      //       center.x + offset,
+      //       center.y + offset,
+      //       center.z + distance
+      //     );
+      //     cam.setTarget(center);
+      //     //console.log(
+      //     //   `Camera positioned on highlighted tag group: ${filename}`
+      //     // );
+      //   } else {
+      //     console.warn("No active camera found.");
+      //   }
+      // }
 
       // ✅ Set additional info
       if (foundTagNo) {
@@ -3612,22 +3647,71 @@ const Iroamer = forwardRef(
       canvas.addEventListener("contextmenu", handleRightClick);
       return () => canvas.removeEventListener("contextmenu", handleRightClick);
     }, [highlightedTagKey]);
+    const clearAllHighlights = () => {
+      if (!sceneRef.current) return;
+
+      sceneRef.current.meshes?.forEach((mesh) => {
+        if (mesh.metadata?.isHighlighted) {
+          resetMeshHighlight(mesh);
+        }
+      });
+
+      // Also clear the highlight layer
+      dehighlightMesh();
+
+      console.log("Cleared all highlights");
+    };
 
     const removeHighlightForTag = (filename) => {
       if (!sceneRef.current) return;
 
+      const cleanFilename =
+        filename.slice(0, filename.lastIndexOf(".")) || filename;
+      console.log("Removing highlight for:", cleanFilename);
+
       sceneRef.current.meshes?.forEach((mesh) => {
-        if (mesh.metadata?.tag === filename && mesh.metadata.isHighlighted) {
-          if (mesh.material) {
-            if (mesh.material.emissiveColor) {
-              mesh.material.emissiveColor = new BABYLON.Color3(0, 0, 0); // Reset
-            } else if (mesh.material.diffuseColor) {
-              mesh.material.diffuseColor = new BABYLON.Color3(1, 1, 1); // Reset to white
-            }
-          }
-          mesh.metadata.isHighlighted = false;
+        if (mesh.name.includes("__root__") || mesh.name.includes("sky")) return;
+
+        // Check multiple ways the tag might be stored
+        const meshTag = mesh.metadata?.tagNo?.tag || mesh.metadata?.tag;
+        const isHighlighted = mesh.metadata?.isHighlighted;
+
+        if (meshTag === cleanFilename && isHighlighted) {
+          resetMeshHighlight(mesh);
         }
       });
+    };
+
+    // New function to reset individual mesh highlight
+    const resetMeshHighlight = (mesh) => {
+      if (!mesh.material) return;
+
+      try {
+        // Reset emissive color
+        if (mesh.material.emissiveColor) {
+          mesh.material.emissiveColor = new BABYLON.Color3(0, 0, 0);
+        }
+
+        // Reset diffuse color to original or white
+        if (mesh.material.diffuseColor) {
+          // Use original color if stored, otherwise white
+          const originalColor =
+            mesh.metadata?.originalColor || new BABYLON.Color3(1, 1, 1);
+          mesh.material.diffuseColor = originalColor;
+        }
+
+        // Reset albedo color for PBR materials
+        if (mesh.material.albedoColor) {
+          const originalColor =
+            mesh.metadata?.originalColor || new BABYLON.Color3(1, 1, 1);
+          mesh.material.albedoColor = originalColor;
+        }
+
+        mesh.metadata.isHighlighted = false;
+        console.log("Reset highlight for mesh:", mesh.name);
+      } catch (error) {
+        console.error("Error resetting mesh highlight:", error);
+      }
     };
 
     // Updated highlightMesh function with toggle behavior
@@ -6168,8 +6252,49 @@ const Iroamer = forwardRef(
                 </div>
               ))}
           </div>
+          <input
+  type="color"
+  ref={colorInputRef}
+  style={{ display: 'none' }}
+  onChange={handleColorSelected}
+/>
 
-          {/* Right click menu */}
+          {isMenuOpenNormal && (
+            <div
+              className="menu"
+              style={{
+                position: "absolute",
+                maxWidth: "250px",
+                top: `${menuPosition.top - 200}px`,
+                left: `${menuPosition.left - 300}px`,
+                fontSize: "14px",
+                zIndex: 100,
+              }}
+            >
+              {menuOptionsOne?.map((option, index) => (
+                <div
+                  key={index}
+                  className="menu-option"
+                  onClick={option.action}
+                  onMouseEnter={() => setHoveredIndex(index)}
+                  onMouseLeave={() => setHoveredIndex(null)}
+                  style={{
+                    position: "relative",
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    cursor: option.action ? "pointer" : "default",
+                    paddingLeft: "10px",
+                    paddingRight: "10px",
+                  }}
+                >
+                  <span>{option.label}</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Right click menu with select */}
           {isMenuOpen && (
             <div
               className="menu"
