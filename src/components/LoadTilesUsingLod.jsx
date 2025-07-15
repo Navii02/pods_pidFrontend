@@ -179,7 +179,7 @@ const BabylonLODManager = ({
   const commentPositionRef = useRef({ x: 0, y: 0, z: 0 });
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isMenuOpenNormal, setIsMenuOpenNormal] = useState(false);
-  
+
   const [menuPosition, setMenuPosition] = useState({
     top: 0,
     left: 0,
@@ -254,6 +254,74 @@ const BabylonLODManager = ({
     setBackgroundColorTag,
     setview,
   } = useContext(iroamerContext);
+
+  // ========================================================================================
+  const [floatingPosition, setFloatingPosition] = useState({
+    x: menuPosition.left,
+    y: menuPosition.top,
+  });
+  const [size, setSize] = useState({ width: 380, height: 290 });
+  const [dragging, setDragging] = useState(false);
+  const [resizing, setResizing] = useState(false);
+  const [offset, setOffset] = useState({ x: 0, y: 0 });
+  const [isMaximized, setIsMaximized] = useState(false);
+  const [isMinimized, setIsMinimized] = useState(false);
+  const [startSize, setStartSize] = useState({ width: 0, height: 0 });
+  const [startPosition, setStartPosition] = useState({ x: 0, y: 0 });
+
+  // Start dragging
+  const startDrag = (e) => {
+    if (!isMaximized) {
+      e.preventDefault();
+      setDragging(true);
+      setOffset({
+        x: e.clientX - floatingPosition.x,
+        y: e.clientY - floatingPosition.y,
+      });
+    }
+  };
+
+  // Stop dragging and resizing
+  const stopActions = () => {
+    setDragging(false);
+    setResizing(false);
+  };
+  // Handle Resizing & Dragging
+  useEffect(() => {
+    const onMouseMove = (e) => {
+      if (resizing && !isMaximized) {
+        const deltaWidth = e.clientX - startPosition.x;
+        const deltaHeight = e.clientY - startPosition.y;
+
+        setSize({
+          width: Math.max(200, startSize.width + deltaWidth),
+          height: Math.max(100, startSize.height + deltaHeight),
+        });
+      } else if (dragging && !isMaximized) {
+        setFloatingPosition({
+          x: e.clientX - offset.x,
+          y: e.clientY - offset.y,
+        });
+      }
+    };
+
+    const onMouseUp = () => {
+      stopActions();
+    };
+
+    if (resizing || dragging) {
+      window.addEventListener("mousemove", onMouseMove);
+      window.addEventListener("mouseup", onMouseUp);
+    }
+
+    return () => {
+      window.removeEventListener("mousemove", onMouseMove);
+      window.removeEventListener("mouseup", onMouseUp);
+    };
+  }, [resizing, dragging, offset, startPosition, startSize, isMaximized]);
+
+  // ==========================================================================================
+
   const fetchAllProjectData = async () => {
     try {
       const areasResponse = await getProjectArea(selectedProject.projectId, {
@@ -354,7 +422,7 @@ const BabylonLODManager = ({
     scene.onPointerDown = function (evt, pickResult) {
       if (evt.button === 0 && !pickResult.hit) {
         dehighlightMesh();
-                    setIsMenuOpenNormal(false);
+        setIsMenuOpenNormal(false);
 
         setHighlightedTagKeyGlobal(""); // Or however you're clearing it
         selectedMeshRef.current = [];
@@ -367,40 +435,40 @@ const BabylonLODManager = ({
     };
   });
 
-useEffect(() => {
-  const scene = sceneRef.current;
-  if (!scene) return; // ✅ Exit early if scene is not ready
+  useEffect(() => {
+    const scene = sceneRef.current;
+    if (!scene) return; // ✅ Exit early if scene is not ready
 
-  const observer = scene.onPointerObservable.add((pointerInfo) => {
-    const { event, type } = pointerInfo;
-    if (type === BABYLON.PointerEventTypes.POINTERDOWN) {
-      const isRightClick = event.button === 2;
-      if (isRightClick) {
-        console.log("Right click detected");
+    const observer = scene.onPointerObservable.add((pointerInfo) => {
+      const { event, type } = pointerInfo;
+      if (type === BABYLON.PointerEventTypes.POINTERDOWN) {
+        const isRightClick = event.button === 2;
+        if (isRightClick) {
+          console.log("Right click detected");
 
-        const windowHeight = window.innerHeight;
-        const windowWidth = window.innerWidth;
+          const windowHeight = window.innerHeight;
+          const windowWidth = window.innerWidth;
 
-        const isSpaceBelow = event.clientY + 200 <= windowHeight;
-        const isSpaceRight = event.clientX + 180 <= windowWidth;
-        const top = isSpaceBelow ? event.clientY : event.clientY - 200;
-        const left = isSpaceRight ? event.clientX : event.clientX - 180;
+          const isSpaceBelow = event.clientY + 200 <= windowHeight;
+          const isSpaceRight = event.clientX + 180 <= windowWidth;
+          const top = isSpaceBelow ? event.clientY : event.clientY - 200;
+          const left = isSpaceRight ? event.clientX : event.clientX - 180;
 
-        setMenuPosition({ top, left });
-        setIsMenuOpenNormal(true);
+          setMenuPosition({ top, left });
+          setIsMenuOpenNormal(true);
+          setFloatingPosition({ x: left, y: top });
 
-        event.preventDefault(); // Prevent default context menu
+          event.preventDefault(); // Prevent default context menu
+        }
       }
-    }
-  });
+    });
 
-  return () => {
-    if (observer && scene) {
-      scene.onPointerObservable.remove(observer);
-    }
-  };
-}, [sceneRef.current]); // 👈 rerun when sceneRef.current changes
-
+    return () => {
+      if (observer && scene) {
+        scene.onPointerObservable.remove(observer);
+      }
+    };
+  }, [sceneRef.current]); // 👈 rerun when sceneRef.current changes
 
   const highlightTagByParentFileName = (parentFileName) => {
     console.log("🔍 Searching for parentFileName in tree:", parentFileName);
@@ -2403,7 +2471,7 @@ useEffect(() => {
       className="speed-bar"
       style={{
         position: "absolute",
-        top: "75vh",
+        bottom: "10px",
         left: 0,
         zIndex: 100,
         padding: "10px",
@@ -3286,7 +3354,7 @@ useEffect(() => {
     const left = isSpaceRight ? x : x - 180;
 
     setMenuPosition({ top, left });
-
+    setFloatingPosition({ x: left, y: top });
     // if (selectedItem) {
     setRightClickCoordinates({ x: top, y: left });
     setIsMenuOpen(true);
@@ -4177,30 +4245,41 @@ useEffect(() => {
         `🔧 Attempting to remove indices from ${startIdx} to ${endIdx}`
       );
 
-    // FIXED: Validate against original indices, not current indices
-    if (startIdx < 0 || endIdx > originalIndices.length || startIdx >= endIdx) {
-      console.error("❌ Invalid index range against original mesh:", { 
-        startIdx, 
-        endIdx, 
-        originalIndicesLength: originalIndices.length,
-        currentIndicesLength: workingIndices.length 
-      });
-      throw new Error("Invalid index range against original mesh");
-    }
-    const indicesToRemove = new Set();
-    
-    // Build a map of original index positions to current positions
-    const originalToCurrent = new Map();
-    let currentPos = 0;
-    
-    for (let originalPos = 0; originalPos < originalIndices.length; originalPos++) {
-      // Check if this original index still exists in current indices
-      if (currentPos < workingIndices.length && workingIndices[currentPos] === originalIndices[originalPos]) {
-        originalToCurrent.set(originalPos, currentPos);
-        currentPos++;
+      // FIXED: Validate against original indices, not current indices
+      if (
+        startIdx < 0 ||
+        endIdx > originalIndices.length ||
+        startIdx >= endIdx
+      ) {
+        console.error("❌ Invalid index range against original mesh:", {
+          startIdx,
+          endIdx,
+          originalIndicesLength: originalIndices.length,
+          currentIndicesLength: workingIndices.length,
+        });
+        throw new Error("Invalid index range against original mesh");
       }
-      // If index was already removed, it won't be in the map
-    }
+      const indicesToRemove = new Set();
+
+      // Build a map of original index positions to current positions
+      const originalToCurrent = new Map();
+      let currentPos = 0;
+
+      for (
+        let originalPos = 0;
+        originalPos < originalIndices.length;
+        originalPos++
+      ) {
+        // Check if this original index still exists in current indices
+        if (
+          currentPos < workingIndices.length &&
+          workingIndices[currentPos] === originalIndices[originalPos]
+        ) {
+          originalToCurrent.set(originalPos, currentPos);
+          currentPos++;
+        }
+        // If index was already removed, it won't be in the map
+      }
 
       // Mark indices for removal based on original range
       for (let originalPos = startIdx; originalPos < endIdx; originalPos++) {
@@ -5003,14 +5082,12 @@ useEffect(() => {
         case "Hide all":
           hideAllEnhanced();
           setIsMenuOpen(false);
-          setIsMenuOpenNormal(false);
 
           break;
 
         case "Unhide all":
           unhideAllEnhanced();
           setIsMenuOpen(false);
-          setIsMenuOpenNormal(false);
 
           break;
 
@@ -5076,16 +5153,16 @@ useEffect(() => {
       handleShowlineEqpInfo,
     ]
   );
-    const menuOptionsOne = [
-  {
-          label: "Hide all",
-          action: () => handleMenuOptionClick({ label: "Hide all" }),
-        },
-        {
-          label: "Unhide all",
-          action: () => handleMenuOptionClick({ label: "Unhide all" }),
-        },
-    ];
+  const menuOptionsOne = [
+    {
+      label: "Hide all",
+      action: () => handleMenuOptionClick({ label: "Hide all" }),
+    },
+    {
+      label: "Unhide all",
+      action: () => handleMenuOptionClick({ label: "Unhide all" }),
+    },
+  ];
 
   const menuOptions = [
     { label: selectedItemName ? `${selectedItemName.parentFileName}` : "" },
@@ -6418,7 +6495,7 @@ useEffect(() => {
       <div
         style={{
           position: "absolute",
-          bottom: "10px",
+          top: "20px",
           left: "10px",
           display: "flex",
           flexDirection: "column",
@@ -6426,14 +6503,12 @@ useEffect(() => {
         }}
       >
         <button
-          style={{ zIndex: "1000" }}
+          style={{ zIndex: "1000", backgroundColor: "#5B66CB" }}
           onClick={loadMergedPolyMeshesWithWorkers}
-          className="btn btn-success mb-3"
+          className="btn mb-3"
         >
           open Model
         </button>
-
-       
 
         {/* WebXR Camera Button - only show if supported */}
         {isXRSupported && (
@@ -6463,55 +6538,58 @@ useEffect(() => {
           </div>
         )}
       </div>
-            {/* Right click menu with out select*/}
-
-
-          {isMenuOpenNormal && (
-            <div
-              className="menu"
-              style={{
-                position: "absolute",
-                maxWidth: "250px",
-                top: `${menuPosition.top - 200}px`,
-                left: `${menuPosition.left - 300}px`,
-                fontSize: "14px",
-                zIndex: 100,
-              }}
-            >
-              {menuOptionsOne?.map((option, index) => (
-                <div
-                  key={index}
-                  className="menu-option"
-                  onClick={option.action}
-                  onMouseEnter={() => setHoveredIndex(index)}
-                  onMouseLeave={() => setHoveredIndex(null)}
-                  style={{
-                    position: "relative",
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    cursor: option.action ? "pointer" : "default",
-                    paddingLeft: "10px",
-                    paddingRight: "10px",
-                  }}
-                >
-                  <span>{option.label}</span>
-                </div>
-              ))}
-            </div>
-          )}
+      {/* Right click menu with out select*/}
+      {isMenuOpenNormal && (
+        <div
+          className="menu"
+          style={{
+            position: "fixed",
+            zIndex: 2,
+            transform: "translateZ(0)",
+            willChange: "transform",
+            top: floatingPosition.y,
+            left: floatingPosition.x,
+          }}
+          onMouseDown={startDrag}
+        >
+          <div>
+            {menuOptionsOne?.map((option, index) => (
+              <div
+                key={index}
+                className="menu-option"
+                onClick={option.action}
+                onMouseEnter={() => setHoveredIndex(index)}
+                onMouseLeave={() => setHoveredIndex(null)}
+                style={{
+                  position: "relative",
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  cursor: option.action ? "pointer" : "default",
+                  paddingLeft: "10px",
+                  paddingRight: "10px",
+                }}
+              >
+                <span>{option.label}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Right click menu with select*/}
       {isMenuOpen && (
         <div
           className="menu"
           style={{
-            position: "absolute",
-            maxWidth: "250px",
-            top: `${menuPosition.top - 200}px`,
-            left: `${menuPosition.left - 300}px`,
-            fontSize: "14px",
+            position: "fixed",
+            zIndex: 2,
+            transform: "translateZ(0)",
+            willChange: "transform",
+            top: floatingPosition.y,
+            left: floatingPosition.x,
           }}
+          onMouseDown={startDrag}
         >
           {menuOptions.map((option, index) => (
             <div
@@ -8136,6 +8214,15 @@ useEffect(() => {
       )}
     </div>
   );
+};
+// Styles remain the same
+const buttonStyle = {
+  background: "transparent",
+  color: "white",
+  border: "none",
+  cursor: "pointer",
+  fontSize: "16px",
+  marginRight: "8px",
 };
 
 export default BabylonLODManager;

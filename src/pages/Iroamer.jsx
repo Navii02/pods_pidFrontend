@@ -434,6 +434,74 @@ const Iroamer = forwardRef(
     const projectString = sessionStorage.getItem("selectedProject");
     const project = projectString ? JSON.parse(projectString) : null;
     const projectId = project?.projectId;
+
+    // ========================================================================================
+    const [floatingPosition, setFloatingPosition] = useState({
+      x: menuPosition.left,
+      y: menuPosition.top,
+    });
+    const [size, setSize] = useState({ width: 380, height: 290 });
+    const [dragging, setDragging] = useState(false);
+    const [resizing, setResizing] = useState(false);
+    const [offset, setOffset] = useState({ x: 0, y: 0 });
+    const [isMaximized, setIsMaximized] = useState(false);
+    const [isMinimized, setIsMinimized] = useState(false);
+    const [startSize, setStartSize] = useState({ width: 0, height: 0 });
+    const [startPosition, setStartPosition] = useState({ x: 0, y: 0 });
+
+    // Start dragging
+    const startDrag = (e) => {
+      if (!isMaximized) {
+        e.preventDefault();
+        setDragging(true);
+        setOffset({
+          x: e.clientX - floatingPosition.x,
+          y: e.clientY - floatingPosition.y,
+        });
+      }
+    };
+
+    // Stop dragging and resizing
+    const stopActions = () => {
+      setDragging(false);
+      setResizing(false);
+    };
+    // Handle Resizing & Dragging
+    useEffect(() => {
+      const onMouseMove = (e) => {
+        if (resizing && !isMaximized) {
+          const deltaWidth = e.clientX - startPosition.x;
+          const deltaHeight = e.clientY - startPosition.y;
+
+          setSize({
+            width: Math.max(200, startSize.width + deltaWidth),
+            height: Math.max(100, startSize.height + deltaHeight),
+          });
+        } else if (dragging && !isMaximized) {
+          setFloatingPosition({
+            x: e.clientX - offset.x,
+            y: e.clientY - offset.y,
+          });
+        }
+      };
+
+      const onMouseUp = () => {
+        stopActions();
+      };
+
+      if (resizing || dragging) {
+        window.addEventListener("mousemove", onMouseMove);
+        window.addEventListener("mouseup", onMouseUp);
+      }
+
+      return () => {
+        window.removeEventListener("mousemove", onMouseMove);
+        window.removeEventListener("mouseup", onMouseUp);
+      };
+    }, [resizing, dragging, offset, startPosition, startSize, isMaximized]);
+
+    // ==========================================================================================
+
     useEffect(() => {
       if (!sceneRef.current) return;
       const scene = sceneRef.current;
@@ -623,9 +691,7 @@ const Iroamer = forwardRef(
       scene.onPointerDown = function (evt, pickResult) {
         if (evt.button === 0 && !pickResult.hit) {
           setIsMenuOpenNormal(false);
-
           dehighlightMesh();
-          clearAllHighlights();
           setHighlightedTagKey(""); // Or however you're clearing it
           selectedMeshRef.current = [];
           setFileInfoDetails(null); // Clear file info
@@ -1800,6 +1866,8 @@ const Iroamer = forwardRef(
             const left = isSpaceRight ? event.clientX : event.clientX - 180;
 
             setMenuPosition({ top, left });
+            setFloatingPosition({ x: left, y: top });
+
             setIsMenuOpenNormal(true);
 
             // Prevent default browser context menu
@@ -1817,7 +1885,7 @@ const Iroamer = forwardRef(
 
     useEffect(() => {
       let observer = null;
-      if (selectedItem) {
+      if (selectedItem || highlightedTagKey) {
         if (!sceneRef.current) return;
         const scene = sceneRef.current;
         const canvas = scene.getEngine().getRenderingCanvas();
@@ -1962,7 +2030,7 @@ const Iroamer = forwardRef(
           }
         };
       }
-    }, [selectedItem]);
+    }, [selectedItem, highlightedTagKey]);
 
     // useEffect for measurement functionality
     useEffect(() => {
@@ -3179,10 +3247,12 @@ const Iroamer = forwardRef(
       const left = isSpaceRight ? x : x - 180;
 
       setMenuPosition({ top, left });
-
+      setFloatingPosition({ x: left, y: top });
       // if (selectedItem) {
       setRightClickCoordinates({ x: top, y: left });
       setIsMenuOpen(true);
+      setIsMenuOpenNormal(false);
+
       // } else {
       //   //console.log("No mesh selected for context menu");
       // }
@@ -3205,49 +3275,47 @@ const Iroamer = forwardRef(
     };
     const colorInputRef = useRef(null);
 
+    const handleColorChange = () => {
+      if (!sceneRef.current || !selectedMeshRef.current) {
+        console.warn("Scene or selected mesh is not available.");
+        return;
+      }
 
-  const handleColorChange = () => {
-  if (!sceneRef.current || !selectedMeshRef.current) {
-    console.warn("Scene or selected mesh is not available.");
-    return;
-  }
-
-  // Trigger the hidden color picker input
-  if (colorInputRef.current) {
-    colorInputRef.current.click();
-  }
-};
-const handleColorSelected = (event) => {
-  const selectedColor = event.target.value; // hex color like "#ff00ff"
-
-  const scene = sceneRef.current;
-  const meshes = selectedMeshRef.current;
-
-  if (!scene || !meshes) return;
-
-  const color3 = BABYLON.Color3.FromHexString(selectedColor);
-
-  meshes.forEach((mesh) => {
-    let material;
-    if (mesh.material && mesh.material instanceof BABYLON.PBRMaterial) {
-      material = mesh.material.clone("clonedPBR");
-      material.albedoColor = color3;
-      mesh.material = material;
-    } else {
-      material = new BABYLON.StandardMaterial("mat", scene);
-      material.diffuseColor = color3;
-      mesh.material = material;
-    }
-
-    mesh.metadata = {
-      ...mesh.metadata,
-      color: color3.toHexString(),
+      // Trigger the hidden color picker input
+      if (colorInputRef.current) {
+        colorInputRef.current.click();
+      }
     };
-  });
+    const handleColorSelected = (event) => {
+      const selectedColor = event.target.value; // hex color like "#ff00ff"
 
-  setIsMenuOpen(false);
-};
+      const scene = sceneRef.current;
+      const meshes = selectedMeshRef.current;
 
+      if (!scene || !meshes) return;
+
+      const color3 = BABYLON.Color3.FromHexString(selectedColor);
+
+      meshes.forEach((mesh) => {
+        let material;
+        if (mesh.material && mesh.material instanceof BABYLON.PBRMaterial) {
+          material = mesh.material.clone("clonedPBR");
+          material.albedoColor = color3;
+          mesh.material = material;
+        } else {
+          material = new BABYLON.StandardMaterial("mat", scene);
+          material.diffuseColor = color3;
+          mesh.material = material;
+        }
+
+        mesh.metadata = {
+          ...mesh.metadata,
+          color: color3.toHexString(),
+        };
+      });
+
+      setIsMenuOpen(false);
+    };
 
     const handleSelectTag = () => {
       if (!selectedItemName || !selectedItemName.name) {
@@ -3400,7 +3468,6 @@ const handleColorSelected = (event) => {
           mesh.setEnabled(false);
         }
       });
-      setIsMenuOpenNormal(false);
     };
 
     const unhideAllItems = () => {
@@ -3410,7 +3477,6 @@ const handleColorSelected = (event) => {
       scene.meshes?.forEach((mesh) => {
         mesh.setEnabled(true);
       });
-      setIsMenuOpenNormal(false);
     };
 
     const handleReload = () => {
@@ -3532,8 +3598,6 @@ const handleColorSelected = (event) => {
         if (mesh.name.includes("__root__") || mesh.name.includes("sky")) return;
 
         if (mesh.metadata && mesh.metadata.tagNo.tag === filename) {
-          //console.log("sdgsd");
-
           meshesToHighlight.push(mesh);
 
           // Highlight logic
@@ -3647,71 +3711,38 @@ const handleColorSelected = (event) => {
       canvas.addEventListener("contextmenu", handleRightClick);
       return () => canvas.removeEventListener("contextmenu", handleRightClick);
     }, [highlightedTagKey]);
-    const clearAllHighlights = () => {
-      if (!sceneRef.current) return;
-
-      sceneRef.current.meshes?.forEach((mesh) => {
-        if (mesh.metadata?.isHighlighted) {
-          resetMeshHighlight(mesh);
-        }
-      });
-
-      // Also clear the highlight layer
-      dehighlightMesh();
-
-      console.log("Cleared all highlights");
-    };
 
     const removeHighlightForTag = (filename) => {
       if (!sceneRef.current) return;
 
-      const cleanFilename =
-        filename.slice(0, filename.lastIndexOf(".")) || filename;
-      console.log("Removing highlight for:", cleanFilename);
-
-      sceneRef.current.meshes?.forEach((mesh) => {
-        if (mesh.name.includes("__root__") || mesh.name.includes("sky")) return;
-
-        // Check multiple ways the tag might be stored
-        const meshTag = mesh.metadata?.tagNo?.tag || mesh.metadata?.tag;
-        const isHighlighted = mesh.metadata?.isHighlighted;
-
-        if (meshTag === cleanFilename && isHighlighted) {
-          resetMeshHighlight(mesh);
+      sceneRef.current.meshes.forEach((mesh) => {
+        if (mesh.metadata?.tag === filename && mesh.metadata.isHighlighted) {
+          if (mesh.material) {
+            if (mesh.material.emissiveColor) {
+              mesh.material.emissiveColor = new BABYLON.Color3(0, 0, 0); // Reset
+            } else if (mesh.material.diffuseColor) {
+              mesh.material.diffuseColor = new BABYLON.Color3(1, 1, 1); // Reset to white
+            }
+          }
+          mesh.metadata.isHighlighted = false;
         }
       });
-    };
-
-    // New function to reset individual mesh highlight
-    const resetMeshHighlight = (mesh) => {
-      if (!mesh.material) return;
-
-      try {
-        // Reset emissive color
-        if (mesh.material.emissiveColor) {
-          mesh.material.emissiveColor = new BABYLON.Color3(0, 0, 0);
+      sceneRef.current.meshes.forEach((mesh) => {
+        // Fix: Use the same property path as in highlightTagInScene
+        if (
+          mesh.metadata?.tagNo?.filename === filename &&
+          mesh.metadata.isHighlighted
+        ) {
+          if (mesh.material) {
+            if (mesh.material.emissiveColor) {
+              mesh.material.emissiveColor = new BABYLON.Color3(0, 0, 0); // Reset
+            } else if (mesh.material.diffuseColor) {
+              mesh.material.diffuseColor = new BABYLON.Color3(1, 1, 1); // Reset to white
+            }
+          }
+          mesh.metadata.isHighlighted = false;
         }
-
-        // Reset diffuse color to original or white
-        if (mesh.material.diffuseColor) {
-          // Use original color if stored, otherwise white
-          const originalColor =
-            mesh.metadata?.originalColor || new BABYLON.Color3(1, 1, 1);
-          mesh.material.diffuseColor = originalColor;
-        }
-
-        // Reset albedo color for PBR materials
-        if (mesh.material.albedoColor) {
-          const originalColor =
-            mesh.metadata?.originalColor || new BABYLON.Color3(1, 1, 1);
-          mesh.material.albedoColor = originalColor;
-        }
-
-        mesh.metadata.isHighlighted = false;
-        console.log("Reset highlight for mesh:", mesh.name);
-      } catch (error) {
-        console.error("Error resetting mesh highlight:", error);
-      }
+      });
     };
 
     // Updated highlightMesh function with toggle behavior
@@ -4987,7 +5018,7 @@ const handleColorSelected = (event) => {
         className="speed-bar"
         style={{
           position: "absolute",
-          top: "75vh",
+          bottom: "10px",
           left: 0,
           zIndex: 100,
           padding: "10px",
@@ -6252,61 +6283,77 @@ const handleColorSelected = (event) => {
                 </div>
               ))}
           </div>
-          <input
-  type="color"
-  ref={colorInputRef}
-  style={{ display: 'none' }}
-  onChange={handleColorSelected}
-/>
+          <div
+            style={{
+              position: "absolute",
+              top: "10px",
+              left: "100px",
+            }}
+          >
+            <input
+              type="color"
+              ref={colorInputRef}
+              style={{
+                display: "none",
+              }}
+              onChange={handleColorSelected}
+            />
+          </div>
 
+          {/* Right click menu with out select*/}
           {isMenuOpenNormal && (
             <div
               className="menu"
               style={{
-                position: "absolute",
-                maxWidth: "250px",
-                top: `${menuPosition.top - 200}px`,
-                left: `${menuPosition.left - 300}px`,
-                fontSize: "14px",
-                zIndex: 100,
+                position: "fixed",
+                zIndex: 2,
+                transform: "translateZ(0)",
+                willChange: "transform",
+                top: floatingPosition.y,
+                left: floatingPosition.x,
               }}
+              onMouseDown={startDrag}
             >
-              {menuOptionsOne?.map((option, index) => (
-                <div
-                  key={index}
-                  className="menu-option"
-                  onClick={option.action}
-                  onMouseEnter={() => setHoveredIndex(index)}
-                  onMouseLeave={() => setHoveredIndex(null)}
-                  style={{
-                    position: "relative",
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    cursor: option.action ? "pointer" : "default",
-                    paddingLeft: "10px",
-                    paddingRight: "10px",
-                  }}
-                >
-                  <span>{option.label}</span>
-                </div>
-              ))}
+              <div>
+                {menuOptionsOne?.map((option, index) => (
+                  <div
+                    key={index}
+                    className="menu-option"
+                    onClick={option.action}
+                    onMouseEnter={() => setHoveredIndex(index)}
+                    onMouseLeave={() => setHoveredIndex(null)}
+                    style={{
+                      position: "relative",
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      cursor: option.action ? "pointer" : "default",
+                      paddingLeft: "10px",
+                      paddingRight: "10px",
+                    }}
+                  >
+                    <span>{option.label}</span>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
 
-          {/* Right click menu with select */}
+          {/* Right click menu with select*/}
           {isMenuOpen && (
             <div
               className="menu"
               style={{
-                position: "absolute",
-                maxWidth: "250px",
-                top: `${menuPosition.top - 200}px`,
-                left: `${menuPosition.left - 300}px`,
-                fontSize: "14px",
+                position: "fixed",
+                zIndex: 2,
+                transform: "translateZ(0)",
+                willChange: "transform",
+                top: floatingPosition.y,
+                left: floatingPosition.x,
               }}
+              onMouseDown={startDrag}
             >
-              {menuOptions?.map((option, index) => (
+              {menuOptions.map((option, index) => (
                 <div
                   key={index}
                   className="menu-option"
@@ -6322,9 +6369,7 @@ const handleColorSelected = (event) => {
                     paddingLeft: "10px",
                     paddingRight: "10px",
                     fontWeight:
-                      (selectedItemName &&
-                        option.label === selectedItemName.name) ||
-                      option.label === taginfo.filename
+                      selectedItemName && option.label === selectedItemName.name
                         ? "bold"
                         : "normal",
                   }}
@@ -6339,7 +6384,7 @@ const handleColorSelected = (event) => {
                       className="submenu"
                       style={{ position: "absolute", left: "100%", top: 0 }}
                     >
-                      {option.children?.map((subOption, subIndex) => (
+                      {option.children.map((subOption, subIndex) => (
                         <div
                           key={subIndex}
                           className="menu-option"
@@ -6360,7 +6405,6 @@ const handleColorSelected = (event) => {
               ))}
             </div>
           )}
-
           {showMeasure && (
             <>
               <div

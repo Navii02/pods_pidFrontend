@@ -40,16 +40,16 @@ export const zoomOnSelectedMesh = (scene, meshes) => {
               center.y + offset,
               center.z + distance
             );
-            // camera.setTarget(center);
+            camera.setTarget(center);
            
-  // if (camera instanceof BABYLON.ArcRotateCamera) {
+  if (camera instanceof BABYLON.ArcRotateCamera) {
    
-  // } 
-  // else if (camera instanceof BABYLON.FreeCamera) {
-  //   const direction = camera.getDirection(BABYLON.Vector3.Forward());
-  //   const newPosition = center.subtract(direction.scale(distance));
-  //   camera.position = newPosition;
-  //   camera.setTarget(center);
-  // }
+  } 
+  else if (camera instanceof BABYLON.FreeCamera) {
+    const direction = camera.getDirection(BABYLON.Vector3.Forward());
+    const newPosition = center.subtract(direction.scale(distance));
+    camera.position = newPosition;
+    camera.setTarget(center);
+  }
 };
 

@@ -56,6 +56,18 @@ const TagEntityModal = ({
     }
   }, [selectedProject]);
 
+  // Clean up selected tags when tags become assigned
+  useEffect(() => {
+    if (selectedTags.length > 0) {
+      const availableTags = selectedTags.filter(tagNumber => 
+        !tagsMapArray.some(t => t.tag === tagNumber)
+      );
+      if (availableTags.length !== selectedTags.length) {
+        setSelectedTags(availableTags);
+      }
+    }
+  }, [tagsMapArray, selectedTags]);
+
   const fetchProjectTags = async () => {
     try {
       setIsLoadingTags(true);
@@ -82,7 +94,6 @@ const TagEntityModal = ({
     } catch (error) {
       console.error("Error fetching parent tags:", error);
       setCustomAlert(true);
-
       setModalMessage("Failed to fetch parent tags. Please try again.");
     } finally {
       setIsLoadingParentTags(false);
@@ -96,10 +107,13 @@ const TagEntityModal = ({
     );
   };
 
-  // Select all filtered tags
+  // Select all filtered tags that are not assigned anywhere
   const handleSelectAll = () => {
-    const filteredTagNumbers = filteredTags.map((tag) => tag.number);
-    setSelectedTags((prev) => [...new Set([...prev, ...filteredTagNumbers])]);
+    const selectableTagNumbers = filteredTags
+      .filter(tag => !tagsMapArray.some(t => t.tag === tag.number)) // Only unassigned tags
+      .map(tag => tag.number);
+      
+    setSelectedTags((prev) => [...new Set([...prev, ...selectableTagNumbers])]);
   };
 
   // Clear all selected tags
@@ -115,9 +129,37 @@ const TagEntityModal = ({
       return;
     }
 
+    // Filter out any already assigned tags from selection (safety check)
+    const availableTagsToAssign = selectedTags.filter(tagNumber => 
+      !tagsMapArray.some(t => t.tag === tagNumber)
+    );
+
+    if (availableTagsToAssign.length === 0) {
+      setCustomAlert(true);
+      setModalMessage("No available tags to assign. All selected tags are already assigned.");
+      return;
+    }
+
+    // Double-check for tags already assigned ANYWHERE in the project
+    const alreadyAssignedTags = availableTagsToAssign.filter(tagNumber => 
+      tagsMapArray.some(t => t.tag === tagNumber)
+    );
+
+    if (alreadyAssignedTags.length > 0) {
+      // Get details of where these tags are assigned
+      const assignmentDetails = alreadyAssignedTags.map(tagNumber => {
+        const location = tagsMapArray.find(t => t.tag === tagNumber);
+        return `${tagNumber} (assigned to ${location.area}/${location.disc}/${location.sys})`;
+      });
+      
+      setCustomAlert(true);
+      setModalMessage(`Some tags are already assigned in this project:\n${assignmentDetails.join('\n')}`);
+      return;
+    }
+
     try {
       setIsLoading(true);
-      for (const tagNumber of selectedTags) {
+      for (const tagNumber of availableTagsToAssign) {
         const tag = tags.find((t) => t.number === tagNumber);
         if (!tag) continue;
 
@@ -152,7 +194,6 @@ const TagEntityModal = ({
     } catch (error) {
       console.error("Failed to assign tags:", error);
       setCustomAlert(true);
-
       setModalMessage(`Failed to assign tags: ${error.message}`);
     } finally {
       setIsLoading(false);
@@ -184,19 +225,16 @@ const TagEntityModal = ({
   const validateForm = () => {
     if (!selectedProject?.projectId) {
       setCustomAlert(true);
-
       setModalMessage("No project selected. Please select a project first.");
       return false;
     }
     if (!formData.tagNumber.trim()) {
       setCustomAlert(true);
-
       setModalMessage("Tag number is required");
       return false;
     }
     if (!formData.type) {
       setCustomAlert(true);
-
       setModalMessage("Tag type is required");
       return false;
     }
@@ -237,7 +275,7 @@ const TagEntityModal = ({
     }
   };
 
-  // Memoized filtered tags
+  // Memoized filtered tags with project-wide uniqueness
   const filteredTags = useMemo(() => {
     return tags
       .filter((tag) =>
@@ -245,31 +283,37 @@ const TagEntityModal = ({
       )
       .filter((tag) => (typeFilter === "all" ? true : tag.type === typeFilter))
       .filter((tag) => {
-        const isAssigned = tagsMapArray.some(
+        // Check if tag is assigned ANYWHERE in the project
+        const isAssignedInProject = tagsMapArray.some(
+          (t) => t.tag === tag.number
+        );
+        
+        // Check if tag is assigned to the CURRENT system specifically
+        const isAssignedToCurrentSys = tagsMapArray.some(
           (t) =>
             t.area === showTagModalFor?.area &&
             t.disc === showTagModalFor?.disc &&
             t.sys === showTagModalFor?.sys &&
             t.tag === tag.number
         );
-        if (assignmentFilter === "assigned") return isAssigned;
-        if (assignmentFilter === "unassigned") return !isAssigned;
-        return true;
+
+        if (assignmentFilter === "assigned") {
+          // Show only tags assigned to the current system
+          return isAssignedToCurrentSys;
+        }
+        if (assignmentFilter === "unassigned") {
+          // Show only tags that are NOT assigned ANYWHERE in the project
+          return !isAssignedInProject;
+        }
+        return true; // Show all tags when filter is "all"
       })
       .sort((a, b) => {
+        // Sort based on whether tag is assigned anywhere in the project
         const aAssigned = tagsMapArray.some(
-          (t) =>
-            t.area === showTagModalFor?.area &&
-            t.disc === showTagModalFor?.disc &&
-            t.sys === showTagModalFor?.sys &&
-            t.tag === a.number
+          (t) => t.tag === a.number
         );
         const bAssigned = tagsMapArray.some(
-          (t) =>
-            t.area === showTagModalFor?.area &&
-            t.disc === showTagModalFor?.disc &&
-            t.sys === showTagModalFor?.sys &&
-            t.tag === b.number
+          (t) => t.tag === b.number
         );
         return aAssigned === bAssigned ? 0 : aAssigned ? 1 : -1;
       });
@@ -375,10 +419,12 @@ const TagEntityModal = ({
                       style={{ width: "15px", height: "15px" }}
                       checked={
                         filteredTags.length > 0 &&
-                        filteredTags.every((tag) =>
-                          selectedTags.includes(tag.number)
-                        )
+                        filteredTags
+                          .filter(tag => !tagsMapArray.some(t => t.tag === tag.number)) // Only unassigned tags
+                          .every((tag) => selectedTags.includes(tag.number)) &&
+                        filteredTags.filter(tag => !tagsMapArray.some(t => t.tag === tag.number)).length > 0
                       }
+                      disabled={filteredTags.filter(tag => !tagsMapArray.some(t => t.tag === tag.number)).length === 0}
                       onChange={(e) =>
                         e.target.checked ? handleSelectAll() : handleClearAll()
                       }
@@ -393,13 +439,30 @@ const TagEntityModal = ({
                 </li>
 
                 {/* Individual Tags */}
+                {/* 
+                  Tag Status Logic:
+                  - Green: Assigned to current system (disabled/not clickable)
+                  - Orange: Assigned to different area/disc/sys (disabled/not clickable)
+                  - Red: Unassigned (enabled/clickable)
+                */}
                 {filteredTags.map((tag, index) => {
-                  const isAssigned = tagsMapArray.some(
+                  // Check if assigned to current system
+                  const isAssignedToCurrentSys = tagsMapArray.some(
                     (t) =>
                       t.area === showTagModalFor?.area &&
                       t.disc === showTagModalFor?.disc &&
                       t.sys === showTagModalFor?.sys &&
                       t.tag === tag.number
+                  );
+                  
+                  // Check if assigned anywhere in the project
+                  const isAssignedInProject = tagsMapArray.some(
+                    (t) => t.tag === tag.number
+                  );
+                  
+                  // Find where the tag is assigned (if anywhere)
+                  const assignedLocation = tagsMapArray.find(
+                    (t) => t.tag === tag.number
                   );
 
                   return (
@@ -410,6 +473,7 @@ const TagEntityModal = ({
                         display: "flex",
                         justifyContent: "space-between",
                         alignItems: "center",
+                        opacity: isAssignedInProject ? 0.5 : 1, // Dim all assigned tags
                       }}
                     >
                       <div className="d-flex align-items-center">
@@ -419,16 +483,24 @@ const TagEntityModal = ({
                             marginRight: "5px",
                             width: "15px",
                             height: "15px",
+                            cursor: isAssignedInProject ? "not-allowed" : "pointer",
                           }}
                           checked={selectedTags.includes(tag.number)}
                           onChange={(e) =>
                             handleTagSelection(tag.number, e.target.checked)
                           }
+                          disabled={isAssignedInProject} // Disable if assigned anywhere in project
                         />
-                        <span style={{ margin: 0 }}>
+                        <span 
+                          style={{ 
+                            margin: 0,
+                            cursor: isAssignedInProject ? "not-allowed" : "default",
+                          }}
+                        >
                           {tag.number.length > 17
                             ? `${tag.number.slice(0, 17)}...`
                             : tag.number}
+                          {isAssignedInProject && ""} {/* Lock 🔒 icon for assigned tags */}
                         </span>
                       </div>
 
@@ -443,11 +515,19 @@ const TagEntityModal = ({
                         <span
                           style={{
                             fontSize: "0.75rem",
-                            color: isAssigned ? "green" : "red",
+                            color: isAssignedToCurrentSys 
+                              ? "green" 
+                              : isAssignedInProject 
+                                ? "orange" 
+                                : "red",
                             fontWeight: "bold",
                           }}
                         >
-                          {isAssigned ? "Assigned" : "Unassigned"}
+                          {isAssignedToCurrentSys 
+                            ? "Assigned" 
+                            : isAssignedInProject 
+                              ? `Assigned to ${assignedLocation?.area}` 
+                              : "Unassigned"}
                         </span>
                       </div>
                     </li>
