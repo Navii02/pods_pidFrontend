@@ -47,6 +47,8 @@ const Tagreview = () => {
   const [modalMessage, setModalMessage] = useState("");
   const navigate = useNavigate();
   const [selectedTagIds, setSelectedTagIds] = useState([]);
+  const [loaded, setLoaded] = useState(false);
+
 
   const projectString = sessionStorage.getItem("selectedProject");
   const project = projectString ? JSON.parse(projectString) : null;
@@ -67,9 +69,7 @@ const Tagreview = () => {
     }
   };
 
-  useEffect(() => {
-    GetTags();
-  }, [updateProject]);
+
 
   const handleEdit = (tag) => {
     setEditingId(tag.tagId);
@@ -219,6 +219,10 @@ const handleConfirmDelete = async () => {
       setSelectedTagIds((prev) => prev.filter((id) => id !== tagId));
     }
   };
+  useEffect(() => {
+  if (loaded) GetTags();
+}, [updateProject, loaded]);
+
 
   return (
     <div
@@ -231,6 +235,7 @@ const handleConfirmDelete = async () => {
       }}
     >
       <div className="table-container">
+        
         <table className="tagTable">
           <thead>
             <tr>
@@ -280,7 +285,7 @@ const handleConfirmDelete = async () => {
               </th>
             </tr>
           </thead>
-          <tbody>
+          <tbody >
             {filteredTags.length > 0 ? (
               filteredTags.map((tag, index) => (
                 <tr
@@ -439,8 +444,8 @@ const handleConfirmDelete = async () => {
               ))
             ) : (
               <tr>
-                <td colSpan="7" className="text-center text-muted py-3">
-                  {searchTerm ? "No matching tags found" : "No Tags available"}
+                <td colSpan="8" className="text-center text-muted py-3" style={{backgroundColor:'white'}}>
+                  {searchTerm ? "No matching tags found" : "No Tags available..."}<span style={{cursor:'pointer',color:'blue',fontWeight:'bold'}} onClick={() => setLoaded(true)}>Load tags</span>
                 </td>
               </tr>
             )}

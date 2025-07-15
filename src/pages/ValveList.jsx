@@ -11,11 +11,12 @@ import {
   faSave,
   faTimes,
   faEdit,
+  faTrash,
 } from "@fortawesome/free-solid-svg-icons";
 import { deletevalveList, getvalvelist, saveimportedValveList, EditValvelist } from "../services/TagApi";
 
 function ValveList() {
-  const [editedRowIndex, setEditedRowIndex] = useState(-1);
+  const [editedValveId, setEditedValveId] = useState(null); // Changed from editedRowIndex
   const [editedValveData, setEditedValveData] = useState({});
   const [currentDeleteNumber, setCurrentDeleteNumber] = useState(null);
   const [showConfirm, setShowConfirm] = useState(false);
@@ -25,6 +26,8 @@ function ValveList() {
   const [selectedFile, setSelectedFile] = useState(null);
   const [allValveList, setAllValveList] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
+  const [selectedValveIds, setSelectedValveIds] = useState([]); // New state for multiple selection
+  const [loaded, setLoaded] = useState(false);
 
   const projectString = sessionStorage.getItem("selectedProject");
   const project = projectString ? JSON.parse(projectString) : null;
@@ -34,36 +37,57 @@ function ValveList() {
     const response = await getvalvelist(projectId);
     if (response.status === 200) {
       console.log(response.data);
-      
       setAllValveList(response.data);
     }
   };
 
-  useEffect(() => {
-    fetchValveData(projectId);
-  }, []);
+      useEffect(() => {
+        if (loaded)fetchValveData(projectId);
+  
+      }, [ loaded]);
 
   const handleDeleteValveFromTable = (id) => {
     setCurrentDeleteNumber(id);
     setShowConfirm(true);
   };
 
-  const handleEditOpen = (index) => {
-    setEditedRowIndex(index);
-    setEditedValveData(allValveList[index]);
+  // New function for multiple delete
+  const handleMultipleDelete = () => {
+    if (selectedValveIds.length === 0) {
+      setModalMessage("No valves selected for deletion");
+      setCustomAlert(true);
+      return;
+    }
+    setCurrentDeleteNumber([...selectedValveIds]);
+    setShowConfirm(true);
+  };
+
+  // Modified to use valve object instead of index
+  const handleEditOpen = (valve) => {
+    setEditedValveId(valve.tagId);
+    setEditedValveData(valve);
   };
 
   const handleCloseEdit = () => {
-    setEditedRowIndex(-1);
+    setEditedValveId(null);
     setEditedValveData({});
   };
 
+  // Updated save function
   const handleSave = async (id) => {
-    const response = await EditValvelist(editedValveData);
-    if (response.status === 200) {
-      setEditedRowIndex(-1);
-      setEditedValveData({});
-      fetchValveData(projectId);
+    try {
+      const response = await EditValvelist(editedValveData);
+      if (response.status === 200) {
+        setEditedValveId(null);
+        setEditedValveData({});
+        fetchValveData(projectId);
+        setModalMessage("Valve updated successfully");
+        setCustomAlert(true);
+      }
+    } catch (error) {
+      console.error("Error saving valve:", error);
+      setModalMessage("Failed to save valve data.");
+      setCustomAlert(true);
     }
   };
 
@@ -74,18 +98,58 @@ function ValveList() {
     });
   };
 
+  // Updated to handle both single and multiple deletes
   const handleConfirm = async () => {
-    const response = await deletevalveList(projectId,currentDeleteNumber);
-    if (response.status === 200) {
-      setShowConfirm(false);
-      setCurrentDeleteNumber(null);
+    try {
+      const valveIds = Array.isArray(currentDeleteNumber)
+        ? currentDeleteNumber
+        : [currentDeleteNumber];
+
+      for (const id of valveIds) {
+        const response = await deletevalveList(projectId, id);
+        if (response.status !== 200) {
+          throw new Error(`Failed to delete valve ${id}`);
+        }
+      }
+
+      setModalMessage(
+        valveIds.length > 1
+          ? "Valves deleted successfully"
+          : "Valve deleted successfully"
+      );
+      setCustomAlert(true);
       fetchValveData(projectId);
+    } catch (error) {
+      console.error("Error deleting valves:", error);
+      setModalMessage("Error deleting valve(s)");
+      setCustomAlert(true);
     }
+
+    setShowConfirm(false);
+    setCurrentDeleteNumber(null);
+    setSelectedValveIds([]); // Clear selection
   };
 
   const handleCancel = () => {
     setShowConfirm(false);
     setCurrentDeleteNumber(null);
+  };
+
+  // New functions for checkbox handling
+  const handleSelectAllCheckbox = (e) => {
+    if (e.target.checked) {
+      setSelectedValveIds(filteredValveList.map((valve) => valve.tagId));
+    } else {
+      setSelectedValveIds([]);
+    }
+  };
+
+  const handleValveCheckboxChange = (tagId, isChecked) => {
+    if (isChecked) {
+      setSelectedValveIds((prev) => [...prev, tagId]);
+    } else {
+      setSelectedValveIds((prev) => prev.filter((id) => id !== tagId));
+    }
   };
 
   const handleImportTag = () => {
@@ -135,6 +199,8 @@ function ValveList() {
           setImportTag(false);
           setSelectedFile(null);
           fetchValveData(projectId);
+          setModalMessage("File imported successfully");
+          setCustomAlert(true);
         }
       };
 
@@ -239,7 +305,20 @@ function ValveList() {
           <table className="linetable">
             <thead>
               <tr>
-                   <th className="wideHead">Tag</th>
+                <th>#</th>
+                <th className="mediumHead">
+                  <input
+                    type="checkbox"
+                    onChange={handleSelectAllCheckbox}
+                    checked={
+                      filteredValveList.length > 0 &&
+                      filteredValveList.every((valve) =>
+                        selectedValveIds.includes(valve.tagId)
+                      )
+                    }
+                  />
+                </th>
+                <th className="wideHead">Tag</th>
                 <th className="wideHead">Area</th>
                 <th className="wideHead">Discipline</th>
                 <th className="wideHead">System</th>
@@ -274,10 +353,16 @@ function ValveList() {
                     onClick={handleImportTag}
                     style={{ cursor: "pointer", marginLeft: "10px" }}
                   />
+                  <FontAwesomeIcon
+                    icon={faTrash}
+                    title="Delete Selected"
+                    onClick={handleMultipleDelete}
+                    style={{ cursor: "pointer", marginLeft: "10px" }}
+                  />
                 </th>
               </tr>
               <tr>
-                <th colSpan="22">
+                <th colSpan="25">
                   <input
                     type="text"
                     placeholder="Search by Tag "
@@ -290,11 +375,20 @@ function ValveList() {
             </thead>
             <tbody>
               {filteredValveList?.map((valve, index) => (
-                <tr key={index} style={{ color: "black" }}>
-                     <td style={{ backgroundColor: '#f0f0f0' }}>{valve.tag}</td>
-                  <td style={{ backgroundColor: "#f0f0f0" }}>
-                      
-                    {editedRowIndex === index ? (
+                <tr key={valve.tagId || index} style={{ color: "black" }}>
+                  <td style={{ backgroundColor: "#f0f0f0" }}>{index + 1}</td>
+                  <td>
+                    <input
+                      type="checkbox"
+                      checked={selectedValveIds.includes(valve.tagId)}
+                      onChange={(e) =>
+                        handleValveCheckboxChange(valve.tagId, e.target.checked)
+                      }
+                    />
+                  </td>
+                  <td style={{ backgroundColor: "#f0f0f0" }}>{valve.tag}</td>
+                  <td>
+                    {editedValveId === valve.tagId ? (
                       <input
                         onChange={(e) => handleChange("area", e.target.value)}
                         type="text"
@@ -305,7 +399,7 @@ function ValveList() {
                     )}
                   </td>
                   <td>
-                    {editedRowIndex === index ? (
+                    {editedValveId === valve.tagId ? (
                       <input
                         onChange={(e) => handleChange("discipline", e.target.value)}
                         type="text"
@@ -316,7 +410,7 @@ function ValveList() {
                     )}
                   </td>
                   <td>
-                    {editedRowIndex === index ? (
+                    {editedValveId === valve.tagId ? (
                       <input
                         onChange={(e) => handleChange("system", e.target.value)}
                         type="text"
@@ -327,7 +421,7 @@ function ValveList() {
                     )}
                   </td>
                   <td>
-                    {editedRowIndex === index ? (
+                    {editedValveId === valve.tagId ? (
                       <input
                         onChange={(e) => handleChange("function_code", e.target.value)}
                         type="text"
@@ -338,7 +432,7 @@ function ValveList() {
                     )}
                   </td>
                   <td>
-                    {editedRowIndex === index ? (
+                    {editedValveId === valve.tagId ? (
                       <input
                         onChange={(e) => handleChange("sequence_number", e.target.value)}
                         type="text"
@@ -350,7 +444,7 @@ function ValveList() {
                   </td>
                   <td style={{ backgroundColor: "#f0f0f0" }}>{valve.tag_number}</td>
                   <td>
-                    {editedRowIndex === index ? (
+                    {editedValveId === valve.tagId ? (
                       <input
                         onChange={(e) => handleChange("line_id", e.target.value)}
                         type="text"
@@ -361,7 +455,7 @@ function ValveList() {
                     )}
                   </td>
                   <td>
-                    {editedRowIndex === index ? (
+                    {editedValveId === valve.tagId ? (
                       <input
                         onChange={(e) => handleChange("line_number", e.target.value)}
                         type="text"
@@ -372,7 +466,7 @@ function ValveList() {
                     )}
                   </td>
                   <td>
-                    {editedRowIndex === index ? (
+                    {editedValveId === valve.tagId ? (
                       <input
                         onChange={(e) => handleChange("pid", e.target.value)}
                         type="text"
@@ -383,7 +477,7 @@ function ValveList() {
                     )}
                   </td>
                   <td>
-                    {editedRowIndex === index ? (
+                    {editedValveId === valve.tagId ? (
                       <input
                         onChange={(e) => handleChange("isometric", e.target.value)}
                         type="text"
@@ -394,7 +488,7 @@ function ValveList() {
                     )}
                   </td>
                   <td>
-                    {editedRowIndex === index ? (
+                    {editedValveId === valve.tagId ? (
                       <input
                         onChange={(e) => handleChange("data_sheet", e.target.value)}
                         type="text"
@@ -405,7 +499,7 @@ function ValveList() {
                     )}
                   </td>
                   <td>
-                    {editedRowIndex === index ? (
+                    {editedValveId === valve.tagId ? (
                       <input
                         onChange={(e) => handleChange("drawings", e.target.value)}
                         type="text"
@@ -416,7 +510,7 @@ function ValveList() {
                     )}
                   </td>
                   <td>
-                    {editedRowIndex === index ? (
+                    {editedValveId === valve.tagId ? (
                       <input
                         onChange={(e) => handleChange("design_pressure", e.target.value)}
                         type="text"
@@ -427,7 +521,7 @@ function ValveList() {
                     )}
                   </td>
                   <td>
-                    {editedRowIndex === index ? (
+                    {editedValveId === valve.tagId ? (
                       <input
                         onChange={(e) => handleChange("design_temperature", e.target.value)}
                         type="text"
@@ -438,7 +532,7 @@ function ValveList() {
                     )}
                   </td>
                   <td>
-                    {editedRowIndex === index ? (
+                    {editedValveId === valve.tagId ? (
                       <input
                         onChange={(e) => handleChange("size", e.target.value)}
                         type="text"
@@ -449,7 +543,7 @@ function ValveList() {
                     )}
                   </td>
                   <td>
-                    {editedRowIndex === index ? (
+                    {editedValveId === valve.tagId ? (
                       <input
                         onChange={(e) => handleChange("paint_system", e.target.value)}
                         type="text"
@@ -460,7 +554,7 @@ function ValveList() {
                     )}
                   </td>
                   <td>
-                    {editedRowIndex === index ? (
+                    {editedValveId === valve.tagId ? (
                       <input
                         onChange={(e) => handleChange("purchase_order", e.target.value)}
                         type="text"
@@ -471,7 +565,7 @@ function ValveList() {
                     )}
                   </td>
                   <td>
-                    {editedRowIndex === index ? (
+                    {editedValveId === valve.tagId ? (
                       <input
                         onChange={(e) => handleChange("supplier", e.target.value)}
                         type="text"
@@ -482,7 +576,7 @@ function ValveList() {
                     )}
                   </td>
                   <td>
-                    {editedRowIndex === index ? (
+                    {editedValveId === valve.tagId ? (
                       <input
                         onChange={(e) => handleChange("information_status", e.target.value)}
                         type="text"
@@ -493,7 +587,7 @@ function ValveList() {
                     )}
                   </td>
                   <td>
-                    {editedRowIndex === index ? (
+                    {editedValveId === valve.tagId ? (
                       <input
                         onChange={(e) => handleChange("equipment_status", e.target.value)}
                         type="text"
@@ -504,7 +598,7 @@ function ValveList() {
                     )}
                   </td>
                   <td>
-                    {editedRowIndex === index ? (
+                    {editedValveId === valve.tagId ? (
                       <input
                         onChange={(e) => handleChange("comment", e.target.value)}
                         type="text"
@@ -515,7 +609,7 @@ function ValveList() {
                     )}
                   </td>
                   <td style={{ backgroundColor: "#f0f0f0" }}>
-                    {editedRowIndex === index ? (
+                    {editedValveId === valve.tagId ? (
                       <>
                         <FontAwesomeIcon
                           icon={faSave}
@@ -534,7 +628,7 @@ function ValveList() {
                       <>
                         <FontAwesomeIcon
                           icon={faEdit}
-                          onClick={() => handleEditOpen(index)}
+                          onClick={() => handleEditOpen(valve)}
                           style={{ cursor: "pointer" }}
                         />
                         <FontAwesomeIcon
@@ -549,6 +643,9 @@ function ValveList() {
                 </tr>
               ))}
             </tbody>
+             {
+              loaded?'':<button className="btn" style={{cursor:'pointer',backgroundColor:'#5B66CB',color:'white',width:'100px'}} onClick={() => setLoaded(true)}>Load data</button>
+            }
           </table>
         </div>
       </form>

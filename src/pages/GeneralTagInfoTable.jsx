@@ -13,7 +13,7 @@ import { updateProjectContext } from "../context/ContextShare";
 import Alert from '../components/Alert';
 
 function GeneralTagInfoTable({}) {
-  const [editedRowIndex, setEditedRowIndex] = useState(-1);
+  const [editedTagId, setEditedTagId] = useState(null); // Changed from editedRowIndex
   const [editedTagData, setEditedTagData] = useState({});
   const [currentDeleteNumber, setCurrentDeleteNumber] = useState(null);
   const [showConfirm, setShowConfirm] = useState(false);
@@ -25,6 +25,7 @@ function GeneralTagInfoTable({}) {
   const [userTagInfotable, setUserTagInfotable] = useState([]);
   const [displayFields, setDisplayFields] = useState([]);
   const [generalTagInfoFields, setGeneralTagInfoFields] = useState([]);
+  const [selectedTagInfoIds, setSelectedTagInfoIds] = useState([]); // New state for multiple selection
   const { updateProject } = useContext(updateProjectContext);
   const [customAlert, setCustomAlert] = useState(false);
   const [modalMessage, setModalMessage] = useState("");
@@ -33,19 +34,22 @@ function GeneralTagInfoTable({}) {
   const projectString = sessionStorage.getItem("selectedProject");
   const project = projectString ? JSON.parse(projectString) : null;
   const projectId = project?.projectId;
+    const [loaded, setLoaded] = useState(false);
+  
 
   const fetchGeneralTagInfo = async (projectId) => {
     const response = await fetchAllGentagInfo(projectId);
     if (response.status === 200) {
       console.log(response.data);
       setUserTagInfotable(response.data);
-    }else if(response.status===404){
-      console.log(response)
+    } else if(response.status === 404) {
+      console.log(response);
     }
   };
-  useEffect(() => {
-    fetchGeneralTagInfo(projectId);
-  }, [updateProject]);
+
+     useEffect(() => {
+      if (loaded) fetchGeneralTagInfo(projectId);
+    }, [ updateProject,loaded]);
 
   const getGeneralTagInfoField = async (projectId) => {
     try {
@@ -79,18 +83,37 @@ function GeneralTagInfoTable({}) {
     setDisplayFields(initialFields);
   }, [numFields, generalTagInfoFields]);
 
+  // Updated to handle both single and multiple deletes
   const handleConfirm = async() => {
-    const data= {projectId:projectId,tagId:currentDeleteNumber}
-     const response = await DeleteGeneralTagInfolist(data)
-    if(response.status===200){
-       setCustomAlert(true);
-       setModalMessage(response.data.message)
-       fetchGeneralTagInfo(projectId);
-        setShowConfirm(false);
-    setCurrentDeleteNumber(null);
+    try {
+      const tagIds = Array.isArray(currentDeleteNumber) 
+        ? currentDeleteNumber 
+        : [currentDeleteNumber];
+
+      for (const tagId of tagIds) {
+        const data = { projectId: projectId, tagId: tagId };
+        const response = await DeleteGeneralTagInfolist(data);
+        if (response.status !== 200) {
+          throw new Error(`Failed to delete tag ${tagId}`);
+        }
+      }
+
+      setCustomAlert(true);
+      setModalMessage(
+        tagIds.length > 1
+          ? "Tag info items deleted successfully"
+          : "Tag info deleted successfully"
+      );
+      fetchGeneralTagInfo(projectId);
+    } catch (error) {
+      console.error("Error deleting tag info:", error);
+      setModalMessage("Error deleting tag info");
+      setCustomAlert(true);
     }
-   
-   
+
+    setShowConfirm(false);
+    setCurrentDeleteNumber(null);
+    setSelectedTagInfoIds([]); // Clear selection
   };
 
   const handleCancel = () => {
@@ -98,13 +121,14 @@ function GeneralTagInfoTable({}) {
     setCurrentDeleteNumber(null);
   };
 
-  const handleEditOpen = (index) => {
-    setEditedRowIndex(index);
-    setEditedTagData(userTagInfotable[index]);
+  // Modified to use tag object instead of index
+  const handleEditOpen = (tagInfo) => {
+    setEditedTagId(tagInfo.tagId);
+    setEditedTagData(tagInfo);
   };
 
   const handleCloseEdit = () => {
-    setEditedRowIndex(-1);
+    setEditedTagId(null);
     setEditedTagData({});
     setEditUserField(false);
     setEditUnitField(false);
@@ -117,31 +141,57 @@ function GeneralTagInfoTable({}) {
     });
   };
 
+  // Updated save function
   const handleSave = async(tagId) => {
     console.log(tagId);
 
-     try {
-        const response = await EditGeneralTagInfolist(editedTagData); 
-        if(response.status === 200) {
-          const updatedGeneralTagInfoList = [...userTagInfotable];
-          updatedGeneralTagInfoList[editedRowIndex] = { ...editedTagData};
-          setUserTagInfotable(updatedGeneralTagInfoList);
-          setEditedRowIndex(-1);
-          setEditedTagData({});
-          setCustomAlert(true);
-          setModalMessage("Upadated successfully..")
-        }
-      } catch (error) {
-        console.error("Error saving equipment:", error);
-        setModalMessage("Failed to save equipment data.");
+    try {
+      const response = await EditGeneralTagInfolist(editedTagData); 
+      if(response.status === 200) {
+        setEditedTagId(null);
+        setEditedTagData({});
         setCustomAlert(true);
+        setModalMessage("Updated successfully..");
+        fetchGeneralTagInfo(projectId);
       }
-
+    } catch (error) {
+      console.error("Error saving tag info:", error);
+      setModalMessage("Failed to save tag info data.");
+      setCustomAlert(true);
+    }
   };
 
   const handleDeleteTagInfoFromTable = (tagNumber) => {
     setCurrentDeleteNumber(tagNumber);
     setShowConfirm(true);
+  };
+
+  // New function for multiple delete
+  const handleMultipleDelete = () => {
+    if (selectedTagInfoIds.length === 0) {
+      setModalMessage("No tag info selected for deletion");
+      setCustomAlert(true);
+      return;
+    }
+    setCurrentDeleteNumber([...selectedTagInfoIds]);
+    setShowConfirm(true);
+  };
+
+  // New functions for checkbox handling
+  const handleSelectAllCheckbox = (e) => {
+    if (e.target.checked) {
+      setSelectedTagInfoIds(userTagInfotable.map((info) => info.tagId));
+    } else {
+      setSelectedTagInfoIds([]);
+    }
+  };
+
+  const handleTagInfoCheckboxChange = (tagId, isChecked) => {
+    if (isChecked) {
+      setSelectedTagInfoIds((prev) => [...prev, tagId]);
+    } else {
+      setSelectedTagInfoIds((prev) => prev.filter((id) => id !== tagId));
+    }
   };
 
   const handleExport = () => {
@@ -259,11 +309,11 @@ function GeneralTagInfoTable({}) {
     setEditedFieldData({});
   };
 
-
   const handlesettings = () => {
     settaginfotab(false);
     settagsettab(true);
   };
+
   const handlesettingclose = () => {
     settaginfotab(true);
     settagsettab(false);
@@ -275,6 +325,9 @@ function GeneralTagInfoTable({}) {
       [key]: value,
     });
   };
+
+  // Calculate the number of checked fields for column span
+  const checkedFieldsCount = displayFields.filter(field => field.statuscheck === "checked").length;
 
   return (
     <div
@@ -298,8 +351,9 @@ function GeneralTagInfoTable({}) {
                 <th className="wideHead">Show</th>
                 <th>
                   <i
-                    class="ms-5 fa-regular fa-circle-xmark"
+                    className="ms-5 fa-regular fa-circle-xmark"
                     onClick={handlesettingclose}
+                    style={{ cursor: "pointer" }}
                   ></i>
                 </th>
               </thead>
@@ -390,6 +444,7 @@ function GeneralTagInfoTable({}) {
                   </tr>
                 ))}
               </tbody>
+            
             </table>
           </div>
         </form>
@@ -399,6 +454,19 @@ function GeneralTagInfoTable({}) {
             <table className="tagTable">
               <thead>
                 <tr>
+                  <th>#</th>
+                  <th className="mediumHead">
+                    <input
+                      type="checkbox"
+                      onChange={handleSelectAllCheckbox}
+                      checked={
+                        userTagInfotable.length > 0 &&
+                        userTagInfotable.every((info) =>
+                          selectedTagInfoIds.includes(info.tagId)
+                        )
+                      }
+                    />
+                  </th>
                   <th className="wideHead">Tag</th>
                   <th className="wideHead">Type</th>
                   {displayFields.map((item) =>
@@ -411,16 +479,26 @@ function GeneralTagInfoTable({}) {
                       className="fa fa-upload"
                       title="Export"
                       onClick={handleExport}
+                      style={{ cursor: "pointer" }}
                     ></i>
                     <i
                       className="fa fa-download ms-2"
                       title="Import"
                       onClick={handleImportClick}
+                      style={{ cursor: "pointer" }}
+                    ></i>
+                    <i
+                      className="fa fa-trash ms-2"
+                      title="Delete Selected"
+                      onClick={handleMultipleDelete}
+                      style={{ cursor: "pointer" }}
                     ></i>
                   </th>
                 </tr>
 
                 <tr>
+                  <th></th>
+                  <th></th>
                   <th></th>
                   <th></th>
                   {displayFields.map((item) =>
@@ -432,7 +510,7 @@ function GeneralTagInfoTable({}) {
                     <i
                       onClick={handlesettings}
                       style={{ cursor: "pointer" }}
-                      class="fa-solid fa-gear"
+                      className="fa-solid fa-gear"
                     ></i>
                   </th>
                 </tr>
@@ -442,7 +520,19 @@ function GeneralTagInfoTable({}) {
                 userTagInfotable.length > 0 ? (
                   userTagInfotable.map((info, index) => {
                     return (
-                      <tr key={index} style={{ color: "black" }}>
+                      <tr key={info.tagId || index} style={{ color: "black" }}>
+                        <td style={{ backgroundColor: "#f0f0f0" }}>
+                          {index + 1}
+                        </td>
+                        <td>
+                          <input
+                            type="checkbox"
+                            checked={selectedTagInfoIds.includes(info.tagId)}
+                            onChange={(e) =>
+                              handleTagInfoCheckboxChange(info.tagId, e.target.checked)
+                            }
+                          />
+                        </td>
                         <td style={{ backgroundColor: "#f0f0f0" }}>
                           {info.tag}
                         </td>
@@ -455,7 +545,7 @@ function GeneralTagInfoTable({}) {
                           
                             return (
                               <td key={fieldIndex}>
-                                {editedRowIndex === index ? (
+                                {editedTagId === info.tagId ? (
                                   <input
                                     onChange={(e) =>
                                       handleChange(taginfoKey, e.target.value)
@@ -470,7 +560,7 @@ function GeneralTagInfoTable({}) {
                             );
                           })}
                         <td style={{ backgroundColor: "#f0f0f0" }}>
-                          {editedRowIndex === index ? (
+                          {editedTagId === info.tagId ? (
                             <>
                               <i
                                 className="fa-solid fa-floppy-disk text-success"
@@ -488,7 +578,7 @@ function GeneralTagInfoTable({}) {
                               <i
                                 className="fa-solid fa-pencil"
                                 style={{ cursor: "pointer" }}
-                                onClick={() => handleEditOpen(index)}
+                                onClick={() => handleEditOpen(info)}
                               ></i>
                               <i
                                 className="fa-solid fa-trash-can ms-3"
@@ -505,10 +595,13 @@ function GeneralTagInfoTable({}) {
                   })
                 ) : (
                   <tr>
-                    <td colSpan="100%">No data available</td>
+                    <td colSpan={6 + checkedFieldsCount}>No data available</td>
                   </tr>
                 )}
               </tbody>
+                {
+              loaded?'':<button className="btn" style={{cursor:'pointer',backgroundColor:'#5B66CB',color:'white',width:'100px'}} onClick={() => setLoaded(true)}>Load data</button>
+            }
             </table>
           </div>
         </form>

@@ -3,63 +3,74 @@ import DeleteConfirm from "../components/DeleteConfirm";
 import * as XLSX from "xlsx";
 import Alert from "../components/Alert";
 import { Modal } from "react-bootstrap";
-import { deletelineList, EditLinelist, getLineList, saveimportedLineList } from "../services/TagApi";
+import {
+  deletelineList,
+  EditLinelist,
+  getLineList,
+  saveimportedLineList,
+} from "../services/TagApi";
 
 function LineList() {
-  const [editedRowIndex, setEditedRowIndex] = useState(-1);
+  const [editedLineId, setEditedLineId] = useState(null); // Changed from editedRowIndex to editedLineId
   const [editedLineData, setEditedLineData] = useState({});
-  const [currentDeleteNumber, setCurrentDeleteNumber] = useState(null);
+  const [lineToDelete, setLineToDelete] = useState(null);
   const [showConfirm, setShowConfirm] = useState(false);
   const [customAlert, setCustomAlert] = useState(false);
   const [modalMessage, setModalMessage] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [importTag, setImportTag] = useState(false);
   const [selectedFile, setSelectedFile] = useState(null);
-   const [allLineList,setAllLinelist]=useState([])
-//console.log(allLineList)
+  const [allLineList, setAllLinelist] = useState([]);
+  const [selectedLineIds, setSelectedLineIds] = useState([]);
+  const [loaded, setLoaded] = useState(false);
 
-        const projectString = sessionStorage.getItem("selectedProject");
-      const project = projectString ? JSON.parse(projectString) : null;
-      const projectId = project?.projectId;
-   const fetchLineList  = async(projectId)=>{
-    const response = await getLineList(projectId)
-    if(response.status===200){
-  setAllLinelist(response.data)
+  const projectString = sessionStorage.getItem("selectedProject");
+  const project = projectString ? JSON.parse(projectString) : null;
+  const projectId = project?.projectId;
 
+  const fetchLineList = async (projectId) => {
+    const response = await getLineList(projectId);
+    if (response.status === 200) {
+      setAllLinelist(response.data);
     }
-   }
-  useEffect(() => {
-    fetchLineList(projectId)
- 
-  }, []);
+  };
 
-   
+    useEffect(() => {
+    if (loaded) fetchLineList(projectId);
+  }, [ loaded]);
+ 
   const handleDeleteLineFromTable = (tagNumber) => {
-    setCurrentDeleteNumber(tagNumber);
+    setLineToDelete(tagNumber);
     setShowConfirm(true);
   };
 
-  const handleEditOpen = (index) => {
-    setEditedRowIndex(index);
-    setEditedLineData(allLineList[index]);
+  // Modified to use line.tagId instead of index
+  const handleEditOpen = (line) => {
+    setEditedLineId(line.tagId);
+    setEditedLineData(line);
   };
 
   const handleCloseEdit = () => {
-    setEditedRowIndex(-1);
+    setEditedLineId(null);
     setEditedLineData({});
   };
 
-  const handleSave = async(tag) => {
-    const updatedLineList = [...allLineList];
-    updatedLineList[editedRowIndex] = { ...editedLineData, tag: tag };
- const response = await EditLinelist(editedLineData)
- if(response.status===200){
-  setEditedRowIndex(-1);
-    setEditedLineData({});
-    fetchLineList(projectId)
- }
-  
-
+  // Modified to work with tagId instead of index
+  const handleSave = async (tag) => {
+    try {
+      const response = await EditLinelist(editedLineData);
+      if (response.status === 200) {
+        setEditedLineId(null);
+        setEditedLineData({});
+        fetchLineList(projectId);
+        setModalMessage("Line updated successfully");
+        setCustomAlert(true);
+      }
+    } catch (error) {
+      console.error("Error updating line:", error);
+      setModalMessage("Error updating line");
+      setCustomAlert(true);
+    }
   };
 
   const handleChange = (field, value) => {
@@ -69,21 +80,68 @@ function LineList() {
     });
   };
 
-  const handleConfirm = async() => {
-     const response = await deletelineList(projectId,currentDeleteNumber)
-     if(response.status===200){
-   
-    setShowConfirm(false);
-    setCurrentDeleteNumber(null);
-    fetchLineList(projectId)
-     }
+  const handleSelectAllCheckbox = (e) => {
+    if (e.target.checked) {
+      setSelectedLineIds(filteredLineList.map((line) => line.tagId));
+    } else {
+      setSelectedLineIds([]);
+    }
+  };
 
+  const handleLineCheckboxChange = (tagId, isChecked) => {
+    if (isChecked) {
+      setSelectedLineIds((prev) => [...prev, tagId]);
+    } else {
+      setSelectedLineIds((prev) => prev.filter((id) => id !== tagId));
+    }
+  };
+
+  const handleMultipleDelete = () => {
+    if (selectedLineIds.length === 0) {
+      setModalMessage("No lines selected for deletion");
+      setCustomAlert(true);
+      return;
+    }
+    setLineToDelete([...selectedLineIds]);
+    setShowConfirm(true);
+  };
+
+  const handleConfirm = async () => {
+    try {
+      const lineIds = Array.isArray(lineToDelete)
+        ? lineToDelete
+        : [lineToDelete];
+
+      for (const id of lineIds) {
+        const response = await deletelineList(projectId,id);
+        if (response.status !== 200) {
+          throw new Error(`Failed to delete line ${id}`);
+        }
+      }
+
+      setModalMessage(
+        lineIds.length > 1
+          ? "Lines deleted successfully"
+          : "Line deleted successfully"
+      );
+      setCustomAlert(true);
+      fetchLineList(projectId); // Fixed: added projectId parameter
+    } catch (error) {
+      console.error("Error deleting lines:", error);
+      setModalMessage("Error deleting line(s)");
+      setCustomAlert(true);
+    }
+
+    setShowConfirm(false);
+    setLineToDelete(null);
+    setSelectedLineIds([]);
   };
 
   const handleCancel = () => {
     setShowConfirm(false);
-    setCurrentDeleteNumber(null);
+    setLineToDelete(null);
   };
+
   const handleImportTag = () => {
     setImportTag(true);
   };
@@ -92,18 +150,17 @@ function LineList() {
     setImportTag(false);
   };
 
-
   const handleImportClick = () => {
     if (selectedFile) {
       const reader = new FileReader();
-  
-      reader.onload = async(e) => {
+
+      reader.onload = async (e) => {
         const data = new Uint8Array(e.target.result);
         const workbook = XLSX.read(data, { type: "array" });
         const worksheet = workbook.Sheets[workbook.SheetNames[0]];
         const jsonData = XLSX.utils.sheet_to_json(worksheet);
-  
-        const formattedData = jsonData.map(item => ({
+
+        const formattedData = jsonData.map((item) => ({
           tag: item["tag"] || "",
           fluidCode: item["fluidCode"] || "",
           lineId: item["lineId"] || "",
@@ -131,27 +188,24 @@ function LineList() {
           paintSystem: item["paintSystem"] || "",
           ndtGroup: item["ndtGroup"] || "",
           chemCleaning: item["chemCleaning"] || "",
-          pwht: item["pwht"] || ""
+          pwht: item["pwht"] || "",
         }));
-  
-        // Send to main process or update state
-        const response = await saveimportedLineList(formattedData)
-        if(response.status===200){
-    setImportTag(false);
-        setSelectedFile('');
+
+        const response = await saveimportedLineList(formattedData);
+        if (response.status === 200) {
+          setImportTag(false);
+          setSelectedFile("");
+          fetchLineList(projectId);
         }
-  
-        // Reset
-    
       };
-  
+
       reader.readAsArrayBuffer(selectedFile);
     }
   };
-  
+
   const handleExcelFileChange = (e) => {
     setSelectedFile(e.target.files[0]);
-  }
+  };
 
   const handleDownloadTemplate = () => {
     const headers = [
@@ -182,16 +236,15 @@ function LineList() {
       "paintSystem",
       "ndtGroup",
       "chemCleaning",
-      "pwht"
+      "pwht",
     ];
-  
-    const worksheet = XLSX.utils.aoa_to_sheet([headers]); // Header only
+
+    const worksheet = XLSX.utils.aoa_to_sheet([headers]);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "LineListTemplate");
-  
+
     XLSX.writeFile(workbook, "LineListTemplate.xlsx");
   };
-  
 
   const handleExport = () => {
     const headers = [
@@ -225,7 +278,6 @@ function LineList() {
       "pwht",
     ];
 
-    // Normalize data
     const dataToExport = allLineList?.map((item) => {
       const row = {};
       headers.forEach((header) => {
@@ -237,8 +289,7 @@ function LineList() {
     const ws = XLSX.utils.json_to_sheet(dataToExport, { header: headers });
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Line List");
-    const wbout = XLSX.write(wb, { bookType: "xlsx", type: "array" });
-
+    XLSX.writeFile(wb, "LineList.xlsx");
   };
 
   const handleSearch = (e) => {
@@ -264,6 +315,19 @@ function LineList() {
           <table className="linetable">
             <thead>
               <tr>
+                <th>#</th>
+                <th className="mediumHead">
+                  <input
+                    type="checkbox"
+                    onChange={handleSelectAllCheckbox}
+                    checked={
+                      filteredLineList.length > 0 &&
+                      filteredLineList.every((line) =>
+                        selectedLineIds.includes(line.tagId)
+                      )
+                    }
+                  />
+                </th>
                 <th className="wideHead">Tag</th>
                 <th className="wideHead">Fluid code</th>
                 <th className="wideHead">Line ID</th>
@@ -307,10 +371,16 @@ function LineList() {
                     title="Import"
                     onClick={handleImportTag}
                   ></i>
+                  <i
+                    className="fa fa-trash ms-2"
+                    title="Delete Selected"
+                    onClick={handleMultipleDelete}
+                    style={{ cursor: 'pointer' }}
+                  ></i>
                 </th>
               </tr>
               <tr>
-                <th colSpan="29">
+                <th colSpan="31">
                   <input
                     type="text"
                     placeholder="Search by Tag"
@@ -323,10 +393,20 @@ function LineList() {
             </thead>
             <tbody>
               {filteredLineList?.map((line, index) => (
-                <tr key={index} style={{ color: "black" }}>
+                <tr key={line.tagId || index} style={{ color: "black" }}>
+                  <td style={{ backgroundColor: "#f0f0f0" }}>{index + 1}</td>
+                  <td>
+                    <input
+                      type="checkbox"
+                      checked={selectedLineIds.includes(line.tagId)}
+                      onChange={(e) =>
+                        handleLineCheckboxChange(line.tagId, e.target.checked)
+                      }
+                    />
+                  </td>
                   <td style={{ backgroundColor: "#f0f0f0" }}>{line.tag}</td>
                   <td>
-                    {editedRowIndex === index ? (
+                    {editedLineId === line.tagId ? (
                       <input
                         onChange={(e) =>
                           handleChange("fluidCode", e.target.value)
@@ -340,7 +420,7 @@ function LineList() {
                   </td>
                   <td>{line.lineId}</td>
                   <td>
-                    {editedRowIndex === index ? (
+                    {editedLineId === line.tagId ? (
                       <input
                         onChange={(e) => handleChange("medium", e.target.value)}
                         type="text"
@@ -351,7 +431,7 @@ function LineList() {
                     )}
                   </td>
                   <td>
-                    {editedRowIndex === index ? (
+                    {editedLineId === line.tagId ? (
                       <input
                         onChange={(e) =>
                           handleChange("lineSizeIn", e.target.value)
@@ -364,7 +444,7 @@ function LineList() {
                     )}
                   </td>
                   <td>
-                    {editedRowIndex === index ? (
+                    {editedLineId === line.tagId ? (
                       <input
                         onChange={(e) =>
                           handleChange("lineSizeNb", e.target.value)
@@ -377,7 +457,7 @@ function LineList() {
                     )}
                   </td>
                   <td>
-                    {editedRowIndex === index ? (
+                    {editedLineId === line.tagId ? (
                       <input
                         onChange={(e) =>
                           handleChange("pipingSpec", e.target.value)
@@ -390,7 +470,7 @@ function LineList() {
                     )}
                   </td>
                   <td>
-                    {editedRowIndex === index ? (
+                    {editedLineId === line.tagId ? (
                       <input
                         onChange={(e) =>
                           handleChange("insType", e.target.value)
@@ -403,7 +483,7 @@ function LineList() {
                     )}
                   </td>
                   <td>
-                    {editedRowIndex === index ? (
+                    {editedLineId === line.tagId ? (
                       <input
                         onChange={(e) =>
                           handleChange("insThickness", e.target.value)
@@ -416,7 +496,7 @@ function LineList() {
                     )}
                   </td>
                   <td>
-                    {editedRowIndex === index ? (
+                    {editedLineId === line.tagId ? (
                       <input
                         onChange={(e) =>
                           handleChange("heatTrace", e.target.value)
@@ -429,7 +509,7 @@ function LineList() {
                     )}
                   </td>
                   <td>
-                    {editedRowIndex === index ? (
+                    {editedLineId === line.tagId ? (
                       <input
                         onChange={(e) =>
                           handleChange("lineFrom", e.target.value)
@@ -442,7 +522,7 @@ function LineList() {
                     )}
                   </td>
                   <td>
-                    {editedRowIndex === index ? (
+                    {editedLineId === line.tagId ? (
                       <input
                         onChange={(e) => handleChange("lineTo", e.target.value)}
                         type="text"
@@ -453,7 +533,7 @@ function LineList() {
                     )}
                   </td>
                   <td>
-                    {editedRowIndex === index ? (
+                    {editedLineId === line.tagId ? (
                       <input
                         onChange={(e) =>
                           handleChange("maxOpPress", e.target.value)
@@ -466,7 +546,7 @@ function LineList() {
                     )}
                   </td>
                   <td>
-                    {editedRowIndex === index ? (
+                    {editedLineId === line.tagId ? (
                       <input
                         onChange={(e) =>
                           handleChange("maxOpTemp", e.target.value)
@@ -479,7 +559,7 @@ function LineList() {
                     )}
                   </td>
                   <td>
-                    {editedRowIndex === index ? (
+                    {editedLineId === line.tagId ? (
                       <input
                         onChange={(e) =>
                           handleChange("dsgnPress", e.target.value)
@@ -492,7 +572,7 @@ function LineList() {
                     )}
                   </td>
                   <td>
-                    {editedRowIndex === index ? (
+                    {editedLineId === line.tagId ? (
                       <input
                         onChange={(e) =>
                           handleChange("minDsgnTemp", e.target.value)
@@ -505,7 +585,7 @@ function LineList() {
                     )}
                   </td>
                   <td>
-                    {editedRowIndex === index ? (
+                    {editedLineId === line.tagId ? (
                       <input
                         onChange={(e) =>
                           handleChange("maxDsgnTemp", e.target.value)
@@ -518,7 +598,7 @@ function LineList() {
                     )}
                   </td>
                   <td>
-                    {editedRowIndex === index ? (
+                    {editedLineId === line.tagId ? (
                       <input
                         onChange={(e) =>
                           handleChange("testPress", e.target.value)
@@ -531,7 +611,7 @@ function LineList() {
                     )}
                   </td>
                   <td>
-                    {editedRowIndex === index ? (
+                    {editedLineId === line.tagId ? (
                       <input
                         onChange={(e) =>
                           handleChange("testMedium", e.target.value)
@@ -544,7 +624,7 @@ function LineList() {
                     )}
                   </td>
                   <td>
-                    {editedRowIndex === index ? (
+                    {editedLineId === line.tagId ? (
                       <input
                         onChange={(e) =>
                           handleChange("testMediumPhase", e.target.value)
@@ -557,7 +637,7 @@ function LineList() {
                     )}
                   </td>
                   <td>
-                    {editedRowIndex === index ? (
+                    {editedLineId === line.tagId ? (
                       <input
                         onChange={(e) =>
                           handleChange("massFlow", e.target.value)
@@ -570,7 +650,7 @@ function LineList() {
                     )}
                   </td>
                   <td>
-                    {editedRowIndex === index ? (
+                    {editedLineId === line.tagId ? (
                       <input
                         onChange={(e) =>
                           handleChange("volFlow", e.target.value)
@@ -583,7 +663,7 @@ function LineList() {
                     )}
                   </td>
                   <td>
-                    {editedRowIndex === index ? (
+                    {editedLineId === line.tagId ? (
                       <input
                         onChange={(e) =>
                           handleChange("density", e.target.value)
@@ -596,7 +676,7 @@ function LineList() {
                     )}
                   </td>
                   <td>
-                    {editedRowIndex === index ? (
+                    {editedLineId === line.tagId ? (
                       <input
                         onChange={(e) =>
                           handleChange("velocity", e.target.value)
@@ -609,7 +689,7 @@ function LineList() {
                     )}
                   </td>
                   <td>
-                    {editedRowIndex === index ? (
+                    {editedLineId === line.tagId ? (
                       <input
                         onChange={(e) =>
                           handleChange("paintSystem", e.target.value)
@@ -622,7 +702,7 @@ function LineList() {
                     )}
                   </td>
                   <td>
-                    {editedRowIndex === index ? (
+                    {editedLineId === line.tagId ? (
                       <input
                         onChange={(e) =>
                           handleChange("ndtGroup", e.target.value)
@@ -635,7 +715,7 @@ function LineList() {
                     )}
                   </td>
                   <td>
-                    {editedRowIndex === index ? (
+                    {editedLineId === line.tagId ? (
                       <input
                         onChange={(e) =>
                           handleChange("chemCleaning", e.target.value)
@@ -648,7 +728,7 @@ function LineList() {
                     )}
                   </td>
                   <td>
-                    {editedRowIndex === index ? (
+                    {editedLineId === line.tagId ? (
                       <input
                         onChange={(e) => handleChange("pwht", e.target.value)}
                         type="text"
@@ -660,26 +740,30 @@ function LineList() {
                   </td>
 
                   <td style={{ backgroundColor: "#f0f0f0" }}>
-                    {editedRowIndex === index ? (
+                    {editedLineId === line.tagId ? (
                       <>
                         <i
                           className="fa-solid fa-floppy-disk text-success"
                           onClick={() => handleSave(line.tag)}
+                          style={{ cursor: 'pointer' }}
                         ></i>
                         <i
                           className="fa-solid fa-xmark ms-3 text-danger"
                           onClick={handleCloseEdit}
+                          style={{ cursor: 'pointer' }}
                         ></i>
                       </>
                     ) : (
                       <>
                         <i
                           className="fa-solid fa-pencil"
-                          onClick={() => handleEditOpen(index)}
+                          onClick={() => handleEditOpen(line)}
+                          style={{ cursor: 'pointer' }}
                         ></i>
                         <i
                           className="fa-solid fa-trash-can ms-3"
                           onClick={() => handleDeleteLineFromTable(line.tagId)}
+                          style={{ cursor: 'pointer' }}
                         ></i>
                       </>
                     )}
@@ -687,36 +771,57 @@ function LineList() {
                 </tr>
               ))}
             </tbody>
+            {
+              loaded?'':<button className="btn" style={{cursor:'pointer',backgroundColor:'#5B66CB',color:'white',width:'100px'}} onClick={() => setLoaded(true)}>Load data</button>
+            }
           </table>
         </div>
       </form>
 
-        {importTag &&
-              <Modal
-                onHide={handleClose}
-                show={importTag}
-                backdrop="static"
-                keyboard={false}
-                dialogClassName="custom-modal"
+      {importTag && (
+        <Modal
+          onHide={handleClose}
+          show={importTag}
+          backdrop="static"
+          keyboard={false}
+          dialogClassName="custom-modal"
+        >
+          <div className="tag-dialog">
+            <div className="title-dialog">
+              <p className="text-light">Import list</p>
+              <p className="text-light cross" onClick={handleClose}>
+                &times;
+              </p>
+            </div>
+            <div className="dialog-input">
+              <label>File</label>
+              <input type="file" onChange={handleExcelFileChange} />
+              <a
+                onClick={handleDownloadTemplate}
+                style={{ cursor: "pointer", color: " #00BFFF" }}
               >
-                <div className="tag-dialog">
-                  <div className="title-dialog">
-                    <p className='text-light'>Import list</p>
-                    <p className='text-light cross' onClick={handleClose}>&times;</p>
-                  </div>
-                  <div className="dialog-input">
-                    <label>File</label>
-                    <input
-                      type="file" onChange={handleExcelFileChange} />
-                    <a onClick={handleDownloadTemplate} style={{ cursor: 'pointer', color: ' #00BFFF' }}>Download template</a>
-                  </div>
-                  <div className='dialog-button' style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', bottom: 0 }}>
-                    <button className='btn btn-secondary' onClick={handleClose}>Cancel</button>
-                    <button className='btn btn-dark' onClick={handleImportClick}>Upload</button>
-                  </div>
-                </div>
-              </Modal>
-            }
+                Download template
+              </a>
+            </div>
+            <div
+              className="dialog-button"
+              style={{
+                display: "flex",
+                justifyContent: "flex-end",
+                gap: "10px",
+                bottom: 0,
+              }}
+            >
+              <button className="btn btn-secondary" onClick={handleClose}>
+                Cancel
+              </button>
+              <button className="btn btn-dark" onClick={handleImportClick}>
+                Upload
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
       {customAlert && (
         <Alert
           message={modalMessage}
