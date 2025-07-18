@@ -274,8 +274,6 @@ const Iroamer = forwardRef(
     const [commentEdit, setCommentEdit] = useState("");
     const [unitScaleFactor, setUnitScaleFactor] = useState(1);
     const [customUnitLabel, setCustomUnitLabel] = useState("custom");
-
-    const [showAllViews, setShowAllViews] = useState(false);
     const [selectedTags, setSelectedTags] = useState([]);
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const [isMenuOpenNormal, setIsMenuOpenNormal] = useState(false);
@@ -1890,6 +1888,8 @@ const Iroamer = forwardRef(
         const scene = sceneRef.current;
         const canvas = scene.getEngine().getRenderingCanvas();
         const canvasParent = canvas?.parentElement;
+        
+      const camera = sceneRef.current.activeCamera;
 
         // === Prevent native browser context menu ===
         const preventContextMenu = (e) => {
@@ -1935,7 +1935,7 @@ const Iroamer = forwardRef(
                 ) {
                   return;
                 }
-                //console.log("mesh", mesh);
+                console.log("mesh", mesh);
                 // Clear previous highlight
                 dehighlightMesh();
                 selectedMeshRef.current = mesh;
@@ -1952,6 +1952,21 @@ const Iroamer = forwardRef(
                   intersectionPointX: intersectionPoint.x,
                   intersectionPointY: intersectionPoint.y,
                   intersectionPointZ: intersectionPoint.z,
+                    posX: camera.position.x,
+        posY: camera.position.y,
+        posZ: camera.position.z,
+        targX:
+          camera instanceof BABYLON.ArcRotateCamera
+            ? camera.target.x
+            : camera.getTarget().x,
+        targY:
+          camera instanceof BABYLON.ArcRotateCamera
+            ? camera.target.y
+            : camera.getTarget().y,
+        targZ:
+          camera instanceof BABYLON.ArcRotateCamera
+            ? camera.target.z
+            : camera.getTarget().z,
                 });
 
                 setFileInfoDetails(mesh.metadata.tagNo.fileDetails);
@@ -1987,7 +2002,7 @@ const Iroamer = forwardRef(
 
                 // When setting the data:
                 settaginfo({
-                  filename: tagid,
+                  filename:mesh.metadata.tagNo.tag,
                   meshname: mesh.name,
                   linelistDetails: linelistDetails || null,
                   equipmentlistDetails: equipmentlistDetails || null,
@@ -3179,9 +3194,46 @@ const Iroamer = forwardRef(
     };
 
     const handleCommentInfo = (item) => {
-      //console.log("comment info", item);
       setcommentinfo(item);
       setcommentinfotable(true);
+      setIsMenuOpen(false);
+      // Check if the camera references exist
+      if (!sceneRef.current || !sceneRef.current.activeCamera) return;
+
+      const camera = sceneRef.current.activeCamera;
+      try {
+        // Create target position vector
+        const targetPosition = new BABYLON.Vector3(
+          item.posX,
+          item.posY,
+          item.posZ
+        );
+
+        // Create target point vector
+        const targetPoint = new BABYLON.Vector3(
+          item.targX,
+          item.targY,
+          item.targZ
+        );
+
+        // For ArcRotateCamera
+        if (camera instanceof BABYLON.ArcRotateCamera) {
+          // Set position and target directly without animation
+          camera.position = targetPosition;
+          camera.target = targetPoint;
+        }
+        // For UniversalCamera
+        else if (camera instanceof BABYLON.UniversalCamera) {
+          // Set position and target directly without animation
+          camera.position = targetPosition;
+          camera.setTarget(targetPoint);
+        }
+      } catch (error) {
+        console.error("Error applying saved view:", error);
+        setCustomAlert(true);
+        setModalMessage("Error applying view");
+      }
+     
     };
 
     const handleclosecommentinfo = () => {
@@ -3685,7 +3737,7 @@ const Iroamer = forwardRef(
         }
 
         settaginfo({
-          filename: tagid,
+          filename: filename,
           meshname: meshesToHighlight[0]?.name || "",
           linelistDetails: linelistDetails || null,
           equipmentlistDetails: equipmentlistDetails || null,
@@ -5329,10 +5381,10 @@ const Iroamer = forwardRef(
           )}
           {/* CAD Axis */}
 
-          {/* {showAxis && sceneRef.current && (
+          {showAxis && sceneRef.current && (
             
             <CADTopViewAxisIndicator scene={sceneRef.current} />
-          )} */}
+          )}
 
           {/* Speed bar */}
           {speedBar}

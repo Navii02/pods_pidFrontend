@@ -16,6 +16,7 @@ function UnAssignedtags() {
   const [showAssignModal, setShowAssignModal] = useState(false);
   const [selectedType, setSelectedType] = useState("");
   const [isBulkDelete, setIsBulkDelete] = useState(false);
+  const [loaded, setLoaded] = useState(false);
 
   const tagTypes = [
     "Line ",

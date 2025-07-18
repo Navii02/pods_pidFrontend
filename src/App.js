@@ -32,13 +32,13 @@ import AdminFeatureAssign from "./pages/AdminFeatureAssign";
 function App() {
   return (
     <Routes>
-      {/* <Route path="/" element={<LandingPage />} /> */}
+      <Route path="/" element={<LandingPage />} />
   
 
       {/* All pages after login using shared layout */}
       <Route element={<HomePage />}>
         {/* Move Iroamer route to its own path */}
-         <Route path="/" element={<Iroamer />} />
+         {/* <Route path="/" element={<Iroamer />} /> */}
         <Route path="/iroamer" element={<Iroamer />} />
         <Route path="/spid" element={<Spid />} />
         <Route path="/documents/review" element={<DocumentReview />} />

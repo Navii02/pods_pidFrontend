@@ -3392,12 +3392,27 @@ const BabylonLODManager = ({
   const handleMeshSelection = async (pickInfo) => {
     const pickedMesh = pickInfo.pickedMesh;
     const intersectionPoint = pickInfo.pickedPoint;
-
+   const camera = sceneRef.current.activeCamera;
     // Store intersection point for potential comment/annotation placement
     commentPositionRef.current = {
       intersectionPointX: intersectionPoint._x,
       intersectionPointY: intersectionPoint._y,
       intersectionPointZ: intersectionPoint._z,
+          posX: camera.position.x,
+              posY: camera.position.y,
+              posZ: camera.position.z,
+              targX:
+                camera instanceof BABYLON.ArcRotateCamera
+                  ? camera.target.x
+                  : camera.getTarget().x,
+              targY:
+                camera instanceof BABYLON.ArcRotateCamera
+                  ? camera.target.y
+                  : camera.getTarget().y,
+              targZ:
+                camera instanceof BABYLON.ArcRotateCamera
+                  ? camera.target.z
+                  : camera.getTarget().z,
     };
 
     // Check if this is a merged mesh with vertex mappings
@@ -3629,12 +3644,28 @@ const BabylonLODManager = ({
     highlightMesh(pickedMesh);
 
     setSelectedItemName({ name: pickedMesh.name });
+const camera = sceneRef.current.activeCamera;
 
     const intersectionPoint = pickInfo.pickedPoint;
     commentPositionRef.current = {
       intersectionPointX: intersectionPoint._x,
       intersectionPointY: intersectionPoint._y,
       intersectionPointZ: intersectionPoint._z,
+          posX: camera.position.x,
+              posY: camera.position.y,
+              posZ: camera.position.z,
+              targX:
+                camera instanceof BABYLON.ArcRotateCamera
+                  ? camera.target.x
+                  : camera.getTarget().x,
+              targY:
+                camera instanceof BABYLON.ArcRotateCamera
+                  ? camera.target.y
+                  : camera.getTarget().y,
+              targZ:
+                camera instanceof BABYLON.ArcRotateCamera
+                  ? camera.target.z
+                  : camera.getTarget().z,
     };
 
     setSelectedMeshInfo({
@@ -4552,180 +4583,136 @@ const BabylonLODManager = ({
   // }, [selectedMeshInfo]);
 
   // New function to hide unselected individual meshes using indices removal
-  const hideUnselected = useCallback(() => {
-    if (!selectedMeshInfo) {
-      setCustomAlert(true);
-      setModalMessage("Please select a mesh or tag first");
-      return;
-    }
-
+// Enhanced hideUnselectedIndividualMeshesForTag function
+const hideUnselectedIndividualMeshesForTag = useCallback(
+  (mergedMesh, selectedMeshIds) => {
     try {
-      if (selectedMeshInfo.type === "individual" && selectedMeshRef.current) {
-        const mergedMesh = selectedMeshRef.current;
-        const selectedMeshId = selectedMeshInfo.meshId;
-        const selectedNodeNumber = selectedMeshInfo.nodeNumber;
+      console.log(`🔧 Processing mesh ${mergedMesh.name} for tag selection`);
+      console.log(`📋 Selected mesh IDs:`, selectedMeshIds);
 
-        // Hide other merged meshes (different nodes)
-        if (lodManagerRef.current && lodManagerRef.current.activeMeshes) {
-          const activeMeshes = lodManagerRef.current.activeMeshes;
-
-          activeMeshes.forEach((mesh, nodeNumber) => {
-            if (nodeNumber !== selectedNodeNumber) {
-              mesh.isVisible = false;
-              setHiddenMeshes((prev) => new Set([...prev, nodeNumber]));
-            }
-          });
-        }
-
-        // Hide other individual meshes in the same merged mesh
-        if (mergedMesh.metadata.vertexMappings) {
-          hideUnselectedIndividualMeshes(mergedMesh, selectedMeshId);
-
-          mergedMesh.metadata.vertexMappings.forEach((mapping) => {
-            if (mapping.meshId !== selectedMeshId) {
-              setHiddenIndividualMeshes(
-                (prev) => new Set([...prev, mapping.meshId])
-              );
-            }
-          });
-        }
-      } else if (
-        selectedMeshInfo.type === "merged" &&
-        selectedMeshRef.current
-      ) {
-        const selectedNodeNumber = selectedMeshInfo.nodeNumber;
-
-        if (lodManagerRef.current && lodManagerRef.current.activeMeshes) {
-          const activeMeshes = lodManagerRef.current.activeMeshes;
-
-          activeMeshes.forEach((mesh, nodeNumber) => {
-            if (nodeNumber !== selectedNodeNumber) {
-              mesh.isVisible = false;
-              setHiddenMeshes((prev) => new Set([...prev, nodeNumber]));
-            }
-          });
-        }
-      } else if (selectedMeshInfo.type === "tag") {
-        // NEW: Handle tag-based hiding of unselected
-        console.log(
-          "🏷️ Hiding unselected (keeping only tag):",
-          selectedMeshInfo.tagName
-        );
-
-        if (lodManagerRef.current) {
-          const selectedTagName = selectedMeshInfo.tagName;
-          const tagResult =
-            lodManagerRef.current.selectTagInLOD(selectedTagName);
-
-          if (tagResult && tagResult.results) {
-            // Get all mesh IDs that belong to the selected tag
-            const selectedTagMeshIds = new Set(
-              tagResult.results.map((result) => result.meshId)
-            );
-
-            // Get all nodes that contain parts of the selected tag
-            const selectedTagNodes = new Set(
-              tagResult.results.map((result) => result.nodeNumber)
-            );
-
-            // Hide all other merged meshes (nodes that don't contain the selected tag)
-            if (lodManagerRef.current.activeMeshes) {
-              const activeMeshes = lodManagerRef.current.activeMeshes;
-
-              activeMeshes.forEach((mesh, nodeNumber) => {
-                if (!selectedTagNodes.has(nodeNumber)) {
-                  mesh.isVisible = false;
-                  setHiddenMeshes((prev) => new Set([...prev, nodeNumber]));
-                }
-              });
-            }
-
-            // For nodes that contain the selected tag, hide individual meshes that don't belong to the tag
-            tagResult.results.forEach(({ lodMesh, nodeNumber }) => {
-              if (lodMesh && lodMesh.metadata.vertexMappings) {
-                // Create new indices that only include the selected tag parts
-                const selectedMeshIds = tagResult.results
-                  .filter((r) => r.nodeNumber === nodeNumber)
-                  .map((r) => r.meshId);
-
-                hideUnselectedIndividualMeshesForTag(lodMesh, selectedMeshIds);
-
-                // Track hidden individual meshes
-                lodMesh.metadata.vertexMappings.forEach((mapping) => {
-                  if (!selectedTagMeshIds.has(mapping.meshId)) {
-                    setHiddenIndividualMeshes(
-                      (prev) => new Set([...prev, mapping.meshId])
-                    );
-                  }
-                });
-              }
-            });
-
-            console.log(
-              `✅ Hidden all except tag "${selectedTagName}" (${tagResult.totalParts} parts across ${selectedTagNodes.size} nodes)`
-            );
-          }
-        }
+      const currentIndices = mergedMesh.getIndices();
+      if (!currentIndices) {
+        console.error("❌ No indices available");
+        return;
       }
+
+      // Store original indices if not already stored
+      if (!mergedMesh._originalIndices) {
+        mergedMesh._originalIndices = currentIndices.slice();
+        console.log(`💾 Stored original indices (${currentIndices.length})`);
+      }
+
+      const originalIndices = mergedMesh._originalIndices;
+      const vertexMappings = mergedMesh.metadata?.vertexMappings;
+
+      if (!vertexMappings || vertexMappings.length === 0) {
+        console.warn("⚠️ No vertex mappings found");
+        return;
+      }
+
+      console.log(`📊 Total vertex mappings: ${vertexMappings.length}`);
+
+      // Find all mappings for the selected meshes (the ones we want to KEEP)
+      const selectedMappings = vertexMappings.filter(mapping => 
+        selectedMeshIds.includes(mapping.meshId)
+      );
+
+      if (selectedMappings.length === 0) {
+        console.warn("⚠️ No selected mappings found - hiding entire mesh");
+        mergedMesh.isVisible = false;
+        return;
+      }
+
+      console.log(`✅ Found ${selectedMappings.length} mappings to keep out of ${vertexMappings.length} total`);
+
+      // Log details about what we're keeping vs hiding
+      const hiddenMappings = vertexMappings.filter(mapping => 
+        !selectedMeshIds.includes(mapping.meshId)
+      );
+      
+      console.log(`📌 Keeping mappings:`, selectedMappings.map(m => ({
+        meshId: m.meshId,
+        startIndex: m.startIndex,
+        indexCount: m.indexCount,
+        endIndex: m.startIndex + m.indexCount
+      })));
+      
+      console.log(`🔹 Hiding mappings:`, hiddenMappings.map(m => ({
+        meshId: m.meshId,
+        startIndex: m.startIndex,
+        indexCount: m.indexCount,
+        endIndex: m.startIndex + m.indexCount
+      })));
+
+      // Sort selected mappings by start index to maintain order
+      selectedMappings.sort((a, b) => a.startIndex - b.startIndex);
+
+      // Create new indices array with ONLY the selected meshes
+      const newIndices = [];
+      let totalIndicesKept = 0;
+
+      selectedMappings.forEach((mapping, index) => {
+        const startIdx = mapping.startIndex;
+        const endIdx = mapping.startIndex + mapping.indexCount;
+
+        // Validate range against original indices
+        if (startIdx < 0 || endIdx > originalIndices.length || startIdx >= endIdx) {
+          console.error(`❌ Invalid mapping range for mesh ${mapping.meshId}:`, {
+            startIdx,
+            endIdx,
+            originalLength: originalIndices.length,
+            mapping
+          });
+          return;
+        }
+
+        console.log(`📌 Processing mapping ${index + 1}/${selectedMappings.length}: mesh ${mapping.meshId}, indices ${startIdx}-${endIdx}`);
+
+        // Copy indices belonging to this selected mesh from ORIGINAL indices
+        for (let i = startIdx; i < endIdx; i++) {
+          newIndices.push(originalIndices[i]);
+        }
+
+        totalIndicesKept += (endIdx - startIdx);
+      });
+
+      if (newIndices.length === 0) {
+        console.warn("⚠️ No indices to keep - hiding entire mesh");
+        mergedMesh.isVisible = false;
+        return;
+      }
+
+      // Validate the new indices array
+      const maxVertexIndex = mergedMesh.getTotalVertices() - 1;
+      const invalidIndices = newIndices.filter(index => index > maxVertexIndex);
+      
+      if (invalidIndices.length > 0) {
+        console.error(`❌ Found ${invalidIndices.length} invalid indices > ${maxVertexIndex}`);
+        console.error(`Invalid indices sample:`, invalidIndices.slice(0, 10));
+        return;
+      }
+
+      console.log(`🔄 Updating mesh indices: ${originalIndices.length} → ${newIndices.length} (${((newIndices.length / originalIndices.length) * 100).toFixed(1)}% kept)`);
+
+      // Update the mesh with new indices
+      mergedMesh.updateIndices(new Uint32Array(newIndices));
+
+      // Force mesh update
+      mergedMesh.refreshBoundingInfo();
+      
+      // Ensure mesh is visible
+      mergedMesh.isVisible = true;
+
+      console.log(`✅ Successfully updated mesh to show only ${selectedMeshIds.length} tag parts`);
+      console.log(`📈 Statistics: ${totalIndicesKept} indices kept from ${selectedMappings.length} mappings`);
+
     } catch (error) {
-      console.error("❌ Error hiding unselected meshes/tags:", error);
+      console.error("❌ Error hiding unselected individual meshes for tag:", error);
+      console.error("Stack trace:", error.stack);
     }
-  }, [selectedMeshInfo]);
-
-  const hideUnselectedIndividualMeshesForTag = useCallback(
-    (mergedMesh, selectedMeshIds) => {
-      try {
-        const indices = mergedMesh.getIndices();
-        if (!indices) {
-          console.error("❌ No indices available");
-          return;
-        }
-
-        // Store original indices if not already stored
-        if (!mergedMesh._originalIndices) {
-          mergedMesh._originalIndices = indices.slice();
-        }
-
-        // Find all mappings for the selected meshes (the ones we want to KEEP)
-        const selectedMappings = mergedMesh.metadata.vertexMappings?.filter(
-          (m) => selectedMeshIds.includes(m.meshId)
-        );
-
-        if (!selectedMappings || selectedMappings.length === 0) {
-          return;
-        }
-
-        // Create new indices array with ONLY the selected meshes
-        const newIndices = [];
-
-        selectedMappings.forEach((mapping) => {
-          const startIdx = mapping.startIndex;
-          const endIdx = mapping.startIndex + mapping.indexCount;
-
-          // Copy indices belonging to this selected mesh
-          for (let i = startIdx; i < endIdx; i++) {
-            if (i < indices.length) {
-              newIndices.push(indices[i]);
-            }
-          }
-        });
-
-        // Update the mesh with new indices (only the selected meshes remain)
-        mergedMesh.updateIndices(new Uint32Array(newIndices));
-
-        console.log(
-          `🔸 Updated merged mesh to show only ${selectedMeshIds.length} tag parts`
-        );
-      } catch (error) {
-        console.error(
-          "❌ Error hiding unselected individual meshes for tag:",
-          error
-        );
-      }
-    },
-    []
-  );
-
+  },
+  []
+);
   const hideUnselectedIndividualMeshes = useCallback(
     (mergedMesh, selectedMeshId) => {
       try {
@@ -4773,6 +4760,237 @@ const BabylonLODManager = ({
     },
     []
   );
+
+// Fixed hideUnselected function with correct individual mesh logic
+const hideUnselected = useCallback(() => {
+  if (!selectedMeshInfo) {
+    setCustomAlert(true);
+    setModalMessage("Please select a mesh or tag first");
+    return;
+  }
+
+  console.log("🔄 Hiding unselected:", selectedMeshInfo.type, selectedMeshInfo);
+
+  try {
+    if (selectedMeshInfo.type === "individual" && selectedMeshRef.current) {
+      // ✅ FIXED: Individual mesh hiding logic - hide everything EXCEPT selected
+      console.log("🔸 Processing individual mesh hide unselected");
+      
+      const mergedMesh = selectedMeshRef.current;
+      const selectedMeshId = selectedMeshInfo.meshId;
+      const selectedNodeNumber = selectedMeshInfo.nodeNumber;
+
+      console.log(`🎯 Keeping only mesh ${selectedMeshId} in node ${selectedNodeNumber}`);
+
+      // FIRST: Hide other merged meshes (different nodes)
+      if (lodManagerRef.current && lodManagerRef.current.activeMeshes) {
+        const activeMeshes = lodManagerRef.current.activeMeshes;
+        let hiddenNodes = 0;
+
+        activeMeshes.forEach((mesh, nodeNumber) => {
+          if (nodeNumber !== selectedNodeNumber) {
+            mesh.isVisible = false;
+            setHiddenMeshes((prev) => new Set([...prev, nodeNumber]));
+            hiddenNodes++;
+            console.log(`🔹 Hidden entire node ${nodeNumber} (different from selected node ${selectedNodeNumber})`);
+          }
+        });
+
+        console.log(`📊 Hidden ${hiddenNodes} nodes, keeping node ${selectedNodeNumber}`);
+      }
+
+      // SECOND: Hide other individual meshes in the same merged mesh
+      if (mergedMesh.metadata.vertexMappings) {
+        console.log(`🔧 Processing individual meshes in node ${selectedNodeNumber}`);
+        
+        // Restore original state first
+        if (mergedMesh._originalIndices) {
+          console.log(`🔄 Restoring original indices for node ${selectedNodeNumber}`);
+          mergedMesh.updateIndices(mergedMesh._originalIndices);
+        }
+
+        // Use the function to hide unselected individual meshes (keep only selected)
+        hideUnselectedIndividualMeshes(mergedMesh, selectedMeshId);
+
+        // Track all other individual meshes as hidden
+        mergedMesh.metadata.vertexMappings.forEach((mapping) => {
+          if (mapping.meshId !== selectedMeshId) {
+            setHiddenIndividualMeshes(
+              (prev) => new Set([...prev, mapping.meshId])
+            );
+            console.log(`🔸 Marked individual mesh ${mapping.meshId} as hidden`);
+          }
+        });
+
+        console.log(`✅ Individual mesh hide unselected completed for mesh ${selectedMeshId}`);
+      }
+    } 
+    else if (selectedMeshInfo.type === "merged" && selectedMeshRef.current) {
+      // Merged mesh hiding logic (existing code)
+      console.log("🔸 Processing merged mesh hide unselected");
+      
+      const selectedNodeNumber = selectedMeshInfo.nodeNumber;
+      console.log(`🎯 Keeping only node ${selectedNodeNumber}`);
+
+      if (lodManagerRef.current && lodManagerRef.current.activeMeshes) {
+        const activeMeshes = lodManagerRef.current.activeMeshes;
+        let hiddenNodes = 0;
+
+        activeMeshes.forEach((mesh, nodeNumber) => {
+          if (nodeNumber !== selectedNodeNumber) {
+            mesh.isVisible = false;
+            setHiddenMeshes((prev) => new Set([...prev, nodeNumber]));
+            hiddenNodes++;
+            console.log(`🔹 Hidden node ${nodeNumber} (different from selected node ${selectedNodeNumber})`);
+          }
+        });
+
+        console.log(`✅ Merged mesh hide unselected completed: hidden ${hiddenNodes} nodes`);
+      }
+    } 
+    else if (selectedMeshInfo.type === "tag") {
+      // Enhanced tag hiding logic (the one we fixed)
+      console.log("🏷️ Processing tag-based hide unselected:", selectedMeshInfo.tagName);
+
+      if (!lodManagerRef.current) {
+        console.error("❌ LOD manager not available");
+        return;
+      }
+
+      const selectedTagName = selectedMeshInfo.tagName;
+      
+      // Get the current multi-node selection or perform new selection
+      let tagResult = null;
+      const currentMultiNodeSelection = lodManagerRef.current.getCurrentMultiNodeSelection();
+      
+      if (currentMultiNodeSelection && 
+          currentMultiNodeSelection.tagName === selectedTagName && 
+          currentMultiNodeSelection.hasActiveSelection) {
+        
+        console.log("📋 Using existing multi-node selection");
+        tagResult = {
+          tagName: currentMultiNodeSelection.tagName,
+          totalParts: currentMultiNodeSelection.totalParts,
+          isMultiNode: currentMultiNodeSelection.isMultiNode,
+          results: lodManagerRef.current.highlightRefs?.multiNodeSelection || [],
+        };
+      } else {
+        console.log("🔍 Performing new tag selection");
+        tagResult = lodManagerRef.current.selectTagInLOD(selectedTagName);
+      }
+
+      if (!tagResult || !tagResult.results || tagResult.results.length === 0) {
+        console.error("❌ No tag results found for:", selectedTagName);
+        setCustomAlert(true);
+        setModalMessage(`Tag "${selectedTagName}" not found or has no parts`);
+        return;
+      }
+
+      console.log(`🎯 Tag "${selectedTagName}" found: ${tagResult.totalParts} parts`);
+
+      // Get all mesh IDs that belong to the selected tag
+      const selectedTagMeshIds = new Set();
+      const selectedTagNodes = new Set();
+
+      tagResult.results.forEach(result => {
+        let meshId = null;
+        if (result.meshId) {
+          meshId = result.meshId;
+        } else if (result.mapping && result.mapping.meshId) {
+          meshId = result.mapping.meshId;
+        }
+
+        if (meshId) {
+          selectedTagMeshIds.add(meshId);
+          selectedTagNodes.add(result.nodeNumber);
+        }
+      });
+
+      console.log(`📊 Tag spans ${selectedTagNodes.size} nodes with ${selectedTagMeshIds.size} parts`);
+
+      // Hide all nodes that don't contain any part of the selected tag
+      if (lodManagerRef.current.activeMeshes) {
+        const activeMeshes = lodManagerRef.current.activeMeshes;
+        let hiddenNodes = 0;
+
+        activeMeshes.forEach((mesh, nodeNumber) => {
+          if (!selectedTagNodes.has(nodeNumber)) {
+            mesh.isVisible = false;
+            setHiddenMeshes((prev) => new Set([...prev, nodeNumber]));
+            hiddenNodes++;
+            console.log(`🔹 Hidden entire node ${nodeNumber} (no tag parts)`);
+          }
+        });
+
+        console.log(`📊 Hidden ${hiddenNodes} entire nodes`);
+      }
+
+      // For nodes that contain the selected tag, hide unselected individual meshes
+      const nodeGroups = new Map();
+      
+      tagResult.results.forEach((result) => {
+        const nodeNumber = result.nodeNumber;
+        let meshId = null;
+        
+        if (result.meshId) {
+          meshId = result.meshId;
+        } else if (result.mapping && result.mapping.meshId) {
+          meshId = result.mapping.meshId;
+        }
+
+        if (meshId && result.lodMesh) {
+          if (!nodeGroups.has(nodeNumber)) {
+            nodeGroups.set(nodeNumber, {
+              lodMesh: result.lodMesh,
+              selectedMeshIds: []
+            });
+          }
+          nodeGroups.get(nodeNumber).selectedMeshIds.push(meshId);
+        }
+      });
+
+      console.log(`🔧 Processing ${nodeGroups.size} node groups`);
+
+      // Process each node group
+      nodeGroups.forEach(({ lodMesh, selectedMeshIds }, nodeNumber) => {
+        if (lodMesh && lodMesh.metadata.vertexMappings) {
+          console.log(`🔧 Processing node ${nodeNumber} with ${selectedMeshIds.length} tag parts`);
+          
+          // Restore original indices first
+          if (lodMesh._originalIndices) {
+            console.log(`🔄 Restoring original indices for node ${nodeNumber}`);
+            lodMesh.updateIndices(lodMesh._originalIndices);
+          }
+
+          // Hide unselected parts (keep only tag parts)
+          hideUnselectedIndividualMeshesForTag(lodMesh, selectedMeshIds);
+
+          // Track hidden individual meshes
+          lodMesh.metadata.vertexMappings.forEach((mapping) => {
+            if (!selectedTagMeshIds.has(mapping.meshId)) {
+              setHiddenIndividualMeshes(
+                (prev) => new Set([...prev, mapping.meshId])
+              );
+            }
+          });
+        }
+      });
+
+      console.log(`✅ Tag hide unselected completed for "${selectedTagName}"`);
+    } 
+    else {
+      console.error("❌ Unsupported selection type or missing mesh reference");
+      setCustomAlert(true);
+      setModalMessage("Cannot hide unselected: Invalid selection type");
+    }
+  } catch (error) {
+    console.error("❌ Error hiding unselected:", error);
+    setCustomAlert(true);
+    setModalMessage("Error occurred while hiding unselected items");
+  }
+}, [selectedMeshInfo, hideUnselectedIndividualMeshes, hideUnselectedIndividualMeshesForTag]);
+
+
 
   // Enhanced restore function that handles both methods
   const restoreAllIndividualMeshesEnhanced = useCallback((mergedMesh) => {
@@ -5098,6 +5316,7 @@ const BabylonLODManager = ({
 
         case "Add Comment":
           setIsModalOpen(true);
+          setIsMenuOpen(false);
           break;
 
         case "Tag info":
@@ -5229,10 +5448,51 @@ const BabylonLODManager = ({
     // { label: "Debug States", action: () => { debugMeshStates(); setIsMenuOpen(false); } },
   ];
 
-  const handleCommentInfo = (item) => {
-    setcommentinfo(item);
-    setcommentinfotable(true);
-  };
+  
+
+   const handleCommentInfo = (item) => {
+    setIsMenuOpen(false);
+      setcommentinfo(item);
+      setcommentinfotable(true);
+      console.log(item);
+      // Check if the camera references exist
+      if (!sceneRef.current || !sceneRef.current.activeCamera) return;
+
+      const camera = sceneRef.current.activeCamera;
+      try {
+        // Create target position vector
+        const targetPosition = new BABYLON.Vector3(
+          item.posX,
+          item.posY,
+          item.posZ
+        );
+
+        // Create target point vector
+        const targetPoint = new BABYLON.Vector3(
+          item.targX,
+          item.targY,
+          item.targZ
+        );
+
+        // For ArcRotateCamera
+        if (camera instanceof BABYLON.ArcRotateCamera) {
+          // Set position and target directly without animation
+          camera.position = targetPosition;
+          camera.target = targetPoint;
+        }
+        // For UniversalCamera
+        else if (camera instanceof BABYLON.UniversalCamera) {
+          // Set position and target directly without animation
+          camera.position = targetPosition;
+          camera.setTarget(targetPoint);
+        }
+      } catch (error) {
+        console.error("Error applying saved view:", error);
+        setCustomAlert(true);
+        setModalMessage("Error applying view");
+      }
+     
+    };
 
   const handleclosecommentinfo = () => {
     setIsEditing(false);

@@ -53,11 +53,11 @@ export const deleteTag = async (TagId) => {
   }
 };
 
-export const updateTags = async (TagId, data) => {
+export const updateTags = async (TagId,projectId,data) => {
   try {
     const response = await commonApi(
       "PUT",
-      `${url}/api/update-tag/${TagId}`,
+      `${url}/api/update-tag/${TagId}/${projectId}`,
       data
     );
     return response;
@@ -123,7 +123,14 @@ export const getLineDetails = async (id, tagId) => {
   }
 };
 
-export const saveimportedLineList = async (data) => {};
+export const saveimportedLineList = async (data) => {
+    try {
+    const response = await commonApi("POST", `${url}/api/import-line-list`, data);
+    return response;
+  } catch (error) {
+    throw error;
+  }
+};
 export const EditLinelist = async (data) => {
   try {
     const response = await commonApi("PUT", `${url}/api/edit-line-list`, data);
@@ -166,7 +173,14 @@ export const getEquipmentDetails = async (id, tagId) => {
   }
 };
 
-export const saveimportedEquipmentList = async (data) => {};
+export const saveimportedEquipmentList = async (data) => {
+    try {
+    const response = await commonApi("POST", `${url}/api/import-equipment-list`, data);
+    return response;
+  } catch (error) {
+    throw error;
+  }
+};
 export const EditEquipmentlist = async (data) => {
   try {
     const response = await commonApi(
@@ -211,7 +225,14 @@ export const getValveDetails = async (id, tagId) => {
     throw error;
   }
 };
-export const saveimportedValveList = async (data) => {};
+export const saveimportedValveList = async (data) => {
+   try {
+    const response = await commonApi("POST", `${url}/api/import-valve-list`, data);
+    return response;
+  } catch (error) {
+    throw error;
+  }
+};
 export const EditValvelist = async (data) => {
   try {
     const response = await commonApi("PUT", `${url}/api/edit-valve-list`, data);

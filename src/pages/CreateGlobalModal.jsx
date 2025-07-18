@@ -359,6 +359,7 @@ const processFile = async (file) => {
   try {
     // Process all meshes in parallel
     for (const mesh of container.meshes) {
+      console.log(mesh);
       if (!mesh.geometry) continue;
       meshPromises.push(processMesh(mesh, fileId, file.name));
     }

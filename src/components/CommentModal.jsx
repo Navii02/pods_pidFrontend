@@ -149,16 +149,33 @@ setallCommentStatus(response.data.data)
       setModalMessage("Please choose proper point")
     }
 
-    const data = {
-      docnumber: docdetnum || "",
-      comment,
-      status,
-      priority,
-      projectId,
-      coordinateX: content.intersectionPointX,
-      coordinateY: content.intersectionPointY,
-      coordinateZ: content.intersectionPointZ,
-    };
+    // const data = {
+    //   docnumber: docdetnum || "",
+    //   comment,
+    //   status,
+    //   priority,
+    //   projectId,
+    //   coordinateX: content.intersectionPointX,
+    //   coordinateY: content.intersectionPointY,
+    //   coordinateZ: content.intersectionPointZ,
+    // };
+  const data = {
+  docnumber: docdetnum || "",
+  comment,
+  status,
+  priority,
+  projectId,
+  coordinateX: content.intersectionPointX,
+  coordinateY: content.intersectionPointY,
+  coordinateZ: content.intersectionPointZ,
+  // Add the new fields if you have the data available
+  posX: content.posX || null,
+  posY: content.posY || null,
+  posZ: content.posZ || null,
+  targX: content.targX || null,
+  targY: content.targY || null,
+  targZ: content.targZ || null,
+};
 
     console.log("Saving Comment:", data);
  const response = await SaveComment(data)
@@ -174,6 +191,7 @@ setallCommentStatus(response.data.data)
        onClose();
        setIsMenuOpen(false);
        setCustomAlert(true);
+       console.log("comment added")
        setModalMessage("Comment added successfully..")
   };
  }

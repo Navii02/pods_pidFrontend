@@ -24,8 +24,6 @@ import {
 
 import { url } from "../services/Url";
 
-
-
 function BulkModelImport({ setLoading }) {
   const [progress, setProgress] = useState(0);
   const [files, setFiles] = useState([]);
@@ -52,8 +50,14 @@ function BulkModelImport({ setLoading }) {
   const [totalConversions, setTotalConversions] = useState(0);
   const [previewButton, setPreviewButton] = useState(false);
   const loadedModelsRef = useRef([]);
-    const [isConverting, setIsConverting] = useState(false);
+  const [isConverting, setIsConverting] = useState(false);
   const [visibleFiles, setVisibleFiles] = useState({});
+  // Add these state variables to your component
+  const [isProcessingFolder, setIsProcessingFolder] = useState(false);
+  const [processingProgress, setProcessingProgress] = useState(0);
+  const [totalFilesToProcess, setTotalFilesToProcess] = useState(0);
+  const [processedFileCount, setProcessedFileCount] = useState(0);
+  const [maxFileLimit] = useState(200000); // Set reasonable limit
 
   const modelInfoRef = useRef({
     boundingBoxMin: null,
@@ -563,27 +567,6 @@ function BulkModelImport({ setLoading }) {
     setConversionsInProgress((prev) => prev - 1);
   };
 
-  // const exportSceneAsGLB = () => {
-  //   if (!previewSceneRef.current) return;
-
-  //   const scene = previewSceneRef.current;
-
-  //   // Only export meshes that are visible and valid
-  //   const exportMeshes = scene.meshes.filter(mesh => mesh.isVisible && mesh.geometry);
-
-  //   if (exportMeshes.length === 0) {
-  //     console.warn("No valid meshes to export.");
-  //     return;
-  //   }
-
-  //   // Export the scene or specific meshes to GLB
-  //   GLTF2Export.GLBAsync(scene, "exported_model").then((glb) => {
-  //     glb.downloadFiles(); // Triggers the browser download of .glb
-  //   }).catch(err => {
-  //     console.error("Error exporting GLB:", err);
-  //   });
-  // };
-
   // Add this function to handle downloading the modified files
   const handleDownload = () => {
     if (!previewSceneRef.current || fileNamePath.length === 0) {
@@ -738,55 +721,196 @@ function BulkModelImport({ setLoading }) {
     processFiles(selectedFiles);
   };
 
-  const handleDrop = (e) => {
-    e.preventDefault();
-    const selectedFiles = [];
+  // Add progress indicator in your JSX
+  const ProgressIndicator = () =>
+    isProcessingFolder && (
+      <div
+        style={{
+          position: "fixed",
+          top: "50%",
+          left: "50%",
+          transform: "translate(-50%, -50%)",
+          backgroundColor: "rgba(0, 0, 0, 0.8)",
+          color: "white",
+          padding: "20px",
+          borderRadius: "10px",
+          zIndex: 9999,
+          textAlign: "center",
+        }}
+      >
+        <div>Processing folder...</div>
+        <div>Files processed: {processedFileCount}</div>
+        <div
+          style={{
+            width: "200px",
+            height: "10px",
+            backgroundColor: "#333",
+            borderRadius: "5px",
+            overflow: "hidden",
+            margin: "10px 0",
+          }}
+        >
+          <div
+            style={{
+              width: `${processingProgress}%`,
+              height: "100%",
+              backgroundColor: "#4CAF50",
+              transition: "width 0.3s ease",
+            }}
+          />
+        </div>
+        <div>{Math.round(processingProgress)}%</div>
+      </div>
+    );
 
+  const handleDrop = async (e) => {
+    e.preventDefault();
     const items = e.dataTransfer.items;
 
-    for (let i = 0; i < items.length; i++) {
-      const item = items[i].webkitGetAsEntry();
-      if (item.isDirectory) {
-        readDirectory(item, selectedFiles, () => {
-          processFiles(selectedFiles);
-        });
-      } else {
-        const file = items[i].getAsFile();
-        selectedFiles.push(file);
-      }
-    }
+    if (!items || items.length === 0) return;
 
-    // Process directly dropped files
-    if (selectedFiles.length > 0) {
-      processFiles(selectedFiles);
+    // Check if it's a folder drop
+    const item = items[0].webkitGetAsEntry();
+    if (item && item.isDirectory) {
+      setIsProcessingFolder(true);
+      setProcessingProgress(0);
+      setProcessedFileCount(0);
+
+      try {
+        const files = await readDirectoryWithLimits(item, maxFileLimit);
+        if (files.length > 0) {
+          processFiles(files);
+        }
+      } catch (error) {
+        console.error("Error processing folder:", error);
+        setCustomAlert(true);
+        setModalMessage(`Error processing folder: ${error.message}`);
+      } finally {
+        setIsProcessingFolder(false);
+      }
+    } else {
+      // Handle individual files normally
+      const selectedFiles = [];
+      for (let i = 0; i < items.length; i++) {
+        const file = items[i].getAsFile();
+        if (file) selectedFiles.push(file);
+      }
+      if (selectedFiles.length > 0) {
+        processFiles(selectedFiles);
+      }
     }
   };
 
-  const readDirectory = (directory, fileArray, callback) => {
-    const reader = directory.createReader();
-    reader.readEntries((entries) => {
-      let entryIndex = 0;
+  // New batch-processing directory reader with limits
+  const readDirectoryWithLimits = async (directoryEntry, maxFiles = 10000) => {
+    const allFiles = [];
+    let totalCount = 0;
 
-      const readNextEntry = () => {
-        if (entryIndex < entries.length) {
-          const entry = entries[entryIndex++];
-          if (entry.isFile) {
-            entry.file((file) => {
-              fileArray.push(file);
-              readNextEntry();
-            });
-          } else if (entry.isDirectory) {
-            readDirectory(entry, fileArray, readNextEntry);
-          } else {
-            readNextEntry();
+    const readDirectoryBatch = async (directory, fileArray) => {
+      return new Promise((resolve, reject) => {
+        const reader = directory.createReader();
+
+        const readBatch = async () => {
+          try {
+            reader.readEntries(async (entries) => {
+              if (entries.length === 0) {
+                resolve(); // No more entries
+                return;
+              }
+
+              // Process entries in smaller batches
+              const batchSize = 100;
+              for (let i = 0; i < entries.length; i += batchSize) {
+                if (totalCount >= maxFiles) {
+                  setCustomAlert(true);
+                  setModalMessage(
+                    `File limit reached (${maxFiles}). Only processing first ${maxFiles} files.`
+                  );
+                  resolve();
+                  return;
+                }
+
+                const batch = entries.slice(i, i + batchSize);
+                await processBatch(batch, fileArray);
+
+                // Update progress
+                setProcessedFileCount(totalCount);
+                setProcessingProgress(
+                  Math.min((totalCount / maxFiles) * 100, 100)
+                );
+
+                // Allow UI to update
+                await new Promise((resolve) => setTimeout(resolve, 10));
+              }
+
+              // Continue reading more entries
+              await readBatch();
+            }, reject);
+          } catch (error) {
+            reject(error);
           }
-        } else {
-          callback();
-        }
-      };
+        };
 
-      readNextEntry();
-    });
+        const processBatch = async (entries, fileArray) => {
+          const promises = entries.map((entry) => {
+            return new Promise(async (entryResolve) => {
+              if (totalCount >= maxFiles) {
+                entryResolve();
+                return;
+              }
+
+              if (entry.isFile) {
+                entry.file((file) => {
+                  // Filter for supported file types
+                  const supportedExtensions = [
+                    ".glb",
+                    ".gltf",
+                    ".fbx",
+                    ".obj",
+                    ".3ds",
+                    ".dae",
+                    ".ply",
+                  ];
+                  const fileExt =
+                    "." + file.name.split(".").pop().toLowerCase();
+
+                  if (supportedExtensions.includes(fileExt)) {
+                    fileArray.push(file);
+                    totalCount++;
+                  }
+                  entryResolve();
+                }, entryResolve);
+              } else if (entry.isDirectory) {
+                // Recursively read subdirectories
+                try {
+                  await readDirectoryBatch(entry, fileArray);
+                } catch (error) {
+                  console.warn(
+                    `Error reading subdirectory ${entry.name}:`,
+                    error
+                  );
+                }
+                entryResolve();
+              } else {
+                entryResolve();
+              }
+            });
+          });
+
+          await Promise.all(promises);
+        };
+
+        readBatch();
+      });
+    };
+
+    try {
+      await readDirectoryBatch(directoryEntry, allFiles);
+      setTotalFilesToProcess(allFiles.length);
+      return allFiles;
+    } catch (error) {
+      throw new Error(`Failed to read directory: ${error.message}`);
+    }
   };
 
   const processFiles = (selectedFiles) => {
@@ -802,69 +926,131 @@ function BulkModelImport({ setLoading }) {
     // loadFiles(selectedFiles);
   };
 
-const loadFiles = async (selectedFiles) => {
-  console.log("Loading files:", selectedFiles);
-  if (!selectedFiles || selectedFiles.length === 0) return;
-   const projectString = sessionStorage.getItem("selectedProject");
+  const loadFiles = async (selectedFiles) => {
+    console.log("Loading files:", selectedFiles);
+    if (!selectedFiles || selectedFiles.length === 0) return;
+    const projectString = sessionStorage.getItem("selectedProject");
+    const project = projectString ? JSON.parse(projectString) : null;
+    const projectId = project?.projectId;
+    setProgress(0);
+    setIsConverting(true);
+    setConversionsInProgress(selectedFiles.length);
+    setTotalConversions(selectedFiles.length);
+    const formData = new FormData();
+    selectedFiles.forEach((file) => {
+      formData.append("files", file);
+    });
+    formData.append("projectId", projectId);
+
+    try {
+      let responseReceived = false;
+
+      const response = await uploadFiles(
+        formData,
+        {
+          "Content-Type": "multipart/form-data",
+          projectId: projectId,
+        },
+        (event) => {
+          const percent = Math.round((event.loaded * 100) / event.total);
+          setProgress(percent);
+
+          if (percent === 100 && !responseReceived) {
+            setIsConverting(true);
+          }
+        }
+      );
+
+      responseReceived = true;
+      setIsConverting(false);
+
+      if (response.status === 200 && response.data.convertedFiles) {
+        const files = response.data.convertedFiles;
+
+        // Create array of URLs where the files are saved
+        const savedFileUrls = files.map((file) => ({
+          name: file.name,
+          path: `${url}/models/${projectId}/${file.name}`,
+        }));
+
+        console.log("Saved file URLs:", savedFileUrls);
+
+        setFileNamePath(savedFileUrls);
+        setConvertedFiles(savedFileUrls);
+      }
+    } catch (error) {
+      setIsConverting(false);
+      console.error("Error loading files:", error);
+      setCustomAlert(true);
+      setModalMessage(`Failed to load files: ${error.message}`);
+    } finally {
+      setConversionsInProgress(0);
+    }
+  };
+
+
+  const MAX_BATCH_SIZE = 100; // You can adjust this depending on server capability
+
+const uploadFilesInBatches = async (filesToUpload) => {
+  const totalBatches = Math.ceil(filesToUpload.length / MAX_BATCH_SIZE);
+  const projectString = sessionStorage.getItem("selectedProject");
   const project = projectString ? JSON.parse(projectString) : null;
   const projectId = project?.projectId;
+
   setProgress(0);
   setIsConverting(true);
-  setConversionsInProgress(selectedFiles.length);
-  setTotalConversions(selectedFiles.length);
-  const formData = new FormData();
-  selectedFiles.forEach((file) => {
-    formData.append("files", file);
-  });
-  formData.append("projectId", projectId);
+  setConversionsInProgress(filesToUpload.length);
+  setTotalConversions(filesToUpload.length);
 
-  try {
-    let responseReceived = false;
+  let uploadedFiles = [];
 
-    const response = await uploadFiles(
-      formData,
-      {
-        "Content-Type": "multipart/form-data",
-        "projectId":projectId
-      },
-      (event) => {
-        const percent = Math.round((event.loaded * 100) / event.total);
-        setProgress(percent);
+  for (let batchIndex = 0; batchIndex < totalBatches; batchIndex++) {
+    const start = batchIndex * MAX_BATCH_SIZE;
+    const end = start + MAX_BATCH_SIZE;
+    const batch = filesToUpload.slice(start, end);
 
-        if (percent === 100 && !responseReceived) {
-          setIsConverting(true);
+    const formData = new FormData();
+    batch.forEach((file) => {
+      formData.append("files", file);
+    });
+    formData.append("projectId", projectId);
+
+    try {
+      const response = await uploadFiles(
+        formData,
+        {
+          "Content-Type": "multipart/form-data",
+          projectId: projectId,
+        },
+        (event) => {
+          const percent = Math.round((event.loaded * 100) / event.total);
+          const overallProgress = Math.round(
+            ((batchIndex * MAX_BATCH_SIZE + (percent / 100) * batch.length) /
+              filesToUpload.length) *
+              100
+          );
+          setProgress(overallProgress);
         }
+      );
+
+      if (response.status === 200 && response.data.convertedFiles) {
+        const savedFileUrls = response.data.convertedFiles.map((file) => ({
+          name: file.name,
+          path: `${url}/models/${projectId}/${file.name}`,
+        }));
+        uploadedFiles = [...uploadedFiles, ...savedFileUrls];
       }
-    );
-
-    responseReceived = true;
-    setIsConverting(false);
-
-    if (response.status === 200 && response.data.convertedFiles) {
-      const files = response.data.convertedFiles;
-
-
-      // Create array of URLs where the files are saved
-      const savedFileUrls = files.map((file) => ({
-        name: file.name,
-        path: `${url}/models/${projectId}/${file.name}`, 
-      }));
-
-      console.log("Saved file URLs:", savedFileUrls);
-
-      setFileNamePath(savedFileUrls);
-      setConvertedFiles(savedFileUrls);
+    } catch (error) {
+      console.error(`Batch ${batchIndex + 1} failed:`, error);
       setCustomAlert(true);
-      setModalMessage("Files loaded and processed successfully");
+      setModalMessage(`Batch ${batchIndex + 1} failed: ${error.message}`);
     }
-  } catch (error) {
-    setIsConverting(false);
-    console.error("Error loading files:", error);
-    setCustomAlert(true);
-    setModalMessage(`Failed to load files: ${error.message}`);
-  } finally {
-    setConversionsInProgress(0);
   }
+
+  setIsConverting(false);
+  setConversionsInProgress(0);
+  setFileNamePath(uploadedFiles);
+  setConvertedFiles(uploadedFiles);
 };
 
   const handleRemoveFbxFile = (index) => {
@@ -1138,44 +1324,46 @@ const loadFiles = async (selectedFiles) => {
     }));
   };
 
- const handleSave = async () => {
-  if (fileNamePath.length === 0) {
-    setCustomAlert(true);
-    setModalMessage("Please convert files first");
-    return;
-  }
-
-  const projectString = sessionStorage.getItem("selectedProject");
-  const project = projectString ? JSON.parse(projectString) : null;
-  const projectId = project?.projectId;
-
-  try {
-    const hasModifications = checkIfModelModified(modelModificationsRef.current);
-
-    if (!hasModifications) {
-      // Save unmodified files
-      const files = fileNamePath.map((file) => ({
-        projectId: projectId,
-        name: file.name,
-        path: file.path,
-      }));
-
-      const response = await saveUnassignedData(files);
-      if (response.status === 200) {
-        handleClearAll();
-        setCustomAlert(true);
-        setModalMessage("The files saved successfully");
-      }
-    } else {
-      // Export and save modified files
-      await handleExportChanges();  // 🔁 Reuse existing export logic
+  const handleSave = async () => {
+    if (fileNamePath.length === 0) {
+      setCustomAlert(true);
+      setModalMessage("Please convert files first");
+      return;
     }
-  } catch (error) {
-    console.error("Error saving files:", error);
-    setCustomAlert(true);
-    setModalMessage(`Error saving files: ${error.message}`);
-  }
-};
+
+    const projectString = sessionStorage.getItem("selectedProject");
+    const project = projectString ? JSON.parse(projectString) : null;
+    const projectId = project?.projectId;
+
+    try {
+      const hasModifications = checkIfModelModified(
+        modelModificationsRef.current
+      );
+
+      if (!hasModifications) {
+        // Save unmodified files
+        const files = fileNamePath.map((file) => ({
+          projectId: projectId,
+          name: file.name,
+          path: file.path,
+        }));
+
+        const response = await saveUnassignedData(files);
+        if (response.status === 200) {
+          handleClearAll();
+          setCustomAlert(true);
+          setModalMessage("The files saved successfully");
+        }
+      } else {
+        // Export and save modified files
+        await handleExportChanges(); // 🔁 Reuse existing export logic
+      }
+    } catch (error) {
+      console.error("Error saving files:", error);
+      setCustomAlert(true);
+      setModalMessage(`Error saving files: ${error.message}`);
+    }
+  };
 
   const handleCancel = () => {
     // Reset all states
@@ -1584,7 +1772,11 @@ const loadFiles = async (selectedFiles) => {
     scene.activeCamera.dispose();
 
     // Create new Free camera
-    const camera = new BABYLON.UniversalCamera("flyCaUniversalCameramera", cameraPosition, scene);
+    const camera = new BABYLON.UniversalCamera(
+      "flyCaUniversalCameramera",
+      cameraPosition,
+      scene
+    );
 
     // Ensure we're looking at the right target
     camera.setTarget(cameraTarget);
@@ -2327,7 +2519,7 @@ const loadFiles = async (selectedFiles) => {
     }
   };
 
-   const handleExportChanges = async () => {
+  const handleExportChanges = async () => {
     if (!previewSceneRef.current) return;
 
     const scene = previewSceneRef.current;
@@ -2339,11 +2531,9 @@ const loadFiles = async (selectedFiles) => {
       console.log("No modified models to export");
       setCustomAlert(true);
       setModalMessage("No modified models to export");
-     
+
       return;
     }
-
- 
 
     for (const filename of filesToProcess) {
       const modelData = modelModificationsRef.current[filename];
@@ -2481,21 +2671,20 @@ const loadFiles = async (selectedFiles) => {
           blob instanceof Blob
             ? blob
             : new Blob([blob], { type: "application/octet-stream" });
-            
 
-       const arrayBuffer = await new Promise((resolve, reject) => {
-  const reader = new FileReader();
-  reader.onload = () => resolve(reader.result);
-  reader.onerror = reject;
-  reader.readAsArrayBuffer(finalBlob);
-});
+        const arrayBuffer = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result);
+          reader.onerror = reject;
+          reader.readAsArrayBuffer(finalBlob);
+        });
 
-const uint8Array = Array.from(new Uint8Array(arrayBuffer));
+        const uint8Array = Array.from(new Uint8Array(arrayBuffer));
 
-newFilePaths.push({
-  name: `${baseFilename}.glb`,
-  data: uint8Array,
-});
+        newFilePaths.push({
+          name: `${baseFilename}.glb`,
+          data: uint8Array,
+        });
 
         console.log(`Export successful: ${outputFilename}`);
         processedCount++;
@@ -2507,28 +2696,29 @@ newFilePaths.push({
       tempScene.dispose();
     }
 
- 
     console.log("All exports processed");
     console.log("Exported file paths:", newFilePaths);
-  const projectString = sessionStorage.getItem("selectedProject");
-  const project = projectString ? JSON.parse(projectString) : null;
-  const projectId = project?.projectId;
+    const projectString = sessionStorage.getItem("selectedProject");
+    const project = projectString ? JSON.parse(projectString) : null;
+    const projectId = project?.projectId;
 
     if (newFilePaths.length > 0) {
       const data = {
         fileNamePath: newFilePaths,
         projectId,
       };
-   
-        const response = await saveChangedUnassigned(data);
-        if(response.status===200){
-      handleClearAll();
-           setCustomAlert(true);
+
+      const response = await saveChangedUnassigned(data);
+      if (response.status === 200) {
+        handleClearAll();
+        setCustomAlert(true);
         setModalMessage("The files saved successfully");
-        }
+      }
     }
   };
 
+  
+  
   const speedBar = mode === "fly" && (
     <div
       className="speed-bar"
@@ -2637,9 +2827,9 @@ newFilePaths.push({
             onDragOver={(e) => e.preventDefault()}
             onDrop={handleDrop}
           >
-            <div className="drop-file" style={{width:'100%'}}>
+            <div className="drop-file" style={{ width: "100%" }}>
               <label htmlFor="bulkImportFiles" style={{ cursor: "pointer" }}>
-                Drag and drop folder or click here
+                Drag and drop folder or <span className="fw-bold">click here</span> 
               </label>
               <input
                 id="bulkImportFiles"
@@ -2655,32 +2845,46 @@ newFilePaths.push({
                   htmlFor="singleFileInput"
                   style={{ cursor: "pointer" }}
                 >
-                  Drag and drop files or click here
+                  Drag and drop files or <span className="fw-bold">click here</span>
                 </label>
                 <input
                   id="singleFileInput"
                   type="file"
                   multiple
+                  
                   onChange={handleFileChange}
                   style={{ display: "none" }}
                 />
               </div>
+              {/* Add progress indicator */}
+              <ProgressIndicator />
             </div>
             {files.length > 0 && (
-              <div className="row dropped-files">
-                {files.map((file, index) => (
-                  <div key={index} className="file">
-                    <div className="file-info">
-                      <i className="fa fa-file"></i> {file.name}
+              <div>
+                <div
+                  style={{
+                    fontWeight: "bold",
+                    color: "white",
+                    borderBottom: "1px solid #ccc",
+                  }}
+                >
+                  Dropped Files ({files.length})
+                </div>
+                <div className="row dropped-files">
+                  {files.map((file, index) => (
+                    <div key={index} className="file">
+                      <div className="file-info">
+                        <i className="fa fa-file"></i> {file.name}
+                      </div>
+                      <div className="file-actions">
+                        <i
+                          className="fa fa-close"
+                          onClick={() => handleRemoveFbxFile(index)}
+                        ></i>
+                      </div>
                     </div>
-                    <div className="file-actions">
-                      <i
-                        className="fa fa-close"
-                        onClick={() => handleRemoveFbxFile(index)}
-                      ></i>
-                    </div>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
             )}
           </div>
@@ -2708,7 +2912,7 @@ newFilePaths.push({
                 borderRadius: "4px",
                 cursor: "pointer",
               }}
-              onClick={() => loadFiles(files)}
+              onClick={() => uploadFilesInBatches(files)}
             >
               Load
             </button>
@@ -2719,113 +2923,132 @@ newFilePaths.push({
                 border: "none",
                 padding: "6px",
                 borderRadius: "4px",
-                cursor: "pointer",
+                cursor: files.length > 100 ? "not-allowed" : "pointer",
+                backgroundColor: files.length > 100 ? "#ccc" : "#fff",
               }}
               onClick={() => setPreviewButton(!previewButton)}
+              disabled={files.length > 100}
             >
               Preview
             </button>
           </div>
 
           {/* Options Panel */}
-       {/* Options Panel */}
-<div
-  style={{
-    padding: "10px",
-    borderTop: "1px solid #ccc",
-    
-  }}
->
-  <div
-    style={{
-      display: "flex",
-      alignItems: "center",
-      marginBottom: "15px",
-    }}
-  >
-    <input
-      type="checkbox"
-      id="removeAnimation"
-      checked={removeAnimation}
-      onChange={(e) => setRemoveAnimation(e.target.checked)}
-      style={{ marginRight: "10px", width: "16px", height: "16px" }}
-    />
-    <label htmlFor="removeAnimation" style={{ color: "white", margin: 0 }}>
-      Remove animation
-    </label>
-  </div>
+          {/* Options Panel */}
+          <div
+            style={{
+              padding: "10px",
+              borderTop: "1px solid #ccc",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                marginBottom: "15px",
+              }}
+            >
+              <input
+                type="checkbox"
+                id="removeAnimation"
+                checked={removeAnimation}
+                onChange={(e) => setRemoveAnimation(e.target.checked)}
+                style={{ marginRight: "10px", width: "16px", height: "16px" }}
+              />
+              <label
+                htmlFor="removeAnimation"
+                style={{ color: "white", margin: 0 }}
+              >
+                Remove animation
+              </label>
+            </div>
 
-  <div
-    style={{
-      display: "flex",
-      alignItems: "center",
-      marginBottom: "15px",
-    }}
-  >
-    <input
-      type="checkbox"
-      id="removeMaterials"
-      checked={removeMaterials}
-      onChange={(e) => setRemoveMaterials(e.target.checked)}
-      style={{ marginRight: "10px", width: "16px", height: "16px" }}
-    />
-    <label htmlFor="removeMaterials" style={{ color: "white", margin: 0, }}>
-      Remove Texture and material
-    </label>
-  </div>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                marginBottom: "15px",
+              }}
+            >
+              <input
+                type="checkbox"
+                id="removeMaterials"
+                checked={removeMaterials}
+                onChange={(e) => setRemoveMaterials(e.target.checked)}
+                style={{ marginRight: "10px", width: "16px", height: "16px" }}
+              />
+              <label
+                htmlFor="removeMaterials"
+                style={{ color: "white", margin: 0 }}
+              >
+                Remove Texture and material
+              </label>
+            </div>
 
-  <div style={{ display: "flex", alignItems: "center", marginBottom: "15px" }}>
-    <input
-      type="text"
-      value={simplificationFactor}
-      onChange={(e) => setSimplificationFactor(e.target.value)}
-      style={{
-        width: "50px",
-        height: "35px",
-        marginRight: "10px",
-        textAlign: "center",
-        border: "1px solid #ccc",
-        borderRadius: "4px"
-      }}
-    />
-    <label style={{ color: "white", margin: 0 }}>
-      Simplification angle(in degree)
-    </label>
-  </div>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                marginBottom: "15px",
+              }}
+            >
+              <input
+                type="text"
+                value={simplificationFactor}
+                onChange={(e) => setSimplificationFactor(e.target.value)}
+                style={{
+                  width: "50px",
+                  height: "35px",
+                  marginRight: "10px",
+                  textAlign: "center",
+                  border: "1px solid #ccc",
+                  borderRadius: "4px",
+                }}
+              />
+              <label style={{ color: "white", margin: 0 }}>
+                Simplification angle(in degree)
+              </label>
+            </div>
 
-  <div style={{ display: "flex", justifyContent: "space-between", marginTop: "20px" }}>
-    <button
-      style={{
-        backgroundColor: "white",
-        color: "black",
-        borderRadius: "4px",
-        border: "none",
-        padding: "10px",
-        width: "45%",
-        cursor: "pointer",
-        fontSize: "14px"
-      }}
-      onClick={handleReset}
-    >
-      Reset
-    </button>
-    <button
-      style={{
-        backgroundColor: "white",
-        color: "black",
-        borderRadius: "4px",
-        border: "none",
-        padding: "10px",
-        width: "45%",
-        cursor: "pointer",
-        fontSize: "14px"
-      }}
-      onClick={handleConvert}
-    >
-      Apply
-    </button>
-  </div>
-</div>
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                marginTop: "20px",
+              }}
+            >
+              <button
+                style={{
+                  backgroundColor: "white",
+                  color: "black",
+                  borderRadius: "4px",
+                  border: "none",
+                  padding: "10px",
+                  width: "45%",
+                  cursor: "pointer",
+                  fontSize: "14px",
+                }}
+                onClick={handleReset}
+              >
+                Reset
+              </button>
+              <button
+                style={{
+                  backgroundColor: "white",
+                  color: "black",
+                  borderRadius: "4px",
+                  border: "none",
+                  padding: "10px",
+                  width: "45%",
+                  cursor: "pointer",
+                  fontSize: "14px",
+                }}
+                onClick={handleConvert}
+              >
+                Apply
+              </button>
+            </div>
+          </div>
 
           {/* Model Transformation Area */}
           <div
@@ -3040,7 +3263,7 @@ newFilePaths.push({
               color: "white",
             }}
           >
-            CONVERTED FILE
+            CONVERTED FILE({convertedFiles.length ? convertedFiles.length : ""})
           </div>
           {progress > 0 && (
             <div className="row z-up" style={{ paddingTop: "20px" }}>

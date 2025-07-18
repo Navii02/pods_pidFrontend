@@ -189,6 +189,7 @@ function LineList() {
           ndtGroup: item["ndtGroup"] || "",
           chemCleaning: item["chemCleaning"] || "",
           pwht: item["pwht"] || "",
+          projectId:projectId,
         }));
 
         const response = await saveimportedLineList(formattedData);

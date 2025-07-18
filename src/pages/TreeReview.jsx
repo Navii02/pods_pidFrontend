@@ -12,6 +12,9 @@ import {
   deleteAllAreas,
   deleteAllDisciplines,
   deleteAllSystems,
+  RegisterArea,
+  RegisterDisipline,
+  RegisterSystem,
 } from "../services/TreeManagementApi";
 import "../styles/TreeReview.css";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
@@ -23,6 +26,8 @@ import {
 } from "../context/ContextShare";
 import DeleteConfirm from "../components/DeleteConfirm";
 import Alert from "../components/Alert";
+import { Modal } from "react-bootstrap";
+import * as XLSX from "xlsx";
 
 function TreeReview() {
   const { updateTree, setUpdatetree } = useContext(TreeresponseContext);
@@ -35,6 +40,7 @@ function TreeReview() {
   const projectString = sessionStorage.getItem("selectedProject");
   const project = projectString ? JSON.parse(projectString) : null;
   const projectId = project?.projectId;
+
   const [currentDeleteTag, setCurrentDeleteTag] = useState("");
   const [currentDeleteType, setCurrentDeleteType] = useState("");
   const [showConfirm, setShowConfirm] = useState(false);
@@ -44,6 +50,16 @@ function TreeReview() {
   const [editedLineData, setEditedLineData] = useState({});
   const [customAlert, setCustomAlert] = useState(false);
   const [modalMessage, setModalMessage] = useState("");
+
+  // Import related states
+  const [importArea, setImportArea] = useState(false);
+  const [importDisc, setImportDisc] = useState(false);
+  const [importSys, setImportSys] = useState(false);
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [excelData, setExcelData] = useState([]);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [importResults, setImportResults] = useState(null);
+  const [currentImportType, setCurrentImportType] = useState("");
 
   const handleDeleteTagFromTable = (number, type) => {
     setCurrentDeleteTag(number);
@@ -66,7 +82,7 @@ function TreeReview() {
       } else if (currentDeleteType === "all-system") {
         await deleteAllSystems();
       }
-      setUpdatetree(Date.now()); // Trigger update in ProjectDetails
+      setUpdatetree(Date.now());
       fetchData();
     } catch (error) {
       console.error("Delete failed:", error);
@@ -150,12 +166,207 @@ function TreeReview() {
           return;
       }
       handleCloseEdit();
-      setUpdatetree(Date.now()); // Trigger update in ProjectDetails
+      setUpdatetree(Date.now());
       fetchData();
     } catch (error) {
       console.error("Save failed:", error);
     }
   };
+
+  // Import functions
+  const handleImportTag = (type) => {
+    setCurrentImportType(type);
+    setExcelData([]);
+    setImportResults(null);
+    setSelectedFile(null);
+
+    if (type === "area") {
+      setImportArea(true);
+    } else if (type === "disc") {
+      setImportDisc(true);
+    } else if (type === "sys") {
+      setImportSys(true);
+    }
+  };
+
+  const handleCloseImport = () => {
+    setImportArea(false);
+    setImportDisc(false);
+    setImportSys(false);
+    setExcelData([]);
+    setImportResults(null);
+    setSelectedFile(null);
+    setCurrentImportType("");
+    setIsProcessing(false);
+  };
+
+  const handleExcelFileChange = (e) => {
+    const file = e.target.files[0];
+    setSelectedFile(file);
+
+    if (!file) {
+      setExcelData([]);
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const workbook = XLSX.read(event.target.result, { type: "array" });
+        const sheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[sheetName];
+        const jsonData = XLSX.utils.sheet_to_json(worksheet);
+
+        // Validate and format data
+        const formattedData = jsonData.map((row, index) => ({
+          rowNumber: index + 2, // Excel row number (starting from 2, assuming header in row 1)
+          code: (row.Code || row.code || "").toString().trim(),
+          name: (row.Name || row.name || "").toString().trim(),
+          isValid: !!(row.Code || row.code),
+        }));
+
+        setExcelData(formattedData);
+        setCustomAlert(false);
+      } catch (error) {
+        setCustomAlert(true);
+        setModalMessage("Error reading Excel file. Please check the format.");
+        setExcelData([]);
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  };
+
+  const handleDownloadTemplate = () => {
+    let templateData, filename;
+
+    if (currentImportType === "area") {
+      templateData = [
+        { Code: "AREA001", Name: "Sample Area 1" },
+        { Code: "AREA002", Name: "Sample Area 2" },
+      ];
+      filename = "area_import_template.xlsx";
+    } else if (currentImportType === "disc") {
+      templateData = [
+        { Code: "DISC001", Name: "Sample Discipline 1" },
+        { Code: "DISC002", Name: "Sample Discipline 2" },
+      ];
+      filename = "discipline_import_template.xlsx";
+    } else if (currentImportType === "sys") {
+      templateData = [
+        { Code: "SYS001", Name: "Sample System 1" },
+        { Code: "SYS002", Name: "Sample System 2" },
+      ];
+      filename = "system_import_template.xlsx";
+    }
+
+    const worksheet = XLSX.utils.json_to_sheet(templateData);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Data");
+    XLSX.writeFile(workbook, filename);
+  };
+
+  const handleImportClick = async () => {
+    const validData = excelData.filter((row) => row.isValid);
+    if (validData.length === 0) {
+      setCustomAlert(true);
+      setModalMessage("No valid data to import");
+      return;
+    }
+
+    setIsProcessing(true);
+    const results = {
+      success: [],
+      failures: [],
+      total: validData.length,
+    };
+
+    for (const row of validData) {
+      try {
+        const data = {
+          code: row.code,
+          name: row.name,
+          projectId,
+        };
+
+        let response;
+
+        // Call appropriate API based on current import type
+        if (currentImportType === "area") {
+          response = await RegisterArea(data);
+        } else if (currentImportType === "disc") {
+          response = await RegisterDisipline(data);
+        } else if (currentImportType === "sys") {
+          response = await RegisterSystem(data);
+        }
+
+        if (response && response.status === 200) {
+          results.success.push({
+            ...row,
+            message: "Successfully imported",
+          });
+        } else {
+          results.failures.push({
+            ...row,
+            message: "Failed to import",
+          });
+        }
+      } catch (error) {
+        console.error("Import error for row:", row, error);
+        results.failures.push({
+          ...row,
+          message:
+            error.status === 406 || error.status === 409
+              ? `${currentImportType} already exists`
+              : "Import failed",
+        });
+      }
+    }
+    setImportArea(false);
+    setImportDisc(false);
+
+    setImportSys(false);
+
+    if (results.success.length > 0) {
+      setUpdatetree(Date.now());
+      fetchData(); // Refresh the table data
+    }
+  };
+
+  // Export functions
+  const handleExportData = (type) => {
+    let data, filename;
+
+    if (type === "area") {
+      data = areaData.map((item) => ({ Code: item.area, Name: item.name }));
+      filename = "areas_export.xlsx";
+    } else if (type === "disc") {
+      data = discData.map((item) => ({ Code: item.disc, Name: item.name }));
+      filename = "disciplines_export.xlsx";
+    } else if (type === "sys") {
+      data = sysData.map((item) => ({ Code: item.sys, Name: item.name }));
+      filename = "systems_export.xlsx";
+    }
+
+    if (data.length === 0) {
+      setCustomAlert(true);
+      setModalMessage(`No ${type} data to export`);
+      return;
+    }
+
+    const worksheet = XLSX.utils.json_to_sheet(data);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Data");
+    XLSX.writeFile(workbook, filename);
+  };
+
+  const getImportModalTitle = () => {
+    if (currentImportType === "area") return "Import Areas";
+    if (currentImportType === "disc") return "Import Disciplines";
+    if (currentImportType === "sys") return "Import Systems";
+    return "Import";
+  };
+
+  const isImportModalOpen = importArea || importDisc || importSys;
 
   return (
     <div>
@@ -167,13 +378,23 @@ function TreeReview() {
               <tr>
                 <th className="wideHead">Code</th>
                 <th className="wideHead">Name</th>
-                <th className="tableActionCell">
+                <th className="mediumHead">
                   <i
-                    className="fa-solid fa-trash-can ms-3"
+                    className="fa-solid fa-trash-can ms-1"
                     title="Delete all"
-                    onClick={() => {
-                      handleDeleteTagFromTable(0, "all-area");
-                    }}
+                    onClick={() => handleDeleteTagFromTable(0, "all-area")}
+                  ></i>
+                  <i
+                    className="fa-solid fa-upload ms-1"
+                    title="Import"
+                    onClick={() => handleImportTag("area")}
+                    style={{ cursor: "pointer" }}
+                  ></i>
+                  <i
+                    className="fa-solid fa-download ms-1"
+                    title="Export"
+                    onClick={() => handleExportData("area")}
+                    style={{ cursor: "pointer" }}
                   ></i>
                 </th>
               </tr>
@@ -192,7 +413,7 @@ function TreeReview() {
                       tag.area
                     )}
                   </td>
-                  <td>
+                  <td className="text-center">
                     {editedAreaRowIndex === index ? (
                       <input
                         onChange={(e) => handleChange("name", e.target.value)}
@@ -243,11 +464,23 @@ function TreeReview() {
                 <th className="wideHead">Name</th>
                 <th className="tableActionCell">
                   <i
-                    className="fa-solid fa-trash-can ms-3"
+                    className="fa-solid fa-trash-can ms-1"
                     title="Delete all"
-                    onClick={() => {
-                      handleDeleteTagFromTable(0, "all-discipline");
-                    }}
+                    onClick={() =>
+                      handleDeleteTagFromTable(0, "all-discipline")
+                    }
+                  ></i>
+                  <i
+                    className="fa-solid fa-upload ms-1"
+                    title="Import"
+                    onClick={() => handleImportTag("disc")}
+                    style={{ cursor: "pointer" }}
+                  ></i>
+                  <i
+                    className="fa-solid fa-download ms-1"
+                    title="Export"
+                    onClick={() => handleExportData("disc")}
+                    style={{ cursor: "pointer" }}
                   ></i>
                 </th>
               </tr>
@@ -296,7 +529,7 @@ function TreeReview() {
                           onClick={() => handleEditOpen(index, "disc")}
                         ></i>
                         <i
-                          className="fa-solid fa-trash-can ms-3"
+                          className="fa-solid fa-trash-can ms-1"
                           onClick={() =>
                             handleDeleteTagFromTable(tag.discId, "disc")
                           }
@@ -319,9 +552,19 @@ function TreeReview() {
                   <i
                     className="fa-solid fa-trash-can ms-3"
                     title="Delete all"
-                    onClick={() => {
-                      handleDeleteTagFromTable(0, "all-system");
-                    }}
+                    onClick={() => handleDeleteTagFromTable(0, "all-system")}
+                  ></i>
+                  <i
+                    className="fa-solid fa-upload ms-1"
+                    title="Import"
+                    onClick={() => handleImportTag("sys")}
+                    style={{ cursor: "pointer" }}
+                  ></i>
+                  <i
+                    className="fa-solid fa-download ms-1"
+                    title="Export"
+                    onClick={() => handleExportData("sys")}
+                    style={{ cursor: "pointer" }}
                   ></i>
                 </th>
               </tr>
@@ -384,6 +627,68 @@ function TreeReview() {
           </table>
         </div>
       </form>
+
+      {/* Import Modal */}
+      {isImportModalOpen && (
+        <Modal
+          onHide={handleCloseImport}
+          show={isImportModalOpen}
+          backdrop="static"
+          keyboard={false}
+          dialogClassName="custom-modal"
+          size="lg"
+        >
+          <div className="tag-dialog">
+            <div className="title-dialog">
+              <p className="text-light">{getImportModalTitle()}</p>
+              <p className="text-light cross" onClick={handleCloseImport}>
+                &times;
+              </p>
+            </div>
+            <div className="dialog-input">
+              <label>Select Excel File</label>
+              <input
+                type="file"
+                accept=".xlsx,.xls"
+                onChange={handleExcelFileChange}
+                className="form-control mb-3"
+              />
+              <a
+                onClick={handleDownloadTemplate}
+                style={{ cursor: "pointer", color: "#00BFFF" }}
+              >
+                Download template
+              </a>
+            </div>
+
+            <div
+              className="dialog-button"
+              style={{
+                display: "flex",
+                justifyContent: "flex-end",
+                gap: "10px",
+                bottom: 0,
+              }}
+            >
+              <button className="btn btn-secondary" onClick={handleCloseImport}>
+                Cancel
+              </button>
+              <button
+                className="btn btn-dark"
+                onClick={handleImportClick}
+                disabled={excelData.length === 0 || isProcessing}
+              >
+                {isProcessing
+                  ? "Importing..."
+                  : `Import ${
+                      excelData.filter((r) => r.isValid).length
+                    } Records`}
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
       {showConfirm && (
         <DeleteConfirm
           message="Are you sure you want to delete this tag?"
@@ -391,6 +696,7 @@ function TreeReview() {
           onCancel={handleCancelDelete}
         />
       )}
+
       {customAlert && (
         <Alert message={modalMessage} onClose={() => setCustomAlert(false)} />
       )}

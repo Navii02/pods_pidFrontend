@@ -160,23 +160,50 @@ function ValveList() {
     setImportTag(false);
   };
 
-  const handleImportClick = () => {
-    if (selectedFile) {
-      const reader = new FileReader();
+const handleImportClick = async () => {
+  if (!selectedFile) {
+    setModalMessage("Please select a file to import.");
+    setCustomAlert(true);
+    return;
+  }
 
-      reader.onload = async (e) => {
-        const data = new Uint8Array(e.target.result);
-        const workbook = XLSX.read(data, { type: "array" });
-        const worksheet = workbook.Sheets[workbook.SheetNames[0]];
-        const jsonData = XLSX.utils.sheet_to_json(worksheet);
+  console.log("🚀 Starting valve import process...");
+  console.log("📁 Selected file:", selectedFile.name, selectedFile.size);
+  console.log("🆔 Project ID:", projectId);
 
-        const formattedData = jsonData.map(item => ({
+  setImportTag(false); // Close modal immediately to show loading state
+  setModalMessage("Importing valve data, please wait...");
+  setCustomAlert(true);
+
+  const reader = new FileReader();
+
+  reader.onload = async (e) => {
+    try {
+      const data = new Uint8Array(e.target.result);
+      const workbook = XLSX.read(data, { type: "array" });
+      const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+      const jsonData = XLSX.utils.sheet_to_json(worksheet);
+
+      console.log("📊 Raw Excel data:", jsonData);
+      console.log("📏 Number of rows:", jsonData.length);
+
+      if (jsonData.length === 0) {
+        setModalMessage("No data found in the Excel file");
+        setCustomAlert(true);
+        return;
+      }
+
+      // Updated field mapping to match database structure
+      const formattedData = jsonData.map((item, index) => {
+        const formattedItem = {
+          projectId: projectId, // Add projectId to each item
+          // Use tag_number as the main tag if available, otherwise use tag
+          tag: item["tag_number"] || item["tag"] || "",
           area: item["area"] || "",
           discipline: item["discipline"] || "",
-          system: item["system"] || "",
+          system: item["system"] || item["Systm"] || "", // Handle both variations
           function_code: item["function_code"] || "",
           sequence_number: item["sequence_number"] || "",
-          tag_number: item["tag_number"] || "",
           line_id: item["line_id"] || "",
           line_number: item["line_number"] || "",
           pid: item["pid"] || "",
@@ -192,21 +219,38 @@ function ValveList() {
           information_status: item["information_status"] || "",
           equipment_status: item["equipment_status"] || "",
           comment: item["comment"] || ""
-        }));
-
-        const response = await saveimportedValveList(formattedData);
-        if (response.status === 200) {
-          setImportTag(false);
-          setSelectedFile(null);
-          fetchValveData(projectId);
-          setModalMessage("File imported successfully");
-          setCustomAlert(true);
-        }
-      };
-
-      reader.readAsArrayBuffer(selectedFile);
+        };
+        
+        console.log(`📝 Valve row ${index + 1} formatted:`, formattedItem);
+        return formattedItem;
+      });
+   
+      const response = await saveimportedValveList(formattedData);
+      
+      if (response.status === 200) {
+        const { results } = response.data;      
+        setModalMessage("Valve list added");
+        setCustomAlert(true);
+        setSelectedFile(null);
+        fetchValveData(projectId); // Refresh the valve list
+      } else {
+        throw new Error(response.data.error || "Import failed");
+      }
+    } catch (error) {
+      console.error("💥 Valve import error:", error);
+      setModalMessage(`Import failed: ${error.message || "Unknown error"}`);
+      setCustomAlert(true);
     }
   };
+
+  reader.onerror = () => {
+    console.error("📁 File reading error");
+    setModalMessage("Error reading file. Please try again.");
+    setCustomAlert(true);
+  };
+
+  reader.readAsArrayBuffer(selectedFile);
+};
 
   const handleExcelFileChange = (e) => {
     setSelectedFile(e.target.files[0]);
@@ -214,73 +258,118 @@ function ValveList() {
 
   const handleDownloadTemplate = () => {
     const headers = [
-      "area",
-      "discipline",
-      "system",
-      "function_code",
-      "sequence_number",
-      "tag_number",
-      "line_id",
-      "line_number",
-      "pid",
-      "isometric",
-      "data_sheet",
-      "drawings",
-      "design_pressure",
-      "design_temperature",
-      "size",
-      "paint_system",
-      "purchase_order",
-      "supplier",
-      "information_status",
-      "equipment_status",
-      "comment"
-    ];
-
+    "tag_number",      // Main tag field (maps to 'tag' in database)
+    "area",
+    "discipline", 
+    "system",          // Maps to 'Systm' in database
+    "function_code",
+    "sequence_number",
+    "line_id",
+    "line_number",
+    "pid",
+    "isometric",
+    "data_sheet",
+    "drawings",
+    "design_pressure",
+    "design_temperature",
+    "size",
+    "paint_system",
+    "purchase_order",
+    "supplier",
+    "information_status",
+    "equipment_status",
+    "comment"
+  ];
     const worksheet = XLSX.utils.aoa_to_sheet([headers]);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "ValveListTemplate");
     XLSX.writeFile(workbook, "ValveListTemplate.xlsx");
   };
 
-  const handleExport = () => {
-    const headers = [
-      "area",
-      "discipline",
-      "system",
-      "function_code",
-      "sequence_number",
-      "tag_number",
-      "line_id",
-      "line_number",
-      "pid",
-      "isometric",
-      "data_sheet",
-      "drawings",
-      "design_pressure",
-      "design_temperature",
-      "size",
-      "paint_system",
-      "purchase_order",
-      "supplier",
-      "information_status",
-      "equipment_status",
-      "comment"
-    ];
+const handleExport = () => {
+  const headers = [
+    "tag_number",      // Export as tag_number for consistency
+    "area",
+    "discipline", 
+    "system",          // Export system (not Systm)
+    "function_code",
+    "sequence_number",
+    "line_id",
+    "line_number",
+    "pid",
+    "isometric",
+    "data_sheet",
+    "drawings",
+    "design_pressure",
+    "design_temperature",
+    "size",
+    "paint_system",
+    "purchase_order",
+    "supplier",
+    "information_status",
+    "equipment_status",
+    "comment"
+  ];
 
-    const dataToExport = allValveList?.map((item) => {
-      const row = {};
-      headers.forEach((header) => {
-        row[header] = item[header] || "";
-      });
-      return row;
+  const dataToExport = allValveList?.map((item) => {
+    return {
+      tag_number: item.tag || "",           // Main tag field
+      area: item.area || "",
+      discipline: item.discipline || "",
+      system: item.Systm || "",            // Map Systm to system for export
+      function_code: item.function_code || "",
+      sequence_number: item.sequence_number || "",
+      line_id: item.line_id || "",
+      line_number: item.line_number || "",
+      pid: item.pid || "",
+      isometric: item.isometric || "",
+      data_sheet: item.data_sheet || "",
+      drawings: item.drawings || "",
+      design_pressure: item.design_pressure || "",
+      design_temperature: item.design_temperature || "",
+      size: item.size || "",
+      paint_system: item.paint_system || "",
+      purchase_order: item.purchase_order || "",
+      supplier: item.supplier || "",
+      information_status: item.information_status || "",
+      equipment_status: item.equipment_status || "",
+      comment: item.comment || ""
+    };
+  });
+
+  const ws = XLSX.utils.json_to_sheet(dataToExport, { header: headers });
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Valve List");
+  XLSX.writeFile(wb, "valve_list.xlsx");
+};
+
+// Validation function for valve import data
+const validateValveImportData = (data) => {
+  const errors = [];
+  const requiredFields = ['tag'];
+  
+  data.forEach((item, index) => {
+    requiredFields.forEach(field => {
+      if (!item[field] || item[field].trim() === '') {
+        errors.push(`Row ${index + 1}: Missing required field '${field}'`);
+      }
     });
+    
+    // Validate numeric fields if present
+    const numericFields = ['design_pressure', 'design_temperature', 'sequence_number'];
+    numericFields.forEach(field => {
+      if (item[field] && item[field].trim() !== '') {
+        const numValue = parseFloat(item[field]);
+        if (isNaN(numValue)) {
+          errors.push(`Row ${index + 1}: Invalid numeric value for '${field}': ${item[field]}`);
+        }
+      }
+    });
+  });
+  
+  return errors;
+};
 
-    const ws = XLSX.utils.json_to_sheet(dataToExport, { header: headers });
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Valve List");
-    XLSX.writeFile(wb, "valve_list.xlsx");
-  };
 
   const handleSearch = (e) => {
     setSearchQuery(e.target.value);

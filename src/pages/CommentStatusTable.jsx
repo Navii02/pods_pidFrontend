@@ -6,7 +6,8 @@ import {
   faTrash,
   faPencil,
   faFloppyDisk,
-  faXmark
+  faXmark,
+  faUpload
 } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { getStatustableData, addStatus, deleteStatus } from "../services/CommentApi";
@@ -23,7 +24,7 @@ const CommentStatusTable = () => {
   const [showModal, setShowModal] = useState(false);
   const [modalStatus, setModalStatus] = useState("");
   const [modalColor, setModalColor] = useState("#ffffff");
-  const [modalAlert, setModalAlert] = useState(false);
+  const [customAlert, setCustomAlert] = useState(false);
   const [modalMessage, setModalMessage] = useState("");
   const [showConfirm, setShowConfirm] = useState(false);
   const [currentDeleteNumber, setCurrentDeleteNumber] = useState(null);
@@ -55,7 +56,7 @@ const CommentStatusTable = () => {
     if (showModal) {
       setModalStatus("");
       setModalColor("#ffffff");
-      setModalAlert(false);
+      setCustomAlert(false);
       setModalMessage("");
     }
   }, [showModal]);
@@ -103,7 +104,7 @@ const CommentStatusTable = () => {
 
   const handleModalOk = async () => {
     if (!modalStatus.trim()) {
-      setModalAlert(true);
+      setCustomAlert(true);
       setModalMessage("Status is mandatory");
       return;
     }
@@ -117,11 +118,13 @@ const CommentStatusTable = () => {
     try {
       const response = await addStatus(newStatus);
       if (response.status === 200 || response.status === 201) {
+        setCustomAlert(true);
+        setModalMessage("New status added")
         getStatusTable(projectId);
         handleCloseModal();
       }
     } catch (error) {
-      setModalAlert(true);
+      setCustomAlert(true);
       setModalMessage("Failed to add status. Please try again.");
     }
   };
@@ -144,7 +147,9 @@ const CommentStatusTable = () => {
   const handleSave = async () => {
     try {
       const response = await addStatus(editedStatusData);
-      if (response.status === 200) {
+      if (response.status === 200 || response.status === 201) {
+         setCustomAlert(true);
+        setModalMessage("Updated successfully..")
         getStatusTable(projectId);
         handleCloseEdit();
       }
@@ -157,6 +162,7 @@ const CommentStatusTable = () => {
     setEditedStatusData({
       ...editedStatusData,
       [field]: value,
+      projectId
     });
   };
 
@@ -167,35 +173,70 @@ const CommentStatusTable = () => {
     setSelectedFile(e.target.files[0]);
   };
 
-  const handleImportClick = async () => {
-    if (selectedFile) {
-      const reader = new FileReader();
-      reader.onload = async (e) => {
-        const data = new Uint8Array(e.target.result);
-        const workbook = XLSX.read(data, { type: "array" });
-        const worksheet = workbook.Sheets[workbook.SheetNames[0]];
-        const jsonData = XLSX.utils.sheet_to_json(worksheet);
+const handleImportClick = async () => {
+  if (selectedFile) {
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      const data = new Uint8Array(e.target.result);
+      const workbook = XLSX.read(data, { type: "array" });
+      const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+      const jsonData = XLSX.utils.sheet_to_json(worksheet);
 
-        const formattedData = jsonData.map(item => ({
-          statusname: item["Status"] || "",
-          color: item["Color"] || "#ffffff",
-          projectId
-        }));
+      const formattedData = jsonData.map(item => ({
+        statusname: item["Status"] || "",
+        color: item["Color"] || "#ffffff",
+        projectId
+      }));
 
-        try {
-          // You would need to implement a bulk import API endpoint
-          // const response = await bulkImportStatuses(formattedData);
-          // if(response.status === 200) {
-          //   getStatusTable(projectId);
-          //   handleCloseImport();
-          // }
-        } catch (error) {
-          console.error("Failed to import statuses:", error);
+      try {
+        let successCount = 0;
+        let errorCount = 0;
+
+        // Loop through each status and add them individually
+        for (const statusItem of formattedData) {
+          // Skip empty status names
+          if (!statusItem.statusname.trim()) {
+            continue;
+          }
+
+          try {
+            const response = await addStatus(statusItem);
+            if (response.status === 200 || response.status === 201) {
+              successCount++;
+            } else {
+              errorCount++;
+            }
+          } catch (error) {
+            console.error(`Failed to add status: ${statusItem.statusname}`, error);
+            errorCount++;
+          }
         }
-      };
-      reader.readAsArrayBuffer(selectedFile);
-    }
-  };
+
+        // Show success/error message
+        setCustomAlert(true);
+        if (errorCount === 0) {
+          setModalMessage(`Successfully imported ${successCount} statuses`);
+        } else {
+          setModalMessage(`Imported ${successCount} statuses. ${errorCount} failed.`);
+        }
+
+        // Refresh the table and close modal
+        getStatusTable(projectId);
+        handleCloseImport();
+        setSelectedFile(null);
+
+      } catch (error) {
+        console.error("Failed to import statuses:", error);
+        setCustomAlert(true);
+        setModalMessage("Failed to import statuses. Please try again.");
+      }
+    };
+    reader.readAsArrayBuffer(selectedFile);
+  } else {
+    setCustomAlert(true);
+    setModalMessage("Please select a file to import.");
+  }
+};
 
   const handleDownloadTemplate = () => {
     const headers = ["Status", "Color"];
@@ -220,21 +261,22 @@ const CommentStatusTable = () => {
               <th className="wideHead">Color</th>
               <th className="tableActionCell">
                 <FontAwesomeIcon 
-                  icon={faDownload} 
+                  icon={ faDownload} 
                   title="Export"
                   onClick={handleExport}
                   style={{ cursor: "pointer" }}
                 />
+               
                 <FontAwesomeIcon 
+                  icon={faUpload} 
+                  title="Import"
+                  onClick={handleImportStatus}
+                  style={{ cursor: "pointer", marginLeft: "15px" }}
+                />
+                 <FontAwesomeIcon 
                   icon={faPlus} 
                   title="Add Status"
                   onClick={handleAdd}
-                  style={{ cursor: "pointer", marginLeft: "15px" }}
-                />
-                <FontAwesomeIcon 
-                  icon={faDownload} 
-                  title="Import"
-                  onClick={handleImportStatus}
                   style={{ cursor: "pointer", marginLeft: "15px" }}
                 />
               </th>
@@ -376,20 +418,17 @@ const CommentStatusTable = () => {
                 type="color"
                 value={modalColor}
                 onChange={(e) => setModalColor(e.target.value)}
+                className="mb-3"
               />
               <span>{modalColor}</span>
             </div>
-            {modalAlert && (
-              <div className="alert alert-danger mt-3">
-                {modalMessage}
-              </div>
-            )}
+          
           </div>
           <div className="dialog-button">
             <button className="btn btn-secondary" onClick={handleCloseModal}>
               Cancel
             </button>
-            <button className="btn btn-dark" onClick={handleModalOk}>
+            <button className="btn btn-dark ms-4" onClick={handleModalOk}>
               Save
             </button>
           </div>
@@ -430,13 +469,20 @@ const CommentStatusTable = () => {
               <button className="btn btn-secondary" onClick={handleCloseImport}>
                 Cancel
               </button>
-              <button className="btn btn-dark" onClick={handleImportClick}>
+              <button className="btn btn-dark ms-4" onClick={handleImportClick}>
                 Upload
               </button>
             </div>
           </div>
         </Modal>
       )}
+         {customAlert && (
+              <Alert
+                message={modalMessage}
+                onAlertClose={() => setCustomAlert(false)}
+              />
+            )}
+      
 
       {/* Delete Confirmation */}
       {showConfirm && (

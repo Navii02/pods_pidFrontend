@@ -15,6 +15,7 @@ import {
   getdocumentsbyTags,
   GetTagDetails,
   updateTags,
+  RegisterTag
 } from "../services/TagApi";
 import {
   TreeresponseContext,
@@ -23,6 +24,8 @@ import {
 import { Modal } from "react-bootstrap";
 import Alert from "../components/Alert";
 import DeleteConfirm from "../components/DeleteConfirm";
+import { saveAs } from 'file-saver';
+import * as XLSX from 'xlsx';
 
 const Tagreview = () => {
   const { updateProject } = useContext(updateProjectContext);
@@ -48,6 +51,8 @@ const Tagreview = () => {
   const navigate = useNavigate();
   const [selectedTagIds, setSelectedTagIds] = useState([]);
   const [loaded, setLoaded] = useState(false);
+  const [importTag, setImportTag] = useState(false);
+  const [selectedFile, setSelectedFile] = useState(null);
 
 
   const projectString = sessionStorage.getItem("selectedProject");
@@ -90,7 +95,7 @@ const Tagreview = () => {
         ...editData,
         parenttag: editData.parentTag,
       };
-      const response = await updateTags(tagId, payload);
+      const response = await updateTags(tagId,projectId, payload);
       if (response.status === 200) {
         setModalMessage("The Tag is updated Successfully");
         setCustomAlert(true);
@@ -223,6 +228,193 @@ const handleConfirmDelete = async () => {
   if (loaded) GetTags();
 }, [updateProject, loaded]);
 
+  const handleExportTag = () => {
+    // Define readable headers and matching field keys
+    const headers = [
+      { label: 'Tag Number*', key: 'number' },
+      { label: 'Name', key: 'name' },
+      { label: 'Type*', key: 'type' },
+      { label: 'Parent Tag', key: 'parenttag' },
+      { label: 'Model', key: 'filename' }
+    ];
+  
+    // Choose which data to export
+    const dataToExport = filteredTags.length > 0 ? filteredTags : [];
+  
+    // Convert data for Excel export
+    const exportData = dataToExport.map(tag => ({
+      number: tag.number,
+      name: tag.name,
+      type: tag.type,
+      parenttag: tag.parenttag,
+      filename: tag.filename
+    }));
+  
+    // Create worksheet with column headers
+    const ws = XLSX.utils.json_to_sheet(exportData);
+    
+    // Set custom headers manually
+    XLSX.utils.sheet_add_aoa(ws, [headers.map(h => h.label)], { origin: "A1" });
+  
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Tag List');
+  
+    const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+  
+    saveAs(new Blob([wbout], { type: 'application/octet-stream' }), 'Taglist.xlsx');
+  };
+
+    const handleDownloadTemplate = () => {
+    // Define header labels and object keys
+    const headers = [
+      { label: 'TagNumber*', key: 'number' },
+      { label: 'Name', key: 'name' },
+      { label: 'Type*', key: 'type' },
+      { label: 'Parent Tag', key: 'parenttag' },
+      { label: 'Possible Values for Type', key: '' }
+    ];
+  
+    // Create initial empty row
+    const data = [
+      { number: "", name: "", type: "", parenttag: "" }
+    ];
+  
+    // Create worksheet from data (use keys only)
+    const ws = XLSX.utils.json_to_sheet(data, { header: headers.map(h => h.key) });
+  
+    // Add readable headers to the first row
+    XLSX.utils.sheet_add_aoa(ws, [headers.map(h => h.label)], { origin: "A1" });
+  
+    // Add possible values under "Possible Values for Type" column
+    XLSX.utils.sheet_add_aoa(ws, [
+      ["", "", "", "", "Line"],
+      ["", "", "", "", "Equipment"],
+      ["", "", "", "", "Valve"],
+      ["", "", "", "", "Structural"],
+      ["", "", "", "", "Other"]
+    ], { origin: -1 });
+  
+    // Set column widths
+    ws['!cols'] = [
+      { wch: 15 },  // TagNumber
+      { wch: 20 },  // Name
+      { wch: 15 },  // Type
+      { wch: 20 },  // Parent Tag
+      { wch: 30 }   // Possible Values
+    ];
+  
+    // Apply yellow background to the "Possible Values" column
+    const range = XLSX.utils.decode_range(ws['!ref']);
+    for (let R = 1; R <= range.e.r; ++R) {
+      const cellAddress = XLSX.utils.encode_cell({ c: 4, r: R });
+      if (!ws[cellAddress]) ws[cellAddress] = {};
+      ws[cellAddress].s = {
+        fill: { fgColor: { rgb: "FFFF00" } }
+      };
+    }
+  
+    // Create workbook and save
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Tag-Import-Template');
+    const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+    saveAs(new Blob([wbout], { type: 'application/octet-stream' }), 'Tag-Import-Template.xlsx');
+  };
+    const handleImportTag = () => {
+    setImportTag(true);
+  }
+
+  const handleClose = () => {
+    setImportTag(false);
+  }
+  const handleExcelFileChange = (e) => {
+    setSelectedFile(e.target.files[0]);
+  }
+
+  const handleImportClick = async () => {
+  if (!selectedFile) {
+    setModalMessage("Please select a file to import.");
+    setCustomAlert(true);
+    return;
+  }
+
+  const reader = new FileReader();
+  reader.onload = async (e) => {
+    try {
+      const data = new Uint8Array(e.target.result);
+      const workbook = XLSX.read(data, { type: "array" });
+      const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+      const jsonData = XLSX.utils.sheet_to_json(worksheet);
+       // Filter out rows with empty tagNumber, name, or type
+        const formattedData = jsonData
+          .map(item => ({
+            tagNumber: item['TagNumber*'],
+            name: item['Name'],
+            type: item['Type*'],
+            parenttag: item['Parent Tag'] || null,
+              project_id: projectId
+          }))
+          .filter(item => item.tagNumber && item.name && item.type);  // Filter empty rows
+
+      let successCount = 0;
+      let errorCount = 0;
+      const errors = [];
+      console.log(formattedData)
+
+      // Loop through each tag and register them individually
+      for (const tagData of formattedData) {
+        // Skip rows with empty required fields
+        if (!tagData.tagNumber.trim() || !tagData.type.trim()) {
+          errorCount++;
+          errors.push(`Skipped row: Tag Number and Type are required`);
+          continue;
+        }
+
+        try {
+          const response = await RegisterTag(tagData);
+          if (response.status === 201) {
+            successCount++;
+          } else {
+            errorCount++;
+            errors.push(`Failed to register tag: ${tagData.tagNumber}`);
+          }
+        } catch (error) {
+          console.error(`Failed to register tag: ${tagData.tagNumber}`, error);
+          errorCount++;
+          const errorMsg = error.response?.data?.message || 
+                          error.response?.data?.error || 
+                          `Failed to register tag: ${tagData.tagNumber}`;
+          errors.push(errorMsg);
+        }
+      }
+
+      // Show detailed results
+      if (errorCount === 0) {
+        setModalMessage(`Successfully imported ${successCount} tags`);
+      } else if (successCount === 0) {
+        setModalMessage(`Import failed. ${errorCount} errors occurred.`);
+      } else {
+        setModalMessage(
+          `Imported ${successCount} tags successfully. ${errorCount} failed. Check console for details.`
+        );
+        if (errors.length > 0) {
+          console.log("Import errors:", errors);
+        }
+      }
+
+      setCustomAlert(true);
+      GetTags(); // Refresh the table
+      handleClose();
+
+    } catch (error) {
+      console.error("Failed to process Excel file:", error);
+      setModalMessage("Failed to process Excel file. Please check the format.");
+      setCustomAlert(true);
+    }
+  };
+  
+  reader.readAsArrayBuffer(selectedFile);
+};
+
 
   return (
     <div
@@ -262,11 +454,13 @@ const handleConfirmDelete = async () => {
                   icon={faDownload}
                   className="me-2"
                   title="Export"
+                  onClick={handleExportTag}
                 />
                 <FontAwesomeIcon
                   icon={faUpload}
                   className="me-2"
                   title="Import"
+                  onClick={handleImportTag}
                 />
                 <FontAwesomeIcon  onClick={handleMultipleDelete}
   icon={faTrash}
@@ -305,17 +499,8 @@ const handleConfirmDelete = async () => {
                     />
                   </td>
                   <td>
-                    {editingId === tag.tagId ? (
-                      <input
-                        type="text"
-                        name="number"
-                        value={editData.number || ""}
-                        onChange={handleChange}
-                        className="form-control bg-white text-black"
-                      />
-                    ) : (
-                      tag.number
-                    )}
+                
+                    {  tag.number}
                   </td>
                   <td>
                     {editingId === tag.tagId ? (
@@ -538,6 +723,32 @@ const handleConfirmDelete = async () => {
             )}
           </div>
         )}
+          {importTag &&
+        <Modal
+          onHide={handleClose}
+          show={importTag}
+          backdrop="static"
+          keyboard={false}
+          dialogClassName="custom-modal"
+        >
+          <div className="tag-dialog">
+            <div className="title-dialog">
+              <p className='text-light'>Import Tag</p>
+              <p className='text-light cross' onClick={handleClose}>&times;</p>
+            </div>
+            <div className="dialog-input">
+              <label>File</label>
+              <input
+                type="file" onChange={handleExcelFileChange} />
+              <a onClick={handleDownloadTemplate} style={{ cursor: 'pointer', color: ' #00BFFF' }}>Download template</a>
+            </div>
+            <div className='dialog-button' style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', bottom: 0 }}>
+              <button className='btn btn-secondary' onClick={handleClose}>Cancel</button>
+              <button className='btn btn-dark' onClick={handleImportClick}>Upload</button>
+            </div>
+          </div>
+        </Modal>
+      }
 
         {customAlert && (
           <Alert
