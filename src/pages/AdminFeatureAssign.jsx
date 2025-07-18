@@ -1,125 +1,565 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from "react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import {
+  faEdit,
+  faTrash,
+  faSave,
+  faTimes,
+} from "@fortawesome/free-solid-svg-icons";
+import {
+  AssignuserFeature,
+  getfeatures,
+  getUserfeature,
+} from "../services/UserApi";
+import { getProjects } from "../services/CommonApis";
+import Alert from "../components/Alert";
 
 function AdminFeatureAssign() {
   const [users, setUsers] = useState([]);
-  const [assignments, setAssignments] = useState({}); // { "userId-feature": true }
+  const [selectedUsers, setSelectedUsers] = useState([]);
+  const [projects, setProjects] = useState([]);
+  const [selectedProject, setSelectedProject] = useState(null);
+  const [featureRoleMap, setFeatureRoleMap] = useState({});
+  const [sidebarVisible, setSidebarVisible] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [userProjects, setUserProjects] = useState({});
+  const [features, setFeatures] = useState([]);
+  const [userFeaturesWithProjects, setUserFeaturesWithProjects] = useState([]);
+   const [customAlert, setCustomAlert] = useState(false);
+  const [modalMessage, setModalMessage] = useState("");
+   
+  
+
+  const roles = ["EDITOR", "VIEWER", "NO ROLE"];
+
+  const getProjectDetails = async () => {
+    const response = await getProjects();
+    setProjects(response.data.row);
+    const result = await getfeatures();
+    setFeatures(result.data);
+
+    // Fetch all user feature assignments
+    const userFeaturesResponse = await getUserfeature();
+    setUserFeaturesWithProjects(userFeaturesResponse.data);
+
+    // Create a map of projects by user
+    const projectsByUser = {};
+    userFeaturesResponse.data.forEach((feature) => {
+      if (!projectsByUser[feature.userId]) {
+        projectsByUser[feature.userId] = new Set();
+      }
+      if (feature.projectName) {
+        projectsByUser[feature.userId].add(feature.projectName);
+      }
+    });
+
+    // Convert Sets to Arrays
+    const formattedUserProjects = {};
+    Object.keys(projectsByUser).forEach((userId) => {
+      formattedUserProjects[userId] = Array.from(projectsByUser[userId]);
+    });
+
+    setUserProjects(formattedUserProjects);
+  };
 
   useEffect(() => {
-    // Replace with API call if needed
-    const dummyUsers = [
-      { id: 1, email: "456@poulconsult.com", role: "EDITOR" },
-      { id: 2, email: "333@poulconsult.com", role: "VIEWER" },
-      { id: 3, email: "670@poulconsult.com", role: "EDITOR" },
+    // Initialize with sample users
+    const sampleUsers = [
+      { userId: 1, email: "456@poulconsult.com", role: "EDITOR" },
+      { userId: 2, email: "333@poulconsult.com", role: "VIEWER" },
+      { userId: 3, email: "670@poulconsult.com", role: "EDITOR" },
     ];
-    setUsers(dummyUsers);
 
-    // Initial dummy assignments
-    setAssignments({
-      "1-linelist": true,
-      "1-eqplist": true,
-      "3-linelist": true,
-      "3-eqplist": true,
-      "3-taglist": true,
-    });
+    setUsers(sampleUsers);
+    getProjectDetails();
+    setFeatureRoleMap({});
   }, []);
 
-  const features = ["linelist", "eqplist", "taglist"];
+  const handleUserSelect = async (userId) => {
+    const newSelectedUsers = selectedUsers.includes(userId)
+      ? selectedUsers.filter((id) => id !== userId)
+      : [...selectedUsers, userId];
 
-  const handleCheckboxChange = (userId, feature) => {
-    const key = `${userId}-${feature}`;
-    setAssignments(prev => ({
-      ...prev,
-      [key]: !prev[key],
-    }));
-  };
+    setSelectedUsers(newSelectedUsers);
+    setFeatureRoleMap({}); // Reset feature role map when changing user selection
 
-  const getRoleColor = (role) => {
-    return role === "EDITOR" ? "red" : "green";
-  };
+    // If a single user is selected, initialize featureRoleMap with their existing assignments
+    if (newSelectedUsers.length === 1) {
+      const userIdStr = newSelectedUsers[0].toString();
+      const userAssignments = userFeaturesWithProjects.filter(
+        (assignment) => assignment.userId === userIdStr
+      );
 
-  const handleSubmit = () => {
-    const formattedAssignments = [];
-
-    users.forEach(user => {
-      features.forEach(feature => {
-        const key = `${user.id}-${feature}`;
-        if (assignments[key]) {
-          formattedAssignments.push({ userId: user.id, feature });
+      // Initialize featureRoleMap with existing assignments for the selected project (if any)
+      const initialFeatureRoles = {};
+      userAssignments.forEach((assignment) => {
+        if (
+          selectedProject &&
+          assignment.projectId === selectedProject.projectId
+        ) {
+          initialFeatureRoles[assignment.feature] = assignment.role;
         }
       });
+      setFeatureRoleMap(initialFeatureRoles);
+    }
+  };
+
+  const handleRoleAssign = (feature, role) => {
+    setFeatureRoleMap((prev) => {
+      const newMap = { ...prev };
+      if (role === "NO ROLE") {
+        delete newMap[feature];
+      } else {
+        newMap[feature] = role;
+      }
+      return newMap;
     });
+  };
 
-    console.log("Submitted assignments:", formattedAssignments);
+  const handleProjectSelect = (project) => {
+    setSelectedProject(project);
 
-    // Submit to backend API
-    // axios.post('/api/assign-features', formattedAssignments)
+    // When a new project is selected, update featureRoleMap with existing assignments
+    if (selectedUsers.length === 1) {
+      const userIdStr = selectedUsers[0].toString();
+      const userAssignments = userFeaturesWithProjects.filter(
+        (assignment) =>
+          assignment.userId === userIdStr &&
+          assignment.projectId === project.projectId
+      );
+
+      const initialFeatureRoles = {};
+      userAssignments.forEach((assignment) => {
+        initialFeatureRoles[assignment.feature] = assignment.role;
+      });
+      setFeatureRoleMap(initialFeatureRoles);
+    } else {
+      setFeatureRoleMap({});
+    }
+  };
+
+const handleSubmit = async () => {
+  if (!selectedProject) {
+    alert("Please select a project first");
+    return;
+  }
+
+  // Update user projects assignments
+  const updatedUserProjects = { ...userProjects };
+  selectedUsers.forEach((userId) => {
+    if (selectedProject) {
+      if (!updatedUserProjects[userId]) {
+        updatedUserProjects[userId] = [];
+      }
+      if (!updatedUserProjects[userId].includes(selectedProject.name)) {
+        updatedUserProjects[userId].push(selectedProject.name);
+      }
+    }
+  });
+  setUserProjects(updatedUserProjects);
+
+  // Prepare assignments including explicit NO ROLE selections
+  const assignments = [];
+  
+  // Add features with explicit roles from featureRoleMap
+  Object.entries(featureRoleMap).forEach(([feature, role]) => {
+    assignments.push({ feature, role });
+  });
+
+  // For features not in featureRoleMap (NO ROLE), explicitly send NO ROLE
+  features.forEach(feature => {
+    if (!featureRoleMap.hasOwnProperty(feature.feature_name)) {
+      assignments.push({
+        feature: feature.feature_name,
+        role: "NO ROLE"
+      });
+    }
+  });
+
+  const data = {
+    userIds: selectedUsers,
+    projectId: selectedProject?.projectId,
+    assignments: assignments
+  };
+
+  try {
+    const response = await AssignuserFeature(data);
+    if (response.status === 200) {
+      setModalMessage("Assignments saved successfully!");
+        setCustomAlert(true);
+      setSidebarVisible(false);
+      setSelectedUsers([]);
+      // Refresh the data after saving
+      getProjectDetails();
+    }
+  } catch (error) {
+    console.error("Error saving assignments:", error);
+    setModalMessage("Failed to save assignments");
+      setCustomAlert(true);
+  }
+};
+
+  const filteredUsers = users.filter(
+    (user) =>
+      user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (userProjects[user.userId] &&
+        userProjects[user.userId].some((project) =>
+          project.toLowerCase().includes(searchTerm.toLowerCase())
+        ))
+  );
+
+  // Function to determine if a radio button should be checked
+  const isRoleChecked = (featureName, role) => {
+    // First check if there's a pending change in featureRoleMap
+    if (featureRoleMap.hasOwnProperty(featureName)) {
+      return featureRoleMap[featureName] === role;
+    }
+
+    // If no pending change, check existing assignments
+    if (selectedUsers.length === 1 && selectedProject) {
+      const userIdStr = selectedUsers[0].toString();
+      const existingAssignment = userFeaturesWithProjects.find(
+        (assignment) =>
+          assignment.userId === userIdStr &&
+          assignment.projectId === selectedProject.projectId &&
+          assignment.feature === featureName
+      );
+
+      if (existingAssignment) {
+        return existingAssignment.role === role;
+      }
+    }
+
+    // Default to NO ROLE if no assignment exists
+    return role === "NO ROLE";
   };
 
   return (
-        <div
+    <div
       style={{
-        zIndex: "1",
-        position: "absolute",
-        width: "100%",
-        height: "80vh",
+        display: "flex",
+        height: "100vh",
         backgroundColor: "#33334c",
         color: "white",
       }}
     >
+      {/* Left Main Content */}
+      <div style={{ flex: sidebarVisible ? 1 : "100%" }}>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            marginBottom: "15px",
+            padding: "0",
+          }}
+        >
+          <h3 style={{ fontWeight: "bold", margin: 0 }}>User Selection</h3>
+          {selectedUsers.length > 0 && (
+            <button
+              onClick={() => setSidebarVisible(true)}
+              style={{
+                marginTop: "10px",
+                padding: "5px 10px",
+                backgroundColor: "#fff",
+                color: "#000",
+                border: "none",
+                borderRadius: "4px",
+                cursor: "pointer",
+              }}
+            >
+              Assign Project
+            </button>
+          )}
+        </div>
 
-      <div
-        className="head"
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          padding: "7px",
-        }}
-      >
-        <h3 style={{ fontWeight: "bold", paddingLeft: "20px" }}>Features Assign</h3>
-         <button onClick={handleSubmit}  className="btn"
-          style={{ padding: "8px 16px", backgroundColor: "#fff" }}>
-        Save Feature
-      </button>
-      </div>
-<div className="table-container">
+        <div className="table-container">
+          <table
+            className="tagTable"
+            style={{ width: "100%", borderCollapse: "collapse" }}
+          >
+            <thead>
+              <tr style={{ backgroundColor: "#f0f0f0", color: "black" }}>
+                <th style={{ padding: "10px", textAlign: "left" }}>#</th>
+                <th style={{ padding: "10px", textAlign: "left" }}>Select</th>
+                <th style={{ padding: "10px", textAlign: "left" }}>Email</th>
+                <th style={{ padding: "10px", textAlign: "left" }}>
+                  Assigned Projects
+                </th>
+              </tr>
+              <tr>
+                <th colSpan="5" style={{ padding: "5px" }}>
+                  <input
+                    type="text"
+                    placeholder="Search by Email or Project"
+                    className="form-control w-100 bg-white"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    style={{ width: "100%", border: "1px solid #ddd" }}
+                  />
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredUsers.length > 0 ? (
+                filteredUsers.map((user, index) => {
+                  const userFeatures = userFeaturesWithProjects.filter(
+                    (f) => f.userId === user.userId.toString()
+                  );
 
-      <table className="tagTable"
-          style={{ width: "100%", borderCollapse: "collapse" }}>
-        <thead>
-          <tr style={{ backgroundColor: '#f2f2f2' }}>
-            <th>User list</th>
-            <th>Role</th>
-            {features.map(feature => (
-              <th key={feature}>{feature}</th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {users.map(user => (
-            <tr key={user.id}>
-              <td style={{ backgroundColor: '#f0f0f0',color:'black' }}>{user.email}</td>
-              <td style={{ color: getRoleColor(user.role), fontWeight: 'bold' }}>{user.role}</td>
-              {features.map(feature => {
-                const key = `${user.id}-${feature}`;
-                return (
-                  <td key={key} style={{ textAlign: 'center',backgroundColor: '#f0f0f0' }}>
-                    <input
-                      type="checkbox"
-                      checked={!!assignments[key]}
-                      onChange={() => handleCheckboxChange(user.id, feature)}
-                    />
+                  return (
+                    <tr
+                      key={user.userId}
+                      style={{
+                        backgroundColor:
+                          index % 2 === 0 ? "#ffffff" : "#f9f9f9",
+                        color: "black",
+                      }}
+                    >
+                      <td
+                        style={{
+                          padding: "10px",
+                          borderBottom: "1px solid #ddd",
+                        }}
+                      >
+                        {index + 1}
+                      </td>
+                      <td
+                        style={{
+                          padding: "10px",
+                          borderBottom: "1px solid #ddd",
+                        }}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selectedUsers.includes(user.userId)}
+                          onChange={() => handleUserSelect(user.userId)}
+                          style={{ width: "16px", height: "16px" }}
+                        />
+                      </td>
+                      <td
+                        style={{
+                          padding: "10px",
+                          borderBottom: "1px solid #ddd",
+                        }}
+                      >
+                        {user.email}
+                      </td>
+                      <td
+                        style={{
+                          padding: "10px",
+                          borderBottom: "1px solid #ddd",
+                        }}
+                      >
+                        {userProjects[user.userId] &&
+                        userProjects[user.userId].length > 0
+                          ? userProjects[user.userId].join(", ")
+                          : "No projects assigned"}
+                      </td>
+                    </tr>
+                  );
+                })
+              ) : (
+                <tr>
+                  <td
+                    colSpan="5"
+                    className="text-center text-muted py-3"
+                    style={{ backgroundColor: "white" }}
+                  >
+                    {searchTerm
+                      ? "No matching users found"
+                      : "No users available..."}
                   </td>
-                );
-              })}
-            </tr>
-          ))}
-        </tbody>
-      </table>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
 
-     
+      {/* Right Sidebar */}
+      {sidebarVisible && (
+        <div
+          style={{
+            width: "425px",
+            backgroundColor: "#22223b",
+            padding: "10px",
+            overflowY: "hidden",
+            borderLeft: "1px solid #555",
+            display: "flex",
+            flexDirection: "column",
+            height: "100vh",
+          }}
+        >
+          <div style={{ flexShrink: 0 }}>
+            <h3>Assign to Project</h3>
+            <ul style={{ listStyle: "none", padding: 0 }}>
+              {projects?.map((project) => (
+                <li
+                  key={project.projectId}
+                  onClick={() => handleProjectSelect(project)}
+                  style={{
+                    padding: "8px",
+                    margin: "6px 0",
+                    backgroundColor:
+                      selectedProject?.projectId === project.projectId
+                        ? "#444466"
+                        : "#333",
+                    cursor: "pointer",
+                    borderRadius: "4px",
+                  }}
+                >
+                  {project.projectName}
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          {selectedProject && (
+            <>
+              <div
+                className="d-flex justify-content-between"
+                style={{ flexShrink: 0 }}
+              >
+                <h4 style={{ marginTop: "20px" }}>Assign Feature Roles</h4>
+               
+              </div>
+
+              <div
+                style={{
+                  flex: 1,
+                  overflowY: "auto",
+                  marginTop: "10px",
+                  maxHeight: "450px",
+                  position: "relative",
+                }}
+              >
+                <table
+                  className="tagTable"
+                  style={{ width: "100%", borderCollapse: "collapse" }}
+                >
+                  <thead>
+                    <tr
+                      style={{
+                        backgroundColor: "#f0f0f0",
+                        color: "black",
+                        position: "sticky",
+                        top: 0,
+                        zIndex: 100,
+                      }}
+                    >
+                      <th
+                        style={{
+                          padding: "10px",
+                          textAlign: "left",
+                          width: "40%",
+                           position:"static"
+                        }}
+                      >
+                        Feature
+                      </th>
+                      {roles.map((role) => (
+                        <th
+                          key={role}
+                          style={{
+                            padding: "10px",
+                            textAlign: "center",
+                            width: "10%",
+                              borderRight: "1px solid #ddd",
+                          }}
+                        >
+                          {role}
+                        </th>
+                     
+                      ))}
+                      
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {features.map((feature) => (
+                      <tr
+                        key={feature.feature_id}
+                        style={{ backgroundColor: "#ffffff", color: "black" }}
+                      >
+                        <td
+                          style={{
+                            padding: "10px",
+                            borderBottom: "1px solid #ddd",
+                            fontWeight: "bold",
+                          }}
+                          className="bg-white"
+                        >
+                          {feature.feature_name}
+                        </td>
+                        {roles.map((role) => (
+                          <td
+                            key={`${feature.feature_name}-${role}`}
+                            style={{
+                              padding: "10px",
+                              borderBottom: "1px solid #ddd",
+                              textAlign: "center",
+                              position:"static"
+                            }}
+                            className="bg-white"
+                          >
+                            <div
+                              style={{
+                                display: "flex",
+                                justifyContent: "center",
+                              }}
+                            >
+                              <input
+                                type="radio"
+                                name={`feature-${feature.feature_name}`}
+                                checked={isRoleChecked(
+                                  feature.feature_name,
+                                  role
+                                )}
+                                onChange={() =>
+                                  handleRoleAssign(feature.feature_name, role)
+                                }
+                                style={{ width: "16px", height: "16px" }}
+                              />
+                            </div>
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                
+              </div>
+               <button
+                  onClick={handleSubmit}
+                  style={{
+                    marginTop: "20px",
+                    padding: "10px 20px",
+                    backgroundColor: "#fff",
+                    color: "#000",
+                    fontWeight: "bold",
+                    marginBottom: "5px",
+                    border: "none",
+                    borderRadius: "4px",
+                    cursor: "pointer",
+                  }}
+                >
+                  Save Assignments
+                </button>
+            </>
+            
+          )}
+          
+        </div>
+        
+      )}
+          {customAlert && (
+        <Alert
+          message={modalMessage}
+          onAlertClose={() => setCustomAlert(false)}
+        />
+      )}
     </div>
-    </div>
+   
   );
 }
 
