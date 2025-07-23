@@ -8,10 +8,11 @@ import {
 } from "@fortawesome/free-solid-svg-icons";
 import {
   AssignuserFeature,
+  GetAllUsers,
   getfeatures,
   getUserfeature,
 } from "../services/UserApi";
-import { getProjects } from "../services/CommonApis";
+import { getProjects, getUserProjects } from "../services/CommonApis";
 import Alert from "../components/Alert";
 
 function AdminFeatureAssign() {
@@ -27,19 +28,27 @@ function AdminFeatureAssign() {
   const [userFeaturesWithProjects, setUserFeaturesWithProjects] = useState([]);
    const [customAlert, setCustomAlert] = useState(false);
   const [modalMessage, setModalMessage] = useState("");
+  const [currentUser, setCurrentUser] = useState(null);
+
    
   
 
   const roles = ["EDITOR", "VIEWER", "NO ROLE"];
 
+  const Projects = JSON.parse(sessionStorage.getItem('projects'));
+const projectIds = Object.keys(Projects);
   const getProjectDetails = async () => {
-    const response = await getProjects();
-    setProjects(response.data.row);
+    const response = await getUserProjects({projectIds});
+    console.log(response.data);
+    
+    setProjects(response.data);
     const result = await getfeatures();
     setFeatures(result.data);
 
     // Fetch all user feature assignments
     const userFeaturesResponse = await getUserfeature();
+    console.log(userFeaturesResponse.data);
+    
     setUserFeaturesWithProjects(userFeaturesResponse.data);
 
     // Create a map of projects by user
@@ -61,20 +70,31 @@ function AdminFeatureAssign() {
 
     setUserProjects(formattedUserProjects);
   };
-
-  useEffect(() => {
-    // Initialize with sample users
-    const sampleUsers = [
-      { userId: 1, email: "456@poulconsult.com", role: "EDITOR" },
-      { userId: 2, email: "333@poulconsult.com", role: "VIEWER" },
-      { userId: 3, email: "670@poulconsult.com", role: "EDITOR" },
-    ];
-
-    setUsers(sampleUsers);
-    getProjectDetails();
-    setFeatureRoleMap({});
-  }, []);
-
+ const getUserdetails = async () => {
+  const response = await GetAllUsers();
+  if (response.status === 200) {
+    const userDetails = JSON.parse(sessionStorage.getItem('userDetails'));
+    console.log(userDetails)
+    const currentUserId = userDetails?.userId
+;
+    
+    // Filter out admins and current user
+    const filteredUsers = response.data.data.users.filter(user => {
+      return user.role !== 'admin' && user.userId !== currentUserId;
+    });
+    
+    setUsers(filteredUsers);
+  }
+};
+ useEffect(() => {
+  // Get current user from session storage
+  const userDetails = JSON.parse(sessionStorage.getItem('userdetails'));
+  setCurrentUser(userDetails);
+  
+  getUserdetails();
+  getProjectDetails();
+  setFeatureRoleMap({});
+}, []);
   const handleUserSelect = async (userId) => {
     const newSelectedUsers = selectedUsers.includes(userId)
       ? selectedUsers.filter((id) => id !== userId)
@@ -199,14 +219,17 @@ const handleSubmit = async () => {
   }
 };
 
-  const filteredUsers = users.filter(
-    (user) =>
-      user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (userProjects[user.userId] &&
-        userProjects[user.userId].some((project) =>
-          project.toLowerCase().includes(searchTerm.toLowerCase())
-        ))
+const filteredUsers = users.filter((user) => {
+  if (user.role === 'admin') return false;
+
+  const emailMatch = user.email.toLowerCase().includes(searchTerm.toLowerCase());
+
+  const projectMatch = (userProjects[user.userId] || []).some((project) =>
+    (project || '').toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  return emailMatch || projectMatch;
+});
 
   // Function to determine if a radio button should be checked
   const isRoleChecked = (featureName, role) => {
@@ -282,6 +305,8 @@ const handleSubmit = async () => {
               <tr style={{ backgroundColor: "#f0f0f0", color: "black" }}>
                 <th style={{ padding: "10px", textAlign: "left" }}>#</th>
                 <th style={{ padding: "10px", textAlign: "left" }}>Select</th>
+                                <th style={{ padding: "10px", textAlign: "left" }}>User Name</th>
+
                 <th style={{ padding: "10px", textAlign: "left" }}>Email</th>
                 <th style={{ padding: "10px", textAlign: "left" }}>
                   Assigned Projects
@@ -337,6 +362,14 @@ const handleSubmit = async () => {
                           style={{ width: "16px", height: "16px" }}
                         />
                       </td>
+                        <td
+                        style={{
+                          padding: "10px",
+                          borderBottom: "1px solid #ddd",
+                        }}
+                      >
+                        {user.username}
+                      </td>
                       <td
                         style={{
                           padding: "10px",
@@ -350,6 +383,7 @@ const handleSubmit = async () => {
                           padding: "10px",
                           borderBottom: "1px solid #ddd",
                         }}
+                        className="bg-white"
                       >
                         {userProjects[user.userId] &&
                         userProjects[user.userId].length > 0

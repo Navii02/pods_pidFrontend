@@ -4,7 +4,7 @@ import Footer from '../components/Footer';
 import Sidebar from '../components/Sidebar';
 import ProjectModal from '../components/ProjectModal';
 import { Outlet } from 'react-router-dom';
-import { getProjects, saveProject, updateProject, deleteProject, AllSavedView } from '../services/CommonApis';
+import { getProjects, saveProject, updateProject, deleteProject, AllSavedView, getUserProjects } from '../services/CommonApis';
 import { updateProjectContext } from '../context/ContextShare';
 
 const Home = () => {
@@ -17,7 +17,10 @@ const Home = () => {
   const { updateProject } = useContext(updateProjectContext);
 
    const [allSavedViews, setAllSavedViews] = useState([]);
-  
+    const Projects = JSON.parse(sessionStorage.getItem('projects'));
+const projectIds = Object.keys(Projects);
+   const userDetails = JSON.parse(sessionStorage.getItem("userDetails") || "{}");
+  const isAdmin = userDetails?.role === "admin";
     const projectString = sessionStorage.getItem("selectedProject");
     const project = projectString ? JSON.parse(projectString) : null;
     const projectId = project?.projectId;
@@ -25,24 +28,63 @@ const Home = () => {
     setIsSidebarCollapsed(collapsed);
   };
 
-  const handleOpenProjectModal = async () => {
-    setIsProjectModalOpen(true);
+ const handleOpenProjectModal = async () => {
+  setIsProjectModalOpen(true);
+  
+  try {
+    // Get user details and projects from session storage
+    const userDetails = JSON.parse(sessionStorage.getItem("userDetails") || {});
+    const isAdmin = userDetails?.role === "admin";
+    
+    // Safely get projects from session storage
+    let storedProjects = {};
     try {
-      const response = await getProjects();
-      console.log(response);
-      
-      if (response.status === 200) {
-        setProjectDetails(response.data.row || []);
-        setProjects(response.data.row || []);
-      } else {
-        setError(`Unexpected response status: ${response.status}`);
-        setProjects([]);
-      }
-    } catch (error) {
-      setError('Failed to fetch projects. Please try again.');
-      setProjects([]);
+      const projectsString = sessionStorage.getItem('projects');
+      storedProjects = projectsString ? JSON.parse(projectsString) : {};
+    } catch (e) {
+      console.error("Error parsing projects from sessionStorage:", e);
+      storedProjects = {};
     }
-  };
+    
+    const projectIds = Object.keys(storedProjects);
+    
+    let response;
+    if (isAdmin) {
+      // Admin gets all projects
+      response = await getProjects();
+    } else {
+      // Regular user gets only their assigned projects
+      if (projectIds.length === 0) {
+        throw new Error("No projects assigned to user");
+      }
+      response = await getUserProjects({ projectIds });
+    }
+
+    if (response.status === 200) {
+      const projects = response.data.row || response.data || [];
+      console.log(projects);
+      
+      setProjects(projects);
+      setProjectDetails(projects);
+      
+      // Update session storage for non-admin users
+      if (!isAdmin && projects.length > 0) {
+        const newProjects = {};
+        projects.forEach(project => {
+          newProjects[project.projectId] = project;
+        });
+        sessionStorage.setItem('projects', JSON.stringify(newProjects));
+      }
+    } else {
+      throw new Error(`Unexpected response status: ${response.status}`);
+    }
+  } catch (error) {
+    console.error('Project fetch error:', error);
+    setError(error.message || 'Failed to fetch projects. Please try again.');
+    setProjects([]);
+    setProjectDetails([]);
+  }
+};
 
   const handleCloseProjectModal = () => {
     setIsProjectModalOpen(false);

@@ -5,16 +5,54 @@ import { faArrowRightFromBracket } from "@fortawesome/free-solid-svg-icons";
 import { useNavigate } from "react-router-dom";
 import { useMsal } from "@azure/msal-react";
 import { loginRequest } from "../Utils/AuthConfig"; // path to your authConfig
+import { GetuserDetails } from "../services/UserApi";
 
 function LandingPage() {
   const navigate = useNavigate();
   const { instance } = useMsal();
 
+   const validateToken = async (token) => {
+    // Simulate API call to license manager
+    // For demo purposes, consider tokens starting with "VALID-" as valid
+    return token.startsWith("VALID-");
+  };
+
   const handleMicrosoftLogin = async () => {
     try {
       const loginResponse = await instance.loginPopup(loginRequest);
       console.log("Microsoft login successful", loginResponse);
+      if(loginResponse){
+        
+    const account = loginResponse.account;
+        const data={
+          username:account.name,
+          email:account.username,
+          userId:loginResponse.uniqueId
+        }
+        //console.log(data);
+        
+        const response = await GetuserDetails(data)
+        if(response.status===200){
+          const token = response.data.user.token
+
+          const isValid = await validateToken(token);
+          if(isValid){
+   sessionStorage.setItem("userDetails",JSON.stringify(response.data.user))
+          sessionStorage.setItem("projects",JSON.stringify(response.data.projects))
+
       navigate("/iroamer");
+          }
+          else{
+            alert("sorry you have no access or your token is invalid")
+          }
+
+
+
+       
+
+        }
+
+      }
     } catch (error) {
       console.error("Microsoft Login failed", error);
     } 

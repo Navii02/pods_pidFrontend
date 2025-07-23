@@ -1,35 +1,29 @@
 import React, { useEffect, useState } from 'react';
+import { getUserProjects } from '../services/CommonApis';
 
 function AdminPanel() {
   const [projects, setProjects] = useState([]);
 
+  const Projects = JSON.parse(sessionStorage.getItem('projects'));
+const projectIds = Object.keys(Projects);
+console.log(projectIds)
+
+  const getAdminProjects = async()=>{
+    const response = await getUserProjects({projectIds})
+    if(response.status===200){
+      console.log(response.data);
+      
+      setProjects(response.data)
+    }
+  }
+
   // Example static data — replace with API call later
   useEffect(() => {
-    const dummyProjects = [
-      {
-        projectNumber: 'PRJ001',
-        name: 'Pipeline Maintenance',
-        description: 'Pipeline maintenance project for northern region',
-        createdDate: '2024-11-12',
-        createdBy: 'superadmin@poulconsult.com'
-      },
-      {
-        projectNumber: 'PRJ002',
-        name: 'Tank Inspection',
-        description: 'Annual inspection of oil storage tanks',
-        createdDate: '2025-01-20',
-        createdBy: 'admin@poulconsult.com'
-      },
-      {
-        projectNumber: 'PRJ003',
-        name: 'Site Survey',
-        description: 'Topographical survey for new site',
-        createdDate: '2025-07-01',
-        createdBy: 'projectlead@poulconsult.com'
-      }
-    ];
+   
 
-    setProjects(dummyProjects);
+    getAdminProjects()
+
+
   }, []);
 
   return (
@@ -46,11 +40,11 @@ function AdminPanel() {
           </tr>
         </thead>
         <tbody style={{color:'black'}}>
-          {projects.map((project, idx) => (
+          {projects?.map((project, idx) => (
             <tr key={idx}>
               <td style={{ backgroundColor: '#f0f0f0' }}>{project.projectNumber}</td>
-              <td>{project.name}</td>
-              <td>{project.description}</td>
+              <td>{project.projectName}</td>
+              <td>{project.projectDescription}</td>
               <td>{project.createdDate}</td>
               <td style={{ backgroundColor: '#f0f0f0' }}>{project.createdBy}</td>
             </tr>

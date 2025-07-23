@@ -38,6 +38,8 @@ function ProjectModal({
   const [isFormModalOpen, setIsFormModalOpen] = useState(false);
   const [editingProject, setEditingProject] = useState(null);
   const [error, setError] = useState("");
+  const userDetails = JSON.parse(sessionStorage.getItem("userDetails") || "{}");
+  const isAdmin = userDetails?.role === "admin";
 
   useEffect(() => {
     if (!isOpen) resetState();
@@ -183,23 +185,26 @@ function ProjectModal({
             <div className="heading">
               <h6>Load project</h6>
               <div className="icons">
-                <FontAwesomeIcon
-                  title="Delete all project"
-                  icon={faTrash}
-                  className="ms-2"
-                />
-
-                <FontAwesomeIcon
-                  title="Map project"
-                  icon={faFolder}
-                  className="ms-2"
-                />
-                <FontAwesomeIcon
-                  title="Create new project"
-                  className="ms-2"
-                  onClick={handleCreateProject}
-                  icon={faPlusCircle}
-                />
+                {isAdmin && (
+                  <>
+                    <FontAwesomeIcon
+                      title="Delete all project"
+                      icon={faTrash}
+                      className="ms-2"
+                    />
+                    <FontAwesomeIcon
+                      title="Map project"
+                      icon={faFolder}
+                      className="ms-2"
+                    />
+                    <FontAwesomeIcon
+                      title="Create new project"
+                      className="ms-2"
+                      onClick={handleCreateProject}
+                      icon={faPlusCircle}
+                    />
+                  </>
+                )}
                 <FontAwesomeIcon
                   icon={faTimes}
                   title="Close project"
@@ -258,27 +263,29 @@ function ProjectModal({
                                 border: "none",
                               }}
                             >
-                          <FontAwesomeIcon
-                       title="Open-project"
-                       className="text-light ms-3 me-2"
-                          icon={faFolder}
-                        />
+                              <FontAwesomeIcon
+                                title="Open-project"
+                                className="text-light ms-3 me-2"
+                                icon={faFolder}
+                              />
                             </button>
-                           
-   <FontAwesomeIcon
-                       title="Edit-project"
-                       className="text-light ms-3 me-2"
-                                 onClick={() => handleEditProject(project)}
-                          icon={faPencil}
-                        />
-                         
-                               <FontAwesomeIcon
-                     
-                       className="text-light ms-3 me-2"
-                              onClick={() => handleDeleteProject(project)}
-                              title="Delete-project"
-                          icon={faTrash}
-                        />
+{isAdmin && (
+  <>
+    <FontAwesomeIcon
+      title="Edit-project"
+      className="text-light ms-3 me-2"
+      onClick={() => handleEditProject(project)}
+      icon={faPencil}
+    />
+    <FontAwesomeIcon
+      className="text-light ms-3 me-2"
+      onClick={() => handleDeleteProject(project)}
+      title="Delete-project"
+      icon={faTrash}
+    />
+  </>
+)}
+
                           </td>
                         </tr>
                       ))}

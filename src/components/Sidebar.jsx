@@ -73,6 +73,19 @@ function Sidebar({
   const [customAlert, setCustomAlert] = useState(false);
   const [modalMessage, setModalMessage] = useState("");
 
+  const userDetails = JSON.parse(sessionStorage.getItem("userDetails"));
+const userRole = userDetails?.role || "user";
+
+const projects = JSON.parse(sessionStorage.getItem("projects") || "{}");
+const selectedProjectId = project?.projectId;
+
+console.log(selectedProjectId)
+
+const selectedProjectAccess = projects[selectedProjectId]?.features?.project_access;
+console.log(selectedProjectAccess)
+const isUserAdminOnProject = userRole === "user" && selectedProjectAccess === "project_admin";
+
+
   // Reset to iRoamer when no project is selected (post-logout)
   useEffect(() => {
     const storedProject = sessionStorage.getItem("selectedProject");
@@ -280,31 +293,32 @@ const actionMap = {
       path: "/iroamer",
       activeLink: "three",
     },
-     {
-      icon: faUsersLine,
-      name: "Super admin panel",
-      path: "/superadmin",
-      activeLink: "superAdmin",
-      toggleMenu: "superAdmin",
-      activeLink: "superAdmin",
-      subItems: [
-        { name: "Assign Tokens", path: "/superadmin" },
-        { name: "Assign Projects", path: "/superadmin/assignProjects" },
-
-      ],
-    },
-     {
-      icon: faUserTie,
-      name: "Admin panel",
-      path: "/admin",
-      activeLink: "admin",
-       toggleMenu: "admin",
-      subItems: [
-        { name: "Project Details", path: "/admin" },
-        { name: "Features assign", path: "/admin/featureAssign" },
-
-      ],
-    },
+       ...(userRole === "admin" ? [{
+    icon: faUsersLine,
+    name: "Super admin panel",
+    path: "/superadmin",
+    activeLink: "superAdmin",
+    toggleMenu: "superAdmin",
+    subItems: [
+      { name: "Assign Tokens", path: "/superadmin" },
+      { name: "Assign Projects", path: "/superadmin/assignProjects" },
+    ],
+  }] : []),
+   ...(isUserAdminOnProject
+    ? [
+        {
+          icon: faUserTie,
+          name: "Admin panel",
+          path: "/admin",
+          activeLink: "admin",
+          toggleMenu: "admin",
+          subItems: [
+            { name: "Project Details", path: "/admin" },
+            { name: "Features assign", path: "/admin/featureAssign" },
+          ],
+        },
+      ]
+    : []),
     {
       icon: faArchive,
       name: "Bulk Model Import",

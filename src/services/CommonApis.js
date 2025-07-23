@@ -154,3 +154,13 @@ export const UpdateSavedView = async(data)=>{
     throw error;
   }
 }
+
+export const getUserProjects = async (ids) => {
+  try {
+    const response = await commonApi("POST", `${url}/api/user/get-projects`,ids);
+    console.log(response);
+    return response;
+  } catch (error) {
+    throw error;
+  }
+};
