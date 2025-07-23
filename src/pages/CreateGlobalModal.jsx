@@ -290,17 +290,7 @@ function CreateGlobalModal() {
         positions: Array.from(positions),
         normals: Array.from(normals),
         indices: Array.from(indices),
-           boundingBox: {
-      boundingBox:{
-        centerWorld:mesh.boundingInfo.boundingBox.centerWorld,
-        maximumWorld:mesh.boundingInfo.boundingBox.maximumWorld,
- minimumWorld:mesh.boundingInfo.boundingBox.minimumWorld,
-      },
-      boundingSphere:{
-        radius: mesh.boundingInfo.boundingSphere.radius,
-        radiusWorld:mesh.boundingInfo.boundingSphere.radiusWorld
-      }
-    },
+        boundingBox: mesh.getBoundingInfo().boundingBox,
         name: mesh.name,
         color: materialColor,
         metadata: {

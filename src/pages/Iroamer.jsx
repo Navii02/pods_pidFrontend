@@ -3577,17 +3577,165 @@ const Iroamer = forwardRef(
       { label: "Focus Selected", action: handleFocusSelected },
       // { label: "Reload", action: handleReload },
       { label: "Share & Links",
-  children: [
-    { label: "Copy tag link", action: () => handleCopyTagLink(false) },
-    { label: "Copy tag link + view", action: () => handleCopyTagLink(true) },
-    { label: "Copy all visible tags link", },
-    { label: "Export selection", },
-    { label: "Import selection",  },
-  ],
+   children: [
+      { label: "Copy tag link", action: () => handleCopyTagLink(false) },
+      { label: "Copy tag link + view", action: () => handleCopyTagLink(true) },
+      { label: "Copy all visible tags link", action: handleCopyVisibleTagsLink },
+      { label: "Export selection", action: handleExportSelection },
+      { label: "Import selection", action: handleImportSelection },
+    ],
 }
     ];
 
-    const handleCopyTagLink = async () => {
+ const handleCopyVisibleTagsLink = async () => {
+  try {
+    // Get all currently visible tags
+    const visibleTags = selectedTags.filter(tag => {
+      const tagKey = `${tag.area}-${tag.disc}-${tag.sys}-${tag.tag}`;
+      return viewHideThree[tagKey] === true || 
+             viewHideThreeunassigned[tag.tag] === true;
+    });
+
+    if (visibleTags.length === 0) {
+      setCustomAlert(true);
+      setModalMessage("No visible tags to create link!");
+      setIsMenuOpen(false);
+      return;
+    }
+
+    const currentUrl = window.location.origin + window.location.pathname;
+    const tagParams = new URLSearchParams();
+    
+    tagParams.set('projectId', projectId);
+    
+    // Create comma-separated values for multiple tags
+    const tagNames = visibleTags.map(tag => tag.tag || tag.filename).join(',');
+    const areas = visibleTags.map(tag => tag.area || '').join(',');
+    const discs = visibleTags.map(tag => tag.disc || '').join(',');
+    const systems = visibleTags.map(tag => tag.sys || '').join(',');
+    
+    tagParams.set('tags', tagNames);
+    tagParams.set('areas', areas);
+    tagParams.set('discs', discs);
+    tagParams.set('systems', systems);
+
+    const multiTagLink = `${currentUrl}?${tagParams.toString()}`;
+    
+    await navigator.clipboard.writeText(multiTagLink);
+    setCustomAlert(true);
+    setModalMessage(`Link for ${visibleTags.length} visible tags copied to clipboard!`);
+    setIsMenuOpen(false);
+    
+  } catch (error) {
+    console.error("Failed to copy visible tags link:", error);
+    setCustomAlert(true);
+    setModalMessage("Failed to copy tags link to clipboard!");
+    setIsMenuOpen(false);
+  }
+};
+
+const handleExportSelection = async () => {
+  try {
+    const visibleTags = selectedTags.filter(tag => {
+      const tagKey = `${tag.area}-${tag.disc}-${tag.sys}-${tag.tag}`;
+      return viewHideThree[tagKey] === true || 
+             viewHideThreeunassigned[tag.tag] === true;
+    });
+
+    const exportData = {
+      projectId: projectId,
+      exportDate: new Date().toISOString(),
+      visibleTags: visibleTags.map(tag => ({
+        tag: tag.tag,
+        filename: tag.filename,
+        area: tag.area,
+        disc: tag.disc,
+        sys: tag.sys
+      })),
+      viewSettings: {
+        backgroundTheme,
+        viewMode,
+        cameraMode: mode
+      }
+    };
+
+    const jsonString = JSON.stringify(exportData, null, 2);
+    await navigator.clipboard.writeText(jsonString);
+    
+    setCustomAlert(true);
+    setModalMessage(`Selection exported to clipboard! (${visibleTags.length} tags)`);
+    setIsMenuOpen(false);
+    
+  } catch (error) {
+    console.error("Failed to export selection:", error);
+    setCustomAlert(true);
+    setModalMessage("Failed to export selection!");
+    setIsMenuOpen(false);
+  }
+};
+
+const handleImportSelection = async () => {
+  try {
+    const clipboardText = await navigator.clipboard.readText();
+    const importData = JSON.parse(clipboardText);
+    
+    if (!importData.visibleTags || !Array.isArray(importData.visibleTags)) {
+      throw new Error("Invalid selection format");
+    }
+
+    // Clear current selection
+    setViewHideThree({});
+    setViewHideThreeunassigned({});
+    
+    // Apply imported selection
+    const newViewHideThree = {};
+    const newViewHideThreeunassigned = {};
+    let foundTags = 0;
+
+    importData.visibleTags.forEach(importTag => {
+      const matchingTag = selectedTags.find(tag => 
+        tag.tag === importTag.tag && 
+        tag.filename === importTag.filename
+      );
+
+      if (matchingTag) {
+        if (importTag.area && importTag.disc && importTag.sys) {
+          const tagKey = `${importTag.area}-${importTag.disc}-${importTag.sys}-${importTag.tag}`;
+          newViewHideThree[tagKey] = true;
+        } else {
+          newViewHideThreeunassigned[importTag.tag] = true;
+        }
+        foundTags++;
+      }
+    });
+
+    setViewHideThree(newViewHideThree);
+    setViewHideThreeunassigned(newViewHideThreeunassigned);
+
+    // Apply view settings if available
+    if (importData.viewSettings) {
+      if (importData.viewSettings.backgroundTheme) {
+        setBackgroundTheme(importData.viewSettings.backgroundTheme);
+      }
+      if (importData.viewSettings.viewMode) {
+        setViewMode(importData.viewSettings.viewMode);
+      }
+    }
+    
+    setCustomAlert(true);
+    setModalMessage(`Selection imported! ${foundTags}/${importData.visibleTags.length} tags found`);
+    setIsMenuOpen(false);
+    
+  } catch (error) {
+    console.error("Failed to import selection:", error);
+    setCustomAlert(true);
+    setModalMessage("Failed to import selection! Please check clipboard format.");
+    setIsMenuOpen(false);
+  }
+};
+
+// 5. ENHANCE YOUR handleCopyTagLink FUNCTION - REPLACE YOUR CURRENT ONE WITH THIS:
+const handleCopyTagLink = async (includeViewSettings = false) => {
   if (!taginfo.filename) {
     setCustomAlert(true);
     setModalMessage("No tag selected to copy link!");
@@ -3608,6 +3756,13 @@ const Iroamer = forwardRef(
       projectId: projectId
     });
 
+    // Optionally include view settings
+    if (includeViewSettings) {
+      tagParams.set('theme', backgroundTheme);
+      tagParams.set('view', viewMode);
+      tagParams.set('mode', mode);
+    }
+
     // Create the complete URL with tag parameters
     const tagLink = `${currentUrl}?${tagParams.toString()}`;
 
@@ -3615,7 +3770,7 @@ const Iroamer = forwardRef(
     await navigator.clipboard.writeText(tagLink);
     
     setCustomAlert(true);
-    setModalMessage(`Tag link copied to clipboard!`);
+    setModalMessage(`Tag link copied to clipboard! ${includeViewSettings ? '(with view settings)' : ''}`);
     setIsMenuOpen(false);
 
     // Optional: Show the link in console for debugging
@@ -3628,6 +3783,7 @@ const Iroamer = forwardRef(
     setIsMenuOpen(false);
   }
 };
+
 
 // Add these state variables at the top of your component (with other useState declarations)
 const [isFromTagLink, setIsFromTagLink] = useState(false);
@@ -3657,27 +3813,40 @@ useEffect(() => {
 
 // Update the handleTagLinkNavigation function to track loaded tags
 const handleTagLinkNavigation = () => {
+  console.log("🔗 handleTagLinkNavigation called");
   const urlParams = new URLSearchParams(window.location.search);
+  console.log("📄 URL params:", urlParams.toString());
+  
   const projectIdFromUrl = urlParams.get('projectId');
+  console.log("🆔 Project ID from URL:", projectIdFromUrl, "Current project ID:", projectId);
 
   // Check if project matches
-  if (projectIdFromUrl !== projectId) return;
+  if (projectIdFromUrl !== projectId) {
+    console.log("❌ Project ID mismatch, exiting");
+    return;
+  }
 
   // Handle single tag
   const singleTag = urlParams.get('tag');
   // Handle multiple tags
   const multipleTags = urlParams.get('tags');
+  
+  console.log("🏷️ Single tag:", singleTag, "Multiple tags:", multipleTags);
 
   if (singleTag || multipleTags) {
+    console.log("✅ Found tags in URL, processing...");
     setIsFromTagLink(true); // Mark that we're loading from a link
     
     // Wait for scene and tags to be loaded
     const checkAndHighlight = () => {
+      console.log("🔍 Checking scene and tags...", "Scene exists:", !!sceneRef.current, "Tags count:", selectedTags.length);
+      
       if (sceneRef.current && selectedTags.length > 0) {
         const loadedTagsList = [];
         
         if (singleTag) {
-          // Handle single tag
+          console.log("🎯 Processing single tag:", singleTag);
+          // Handle single tag (rest of your existing code)
           const areaFromUrl = urlParams.get('area');
           const discFromUrl = urlParams.get('disc');
           const sysFromUrl = urlParams.get('sys');
@@ -3689,11 +3858,14 @@ const handleTagLinkNavigation = () => {
              tag.sys === sysFromUrl && tag.tag === singleTag)
           );
 
+          console.log("🎯 Target tag found:", !!targetTag, targetTag);
+
           if (targetTag) {
             const tagKey = areaFromUrl && discFromUrl && sysFromUrl 
               ? `${areaFromUrl}-${discFromUrl}-${sysFromUrl}-${singleTag}`
               : singleTag;
 
+            console.log("🔑 Tag key:", tagKey);
             setHighlightedTagKey(tagKey);
             setViewHideThree(prev => ({ ...prev, [tagKey]: true }));
             highlightTagInScene(targetTag.filename);
@@ -3702,46 +3874,6 @@ const handleTagLinkNavigation = () => {
             setCustomAlert(true);
             setModalMessage(`Tag "${singleTag}" selected from link!`);
           }
-        }
-
-        if (multipleTags) {
-          // Handle multiple tags
-          const tagNames = multipleTags.split(',');
-          const areas = urlParams.get('areas')?.split(',') || [];
-          const discs = urlParams.get('discs')?.split(',') || [];
-          const systems = urlParams.get('systems')?.split(',') || [];
-
-          let foundTags = 0;
-          const newViewHideThree = {};
-
-          tagNames.forEach((tagName, index) => {
-            const area = areas[index] || '';
-            const disc = discs[index] || '';
-            const sys = systems[index] || '';
-
-            const targetTag = selectedTags.find(tag => 
-              tag.tag === tagName || 
-              tag.filename === tagName ||
-              (tag.area === area && tag.disc === disc && tag.sys === sys && tag.tag === tagName)
-            );
-
-            if (targetTag) {
-              const tagKey = area && disc && sys 
-                ? `${area}-${disc}-${sys}-${tagName}`
-                : tagName;
-
-              newViewHideThree[tagKey] = true;
-              highlightTagInScene(targetTag.filename);
-              loadedTagsList.push(tagName);
-              foundTags++;
-            }
-          });
-
-          // Update visibility state for all found tags
-          setViewHideThree(prev => ({ ...prev, ...newViewHideThree }));
-
-          setCustomAlert(true);
-          setModalMessage(`${foundTags} of ${tagNames.length} tags selected from link!`);
         }
 
         // Store the loaded tags for reference
@@ -3758,6 +3890,7 @@ const handleTagLinkNavigation = () => {
         }, 5000);
 
       } else {
+        console.log("⏳ Retrying in 1 second...");
         // Retry after a short delay if scene/tags not ready
         setTimeout(checkAndHighlight, 1000);
       }
@@ -3765,9 +3898,13 @@ const handleTagLinkNavigation = () => {
 
     // Start checking after a short delay to ensure component is mounted
     setTimeout(checkAndHighlight, 500);
+  } else {
+    console.log("ℹ️ No tags found in URL");
   }
 };
-
+useEffect(() => {
+  handleTagLinkNavigation();
+}, [selectedTags, projectId]);
 
     const disposeScene = () => {
       if (sceneRef.current) {
@@ -5533,6 +5670,24 @@ const handleTagLinkNavigation = () => {
               height: "100%",
             }}
           />
+
+          {isFromTagLink && linkLoadedTags.length > 0 && (
+  <div style={{
+    position: 'absolute',
+    top: '10px',
+    right: '10px',
+    backgroundColor: '#4CAF50',
+    color: 'white',
+    padding: '10px 15px',
+    borderRadius: '5px',
+    zIndex: 1000,
+    fontSize: '14px',
+    boxShadow: '0 2px 5px rgba(0,0,0,0.2)'
+  }}>
+    <i className="fa-solid fa-link" style={{ marginRight: '5px' }}></i>
+    Loaded from link: {linkLoadedTags.join(', ')}
+  </div>
+)}
           {/* progress bar */}
           {isLoading && (
             <div
