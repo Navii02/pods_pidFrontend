@@ -462,7 +462,7 @@ function TreeReview() {
               <tr>
                 <th className="wideHead">Code</th>
                 <th className="wideHead">Name</th>
-                <th className="tableActionCell">
+                <th className="mediumHead">
                   <i
                     className="fa-solid fa-trash-can ms-1"
                     title="Delete all"
@@ -548,7 +548,7 @@ function TreeReview() {
               <tr>
                 <th className="wideHead">Code</th>
                 <th className="wideHead">Name</th>
-                <th className="tableActionCell">
+                <th className="mediumHead">
                   <i
                     className="fa-solid fa-trash-can ms-3"
                     title="Delete all"
@@ -678,11 +678,7 @@ function TreeReview() {
                 onClick={handleImportClick}
                 disabled={excelData.length === 0 || isProcessing}
               >
-                {isProcessing
-                  ? "Importing..."
-                  : `Import ${
-                      excelData.filter((r) => r.isValid).length
-                    } Records`}
+              Import
               </button>
             </div>
           </div>

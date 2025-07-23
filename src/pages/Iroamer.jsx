@@ -3576,7 +3576,198 @@ const Iroamer = forwardRef(
       { label: "Zoom selected", action: handleZoomSelected },
       { label: "Focus Selected", action: handleFocusSelected },
       // { label: "Reload", action: handleReload },
+      { label: "Share & Links",
+  children: [
+    { label: "Copy tag link", action: () => handleCopyTagLink(false) },
+    { label: "Copy tag link + view", action: () => handleCopyTagLink(true) },
+    { label: "Copy all visible tags link", },
+    { label: "Export selection", },
+    { label: "Import selection",  },
+  ],
+}
     ];
+
+    const handleCopyTagLink = async () => {
+  if (!taginfo.filename) {
+    setCustomAlert(true);
+    setModalMessage("No tag selected to copy link!");
+    setIsMenuOpen(false);
+    return;
+  }
+
+  try {
+    // Get current URL
+    const currentUrl = window.location.origin + window.location.pathname;
+    
+    // Create tag parameters
+    const tagParams = new URLSearchParams({
+      tag: taginfo.filename,
+      area: selectedMeshRef.current[0]?.metadata?.tagNo?.area || '',
+      disc: selectedMeshRef.current[0]?.metadata?.tagNo?.disc || '',
+      sys: selectedMeshRef.current[0]?.metadata?.tagNo?.sys || '',
+      projectId: projectId
+    });
+
+    // Create the complete URL with tag parameters
+    const tagLink = `${currentUrl}?${tagParams.toString()}`;
+
+    // Copy to clipboard
+    await navigator.clipboard.writeText(tagLink);
+    
+    setCustomAlert(true);
+    setModalMessage(`Tag link copied to clipboard!`);
+    setIsMenuOpen(false);
+
+    // Optional: Show the link in console for debugging
+    console.log("Tag link created:", tagLink);
+    
+  } catch (error) {
+    console.error("Failed to copy tag link:", error);
+    setCustomAlert(true);
+    setModalMessage("Failed to copy tag link to clipboard!");
+    setIsMenuOpen(false);
+  }
+};
+
+// Add these state variables at the top of your component (with other useState declarations)
+const [isFromTagLink, setIsFromTagLink] = useState(false);
+const [linkLoadedTags, setLinkLoadedTags] = useState([]);
+
+// Add keyboard shortcut handler (add this useEffect)
+useEffect(() => {
+  const handleKeyDown = (event) => {
+    // Ctrl+Shift+C to copy tag link
+    if (event.ctrlKey && event.shiftKey && event.key === 'C') {
+      event.preventDefault();
+      if (taginfo.filename) {
+        handleCopyTagLink();
+      }
+    }
+    
+    // Ctrl+Shift+V to paste/import selection
+    if (event.ctrlKey && event.shiftKey && event.key === 'V') {
+      event.preventDefault();
+      // handleImportSelection();
+    }
+  };
+
+  window.addEventListener('keydown', handleKeyDown);
+  return () => window.removeEventListener('keydown', handleKeyDown);
+}, [taginfo.filename]);
+
+// Update the handleTagLinkNavigation function to track loaded tags
+const handleTagLinkNavigation = () => {
+  const urlParams = new URLSearchParams(window.location.search);
+  const projectIdFromUrl = urlParams.get('projectId');
+
+  // Check if project matches
+  if (projectIdFromUrl !== projectId) return;
+
+  // Handle single tag
+  const singleTag = urlParams.get('tag');
+  // Handle multiple tags
+  const multipleTags = urlParams.get('tags');
+
+  if (singleTag || multipleTags) {
+    setIsFromTagLink(true); // Mark that we're loading from a link
+    
+    // Wait for scene and tags to be loaded
+    const checkAndHighlight = () => {
+      if (sceneRef.current && selectedTags.length > 0) {
+        const loadedTagsList = [];
+        
+        if (singleTag) {
+          // Handle single tag
+          const areaFromUrl = urlParams.get('area');
+          const discFromUrl = urlParams.get('disc');
+          const sysFromUrl = urlParams.get('sys');
+
+          const targetTag = selectedTags.find(tag => 
+            tag.tag === singleTag || 
+            tag.filename === singleTag ||
+            (tag.area === areaFromUrl && tag.disc === discFromUrl && 
+             tag.sys === sysFromUrl && tag.tag === singleTag)
+          );
+
+          if (targetTag) {
+            const tagKey = areaFromUrl && discFromUrl && sysFromUrl 
+              ? `${areaFromUrl}-${discFromUrl}-${sysFromUrl}-${singleTag}`
+              : singleTag;
+
+            setHighlightedTagKey(tagKey);
+            setViewHideThree(prev => ({ ...prev, [tagKey]: true }));
+            highlightTagInScene(targetTag.filename);
+            loadedTagsList.push(singleTag);
+
+            setCustomAlert(true);
+            setModalMessage(`Tag "${singleTag}" selected from link!`);
+          }
+        }
+
+        if (multipleTags) {
+          // Handle multiple tags
+          const tagNames = multipleTags.split(',');
+          const areas = urlParams.get('areas')?.split(',') || [];
+          const discs = urlParams.get('discs')?.split(',') || [];
+          const systems = urlParams.get('systems')?.split(',') || [];
+
+          let foundTags = 0;
+          const newViewHideThree = {};
+
+          tagNames.forEach((tagName, index) => {
+            const area = areas[index] || '';
+            const disc = discs[index] || '';
+            const sys = systems[index] || '';
+
+            const targetTag = selectedTags.find(tag => 
+              tag.tag === tagName || 
+              tag.filename === tagName ||
+              (tag.area === area && tag.disc === disc && tag.sys === sys && tag.tag === tagName)
+            );
+
+            if (targetTag) {
+              const tagKey = area && disc && sys 
+                ? `${area}-${disc}-${sys}-${tagName}`
+                : tagName;
+
+              newViewHideThree[tagKey] = true;
+              highlightTagInScene(targetTag.filename);
+              loadedTagsList.push(tagName);
+              foundTags++;
+            }
+          });
+
+          // Update visibility state for all found tags
+          setViewHideThree(prev => ({ ...prev, ...newViewHideThree }));
+
+          setCustomAlert(true);
+          setModalMessage(`${foundTags} of ${tagNames.length} tags selected from link!`);
+        }
+
+        // Store the loaded tags for reference
+        setLinkLoadedTags(loadedTagsList);
+
+        // Clear URL parameters after handling
+        const newUrl = window.location.origin + window.location.pathname;
+        window.history.replaceState({}, document.title, newUrl);
+
+        // Auto-hide the link loaded indicator after 5 seconds
+        setTimeout(() => {
+          setIsFromTagLink(false);
+          setLinkLoadedTags([]);
+        }, 5000);
+
+      } else {
+        // Retry after a short delay if scene/tags not ready
+        setTimeout(checkAndHighlight, 1000);
+      }
+    };
+
+    // Start checking after a short delay to ensure component is mounted
+    setTimeout(checkAndHighlight, 500);
+  }
+};
+
 
     const disposeScene = () => {
       if (sceneRef.current) {
@@ -5389,155 +5580,6 @@ const Iroamer = forwardRef(
           {/* Speed bar */}
           {speedBar}
 
-          {/* {(enableClipping || enableBoxClipping) && (
-            <div
-              className="clipping-controls"
-              style={{
-                position: "absolute",
-                top: "55vh",
-                right: 0,
-                zIndex: "100",
-                backgroundColor: "rgba(255, 255, 255, 0.9)",
-                padding: "10px",
-                borderRadius: "8px",
-                width: "220px",
-                fontSize: "14px",
-              }}
-            >
-              <div style={{ marginBottom: "15px" }}>
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    marginBottom: "10px",
-                  }}
-                >
-                  <label style={{ fontWeight: "bold" }}>Clipping Mode:</label>
-                </div>
-                <div style={{ display: "flex", gap: "10px" }}>
-                  <button
-                    onClick={() => {
-                      setEnableClipping(true);
-                      setEnableBoxClipping(false);
-                    }}
-                    style={{
-                      flex: 1,
-                      padding: "5px",
-                      backgroundColor: enableClipping ? "#4285f4" : "#e0e0e0",
-                      color: enableClipping ? "white" : "black",
-                      border: "none",
-                      borderRadius: "4px",
-                    }}
-                  >
-                    Plane
-                  </button>
-                  <button
-                    onClick={() => {
-                      setEnableBoxClipping(true);
-                      setEnableClipping(false);
-                    }}
-                    style={{
-                      flex: 1,
-                      padding: "5px",
-                      backgroundColor: enableBoxClipping
-                        ? "#4285f4"
-                        : "#e0e0e0",
-                      color: enableBoxClipping ? "white" : "black",
-                      border: "none",
-                      borderRadius: "4px",
-                    }}
-                  >
-                    Box
-                  </button>
-                </div>
-              </div>
-
-              {enableClipping && (
-                <>
-                  <label>Clipping Plane Axis:</label>
-                  <select
-                    value={clippingAxis}
-                    onChange={(e) => setClippingAxis(e.target.value)}
-                    style={{ width: "100%", marginBottom: "10px" }}
-                  >
-                    <option value="X">X - Negative</option>
-                    <option value="-X">X - Positive</option>
-                    <option value="Z">Z - Negative</option>
-                    <option value="-Z">Z - Positive</option>
-                    <option value="Y">Y - Negative</option>
-                    <option value="-Y">Y - Positive</option>
-                  </select>
-
-                  <div style={{ textAlign: "center", margin: "10px 0" }}>
-                    <span style={{ fontWeight: "bold" }}>
-                      Position: {clippingPosition.toFixed(0)}%
-                    </span>
-                  </div>
-
-                  <button
-                    onClick={() => setClippingPosition(50)}
-                    style={{ width: "100%", padding: "5px" }}
-                  >
-                    Reset Position
-                  </button>
-                </>
-              )}
-
-              {enableBoxClipping && (
-                <div style={{ textAlign: "center", margin: "10px 0" }}>
-                  <p>
-                    Use the gizmo handles to resize, rotate, and position the
-                    clipping box.
-                  </p>
-                  <button
-                    onClick={() => {
-                      // Reset box to default position and size
-                      if (clippingBoxMeshRef.current && modelInfoRef.current) {
-                        const { boundingBoxMin, boundingBoxMax } =
-                          modelInfoRef.current;
-                        const fullSize =
-                          boundingBoxMax.subtract(boundingBoxMin);
-                        const center = boundingBoxMin.add(fullSize.scale(0.5));
-
-                        clippingBoxMeshRef.current.position = center;
-                        clippingBoxMeshRef.current.scaling =
-                          fullSize.scale(0.75);
-                        clippingBoxMeshRef.current.rotationQuaternion =
-                          BABYLON.Quaternion.Identity();
-
-                        // Re-apply clipping with reset box
-                        applyCustomClipping(
-                          sceneRef.current,
-                          clippingBoxMeshRef.current
-                        );
-                      }
-                    }}
-                    style={{ width: "100%", padding: "5px" }}
-                  >
-                    Reset Box
-                  </button>
-                </div>
-              )}
-
-              <button
-                onClick={() => {
-                  setEnableClipping(false);
-                  setEnableBoxClipping(false);
-                }}
-                style={{
-                  width: "100%",
-                  padding: "5px",
-                  marginTop: "10px",
-                  backgroundColor: "#f44336",
-                  color: "white",
-                  border: "none",
-                  borderRadius: "4px",
-                }}
-              >
-                Disable Clipping
-              </button>
-            </div>
-          )} */}
 
           {clippingSetting && (
             <div id="groundSettings" className="contextMenu">

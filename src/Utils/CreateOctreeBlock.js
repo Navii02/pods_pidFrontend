@@ -461,9 +461,24 @@ export const createOctreeBlock = (scene, minimum, maximum, meshInfos, depth = 0,
 
 
   // Store mesh info in block
+  // block.meshInfos = meshInfosInBlock.map(info => ({
+  //   id: info.metadata.id,
+  //   boundingBox: info.boundingInfo
+  // }));
+
   block.meshInfos = meshInfosInBlock.map(info => ({
     id: info.metadata.id,
-    boundingBox: info.boundingInfo
+    boundingBox: {
+      boundingBox:{
+        centerWorld:info.boundingInfo.boundingBox.centerWorld,
+        maximumWorld:info.boundingInfo.boundingBox.maximumWorld,
+ minimumWorld:info.boundingInfo.boundingBox.minimumWorld,
+      },
+      boundingSphere:{
+        radius: info.boundingInfo.boundingSphere.radius,
+        radiusWorld:info.boundingInfo.boundingSphere.radiusWorld
+      }
+    }
   }));
   block.customCapacity = meshInfosInBlock.length;
 

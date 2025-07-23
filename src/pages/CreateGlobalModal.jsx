@@ -10,7 +10,6 @@ import { loadModels } from "../Utils/LoadModels";
 import {
   createOctreeBlock,
   createOctreeInfo,
-  distributeMeshesToOctree,
 } from "../Utils/CreateOctreeBlock";
 import { GetTagDetails } from "../services/TagApi";
 import { getUnassignedmodel } from "../services/BulkImportApi";
@@ -291,7 +290,17 @@ function CreateGlobalModal() {
         positions: Array.from(positions),
         normals: Array.from(normals),
         indices: Array.from(indices),
-        boundingBox: mesh.getBoundingInfo().boundingBox,
+           boundingBox: {
+      boundingBox:{
+        centerWorld:mesh.boundingInfo.boundingBox.centerWorld,
+        maximumWorld:mesh.boundingInfo.boundingBox.maximumWorld,
+ minimumWorld:mesh.boundingInfo.boundingBox.minimumWorld,
+      },
+      boundingSphere:{
+        radius: mesh.boundingInfo.boundingSphere.radius,
+        radiusWorld:mesh.boundingInfo.boundingSphere.radiusWorld
+      }
+    },
         name: mesh.name,
         color: materialColor,
         metadata: {
@@ -359,7 +368,6 @@ const processFile = async (file) => {
   try {
     // Process all meshes in parallel
     for (const mesh of container.meshes) {
-      console.log(mesh);
       if (!mesh.geometry) continue;
       meshPromises.push(processMesh(mesh, fileId, file.name));
     }
@@ -600,6 +608,8 @@ const processFile = async (file) => {
     }
   }, [files, isProcessing]);
 
+
+
   const serializeOctree = (octreeInfo) => {
   // Create a more efficient serialization format
   const serialized = {
@@ -634,61 +644,308 @@ const processFile = async (file) => {
     return value;
   });
 };
-
+// Enhanced sendOctreeToBackend function with proper chunking and error handling
 const sendOctreeToBackend = async (octreeInfo) => {
   try {
-    // Use a proper serialization library for circular references
-    const serializeOctree = (data) => {
-      const seen = new WeakSet();
-      return JSON.stringify(data, (key, value) => {
-        if (typeof value === 'object' && value !== null) {
-          if (seen.has(value)) return '[Circular]';
-          seen.add(value);
-        }
-        return value;
-      });
+    console.log('Starting octree upload process...');
+    
+    // Helper function to get object size estimate
+    const getObjectSizeEstimate = (obj) => {
+      return JSON.stringify(obj).length;
     };
 
-    const CHUNK_SIZE = 1 * 1024 * 1024; // 1MB chunks
-    const serializedData = serializeOctree(octreeInfo);
-    const totalChunks = Math.ceil(serializedData.length / CHUNK_SIZE);
+    // Helper function to safely serialize with size limits
+    const safeSerialize = (data, maxSize = 1024 * 1024) => { // 1MB default limit
+      try {
+        const serialized = JSON.stringify(data, (key, value) => {
+          if (typeof value === 'object' && value !== null) {
+            // Handle circular references
+            if (value.__serialized) return '[Circular]';
+            value.__serialized = true;
+          }
+          return value;
+        });
+        
+        // Clean up serialization markers
+        const cleaned = JSON.parse(serialized, (key, value) => {
+          if (typeof value === 'object' && value !== null) {
+            delete value.__serialized;
+          }
+          return value;
+        });
+        
+        return JSON.stringify(cleaned);
+      } catch (error) {
+        console.error('Serialization error:', error);
+        throw new Error(`Serialization failed: ${error.message}`);
+      }
+    };
 
-    // Upload chunks
-    for (let i = 0; i < totalChunks; i++) {
-      const chunk = serializedData.slice(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE);
-      const formData = new FormData();
-      formData.append('projectId', projectId);
-      formData.append('octreeId', octreeInfo.name);
-      formData.append('chunkIndex', i);
-      formData.append('totalChunks', totalChunks);
-      formData.append('chunkData', new Blob([chunk]));
+    // Split octree into manageable sections
+    const octreeSections = {
+      metadata: {
+        name: octreeInfo.name,
+        bounds: octreeInfo.bounds,
+        properties: octreeInfo.properties,
+        statistics: octreeInfo.statistics,
+        timestamp: octreeInfo.timestamp || Date.now()
+      }
+    };
 
-      await axios.post(`${url}/api/octree/chunk`, formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-        onUploadProgress: (progress) => {
-          const percent = Math.round((progress.loaded / progress.total) * 100);
-          updateProgress({
-            stage: "Uploading Octree",
-            subStage: `Chunk ${i+1}/${totalChunks}`,
-            subProgress: percent
-          });
+    // Handle the block hierarchy separately and break it down further
+    if (octreeInfo.data && octreeInfo.data.blockHierarchy) {
+      const hierarchy = octreeInfo.data.blockHierarchy;
+      
+      // Split hierarchy into smaller pieces
+      octreeSections.hierarchyMetadata = {
+        bounds: hierarchy.bounds,
+        properties: hierarchy.properties
+      };
+      
+      // Handle relationships separately (these can be large)
+      if (hierarchy.relationships) {
+        octreeSections.relationships = hierarchy.relationships;
+      }
+      
+      // Handle mesh infos in batches
+      if (hierarchy.meshInfos && Array.isArray(hierarchy.meshInfos)) {
+        const MESH_BATCH_SIZE = 100; // Process meshes in smaller batches
+        const meshBatches = [];
+        
+        for (let i = 0; i < hierarchy.meshInfos.length; i += MESH_BATCH_SIZE) {
+          const batch = hierarchy.meshInfos.slice(i, i + MESH_BATCH_SIZE);
+          // Reduce mesh data to essential information only
+          const reducedBatch = batch.map(mesh => ({
+            id: mesh.metadata?.id || mesh.id,
+            bounds: mesh.boundingInfo ? {
+              min: mesh.boundingInfo.boundingBox?.minimumWorld,
+              max: mesh.boundingInfo.boundingBox?.maximumWorld
+            } : mesh.bounds,
+            vertexCount: mesh.vertexCount || (mesh.metadata?.geometryInfo?.totalVertices),
+            fileId: mesh.metadata?.fileId,
+            parentFile: mesh.metadata?.ParentFile,
+            screenCoverage: mesh.metadata?.screenCoverage
+          }));
+          
+          meshBatches.push(reducedBatch);
         }
-      });
+        
+        octreeSections.meshBatches = meshBatches;
+      }
     }
 
-    // Finalize upload
+    // Upload each section separately
+    let uploadedSections = 0;
+    const totalSections = Object.keys(octreeSections).length + (octreeSections.meshBatches?.length || 0) - 1; // -1 because meshBatches is handled separately
+
+    // Upload metadata first
+    console.log('Uploading metadata...');
+    await uploadSection('metadata', octreeSections.metadata, uploadedSections++, totalSections);
+    
+    // Upload hierarchy metadata
+    if (octreeSections.hierarchyMetadata) {
+      console.log('Uploading hierarchy metadata...');
+      await uploadSection('hierarchyMetadata', octreeSections.hierarchyMetadata, uploadedSections++, totalSections);
+    }
+    
+    // Upload relationships
+    if (octreeSections.relationships) {
+      console.log('Uploading relationships...');
+      await uploadSection('relationships', octreeSections.relationships, uploadedSections++, totalSections);
+    }
+    
+    // Upload mesh batches
+    if (octreeSections.meshBatches) {
+      console.log(`Uploading ${octreeSections.meshBatches.length} mesh batches...`);
+      for (let i = 0; i < octreeSections.meshBatches.length; i++) {
+        const batch = octreeSections.meshBatches[i];
+        await uploadSection(`meshBatch_${i}`, batch, uploadedSections++, totalSections);
+        
+        // Update progress
+        updateProgress({
+          stage: "Uploading Octree",
+          subStage: `Mesh batch ${i + 1}/${octreeSections.meshBatches.length}`,
+          subProgress: Math.round(((i + 1) / octreeSections.meshBatches.length) * 100)
+        });
+      }
+    }
+
+    // Helper function to upload individual sections
+    async function uploadSection(sectionType, sectionData, currentSection, totalSections) {
+      try {
+        const serializedData = safeSerialize(sectionData);
+        const CHUNK_SIZE = 512 * 1024; // 512KB chunks - smaller for safety
+        const totalChunks = Math.ceil(serializedData.length / CHUNK_SIZE);
+        
+        console.log(`Uploading ${sectionType}: ${serializedData.length} chars in ${totalChunks} chunks`);
+        
+        // Upload chunks for this section
+        for (let i = 0; i < totalChunks; i++) {
+          const chunk = serializedData.slice(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE);
+          const formData = new FormData();
+          formData.append('projectId', projectId);
+          formData.append('octreeId', octreeInfo.name);
+          formData.append('sectionType', sectionType);
+          formData.append('chunkIndex', i);
+          formData.append('totalChunks', totalChunks);
+          formData.append('sectionIndex', currentSection);
+          formData.append('totalSections', totalSections);
+          formData.append('chunkData', new Blob([chunk], { type: 'application/json' }));
+
+          const maxRetries = 3;
+          for (let retry = 0; retry < maxRetries; retry++) {
+            try {
+              await axios.post(`${url}/api/octree/chunk`, formData, {
+                headers: { 'Content-Type': 'multipart/form-data' },
+                timeout: 30000, // 30 second timeout
+                onUploadProgress: (progress) => {
+                  const percent = Math.round((progress.loaded / progress.total) * 100);
+                  updateProgress({
+                    stage: "Uploading Octree",
+                    subStage: `${sectionType} - Chunk ${i+1}/${totalChunks}`,
+                    subProgress: percent
+                  });
+                }
+              });
+              break; // Success, exit retry loop
+            } catch (error) {
+              console.error(`Upload attempt ${retry + 1} failed for ${sectionType} chunk ${i}:`, error);
+              if (retry === maxRetries - 1) throw error; // Last retry failed
+              await new Promise(resolve => setTimeout(resolve, 1000 * (retry + 1))); // Progressive backoff
+            }
+          }
+        }
+      } catch (error) {
+        console.error(`Failed to upload section ${sectionType}:`, error);
+        throw new Error(`Section upload failed: ${sectionType} - ${error.message}`);
+      }
+    }
+
+    // Finalize upload with section information
+    console.log('Finalizing octree upload...');
     await axios.post(`${url}/api/octree/finalize`, {
       projectId,
       octreeId: octreeInfo.name,
-      totalChunks
-    },{timeout:6000});
+      sections: Object.keys(octreeSections).filter(key => key !== 'meshBatches'),
+      meshBatchCount: octreeSections.meshBatches?.length || 0,
+      totalSections: totalSections
+    }, { timeout: 60000 }); // 60 second timeout for finalize
 
+    console.log('Octree upload completed successfully');
     return { success: true };
+    
   } catch (error) {
-    console.error('Upload failed:', error);
+    console.error('Octree upload failed:', error);
+    
+    // Provide more specific error information
+    if (error.message.includes('Invalid string length')) {
+      throw new Error('Octree data is too large to process. Consider reducing the detail level or splitting into smaller models.');
+    } else if (error.message.includes('timeout')) {
+      throw new Error('Upload timed out. Please check your network connection and try again.');
+    } else if (error.response?.status === 413) {
+      throw new Error('File too large for server. The octree data exceeds server limits.');
+    } else if (error.response?.status >= 500) {
+      throw new Error('Server error occurred. Please try again later.');
+    } else {
+      throw new Error(`Upload failed: ${error.message}`);
+    }
+  }
+};
+
+// Alternative: Emergency fallback function for extremely large octrees
+const sendOctreeMetadataOnly = async (octreeInfo) => {
+  try {
+    console.log('Using emergency fallback - uploading metadata only...');
+    
+    // Send only essential metadata
+    const minimalOctree = {
+      name: octreeInfo.name,
+      bounds: octreeInfo.bounds,
+      properties: octreeInfo.properties,
+      statistics: {
+        ...octreeInfo.statistics,
+        meshCount: octreeInfo.data?.blockHierarchy?.meshInfos?.length || 0,
+        nodeCount: octreeInfo.statistics?.nodeCount || 'unknown'
+      },
+      timestamp: octreeInfo.timestamp || Date.now(),
+      fallbackMode: true
+    };
+    
+    const serializedData = JSON.stringify(minimalOctree);
+    
+    const formData = new FormData();
+    formData.append('projectId', projectId);
+    formData.append('octreeId', octreeInfo.name);
+    formData.append('fallbackMode', 'true');
+    formData.append('octreeData', new Blob([serializedData], { type: 'application/json' }));
+
+    await axios.post(`${url}/api/octree/fallback`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 30000
+    });
+    
+    console.log('Fallback upload completed');
+    return { success: true, fallback: true };
+    
+  } catch (error) {
+    console.error('Even fallback upload failed:', error);
     throw error;
   }
 };
+// const sendOctreeToBackend = async (octreeInfo) => {
+//   try {
+//     // Use a proper serialization library for circular references
+//     const serializeOctree = (data) => {
+//       const seen = new WeakSet();
+//       return JSON.stringify(data, (key, value) => {
+//         if (typeof value === 'object' && value !== null) {
+//           if (seen.has(value)) return '[Circular]';
+//           seen.add(value);
+//         }
+//         return value;
+//       });
+//     };
+
+//     const CHUNK_SIZE = 1 * 1024 * 1024; // 1MB chunks
+//     const serializedData = serializeOctree(octreeInfo);
+//     const totalChunks = Math.ceil(serializedData.length / CHUNK_SIZE);
+
+//     // Upload chunks
+//     for (let i = 0; i < totalChunks; i++) {
+//       const chunk = serializedData.slice(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE);
+//       const formData = new FormData();
+//       formData.append('projectId', projectId);
+//       formData.append('octreeId', octreeInfo.name);
+//       formData.append('chunkIndex', i);
+//       formData.append('totalChunks', totalChunks);
+//       formData.append('chunkData', new Blob([chunk]));
+
+//       await axios.post(`${url}/api/octree/chunk`, formData, {
+//         headers: { 'Content-Type': 'multipart/form-data' },
+//         onUploadProgress: (progress) => {
+//           const percent = Math.round((progress.loaded / progress.total) * 100);
+//           updateProgress({
+//             stage: "Uploading Octree",
+//             subStage: `Chunk ${i+1}/${totalChunks}`,
+//             subProgress: percent
+//           });
+//         }
+//       });
+//     }
+
+//     // Finalize upload
+//     await axios.post(`${url}/api/octree/finalize`, {
+//       projectId,
+//       octreeId: octreeInfo.name,
+//       totalChunks
+//     },{timeout:6000});
+
+//     return { success: true };
+//   } catch (error) {
+//     console.error('Upload failed:', error);
+//     throw error;
+//   }
+// };
   // Helper functions
   const getMinBounds = (meshInfos) => {
     return meshInfos.reduce((min, info) => {
@@ -1221,6 +1478,7 @@ const sendOctreeToBackend = async (octreeInfo) => {
                     className="ms-1"
                     disabled={isProcessing}
                   />
+                  <button onClick={handleloadModels}>load models</button>
                  
                   {status && (
                     <div
