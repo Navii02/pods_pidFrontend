@@ -8,6 +8,7 @@ const WORKER_CHUNK_SIZE = 1000; // Process models in chunks of 1000
 const projectString = sessionStorage.getItem("selectedProject");
 const project = projectString ? JSON.parse(projectString) : null;
 const projectId = project?.projectId;
+console.log(projectId);
 
 class MeshProcessingWorker {
     constructor() {

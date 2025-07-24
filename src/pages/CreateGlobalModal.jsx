@@ -634,308 +634,61 @@ const processFile = async (file) => {
     return value;
   });
 };
-// Enhanced sendOctreeToBackend function with proper chunking and error handling
+
 const sendOctreeToBackend = async (octreeInfo) => {
   try {
-    console.log('Starting octree upload process...');
-    
-    // Helper function to get object size estimate
-    const getObjectSizeEstimate = (obj) => {
-      return JSON.stringify(obj).length;
-    };
-
-    // Helper function to safely serialize with size limits
-    const safeSerialize = (data, maxSize = 1024 * 1024) => { // 1MB default limit
-      try {
-        const serialized = JSON.stringify(data, (key, value) => {
-          if (typeof value === 'object' && value !== null) {
-            // Handle circular references
-            if (value.__serialized) return '[Circular]';
-            value.__serialized = true;
-          }
-          return value;
-        });
-        
-        // Clean up serialization markers
-        const cleaned = JSON.parse(serialized, (key, value) => {
-          if (typeof value === 'object' && value !== null) {
-            delete value.__serialized;
-          }
-          return value;
-        });
-        
-        return JSON.stringify(cleaned);
-      } catch (error) {
-        console.error('Serialization error:', error);
-        throw new Error(`Serialization failed: ${error.message}`);
-      }
-    };
-
-    // Split octree into manageable sections
-    const octreeSections = {
-      metadata: {
-        name: octreeInfo.name,
-        bounds: octreeInfo.bounds,
-        properties: octreeInfo.properties,
-        statistics: octreeInfo.statistics,
-        timestamp: octreeInfo.timestamp || Date.now()
-      }
-    };
-
-    // Handle the block hierarchy separately and break it down further
-    if (octreeInfo.data && octreeInfo.data.blockHierarchy) {
-      const hierarchy = octreeInfo.data.blockHierarchy;
-      
-      // Split hierarchy into smaller pieces
-      octreeSections.hierarchyMetadata = {
-        bounds: hierarchy.bounds,
-        properties: hierarchy.properties
-      };
-      
-      // Handle relationships separately (these can be large)
-      if (hierarchy.relationships) {
-        octreeSections.relationships = hierarchy.relationships;
-      }
-      
-      // Handle mesh infos in batches
-      if (hierarchy.meshInfos && Array.isArray(hierarchy.meshInfos)) {
-        const MESH_BATCH_SIZE = 100; // Process meshes in smaller batches
-        const meshBatches = [];
-        
-        for (let i = 0; i < hierarchy.meshInfos.length; i += MESH_BATCH_SIZE) {
-          const batch = hierarchy.meshInfos.slice(i, i + MESH_BATCH_SIZE);
-          // Reduce mesh data to essential information only
-          const reducedBatch = batch.map(mesh => ({
-            id: mesh.metadata?.id || mesh.id,
-            bounds: mesh.boundingInfo ? {
-              min: mesh.boundingInfo.boundingBox?.minimumWorld,
-              max: mesh.boundingInfo.boundingBox?.maximumWorld
-            } : mesh.bounds,
-            vertexCount: mesh.vertexCount || (mesh.metadata?.geometryInfo?.totalVertices),
-            fileId: mesh.metadata?.fileId,
-            parentFile: mesh.metadata?.ParentFile,
-            screenCoverage: mesh.metadata?.screenCoverage
-          }));
-          
-          meshBatches.push(reducedBatch);
+    // Use a proper serialization library for circular references
+    const serializeOctree = (data) => {
+      const seen = new WeakSet();
+      return JSON.stringify(data, (key, value) => {
+        if (typeof value === 'object' && value !== null) {
+          if (seen.has(value)) return '[Circular]';
+          seen.add(value);
         }
-        
-        octreeSections.meshBatches = meshBatches;
-      }
-    }
+        return value;
+      });
+    };
 
-    // Upload each section separately
-    let uploadedSections = 0;
-    const totalSections = Object.keys(octreeSections).length + (octreeSections.meshBatches?.length || 0) - 1; // -1 because meshBatches is handled separately
+    const CHUNK_SIZE = 1 * 1024 * 1024; // 1MB chunks
+    const serializedData = serializeOctree(octreeInfo);
+    const totalChunks = Math.ceil(serializedData.length / CHUNK_SIZE);
 
-    // Upload metadata first
-    console.log('Uploading metadata...');
-    await uploadSection('metadata', octreeSections.metadata, uploadedSections++, totalSections);
-    
-    // Upload hierarchy metadata
-    if (octreeSections.hierarchyMetadata) {
-      console.log('Uploading hierarchy metadata...');
-      await uploadSection('hierarchyMetadata', octreeSections.hierarchyMetadata, uploadedSections++, totalSections);
-    }
-    
-    // Upload relationships
-    if (octreeSections.relationships) {
-      console.log('Uploading relationships...');
-      await uploadSection('relationships', octreeSections.relationships, uploadedSections++, totalSections);
-    }
-    
-    // Upload mesh batches
-    if (octreeSections.meshBatches) {
-      console.log(`Uploading ${octreeSections.meshBatches.length} mesh batches...`);
-      for (let i = 0; i < octreeSections.meshBatches.length; i++) {
-        const batch = octreeSections.meshBatches[i];
-        await uploadSection(`meshBatch_${i}`, batch, uploadedSections++, totalSections);
-        
-        // Update progress
-        updateProgress({
-          stage: "Uploading Octree",
-          subStage: `Mesh batch ${i + 1}/${octreeSections.meshBatches.length}`,
-          subProgress: Math.round(((i + 1) / octreeSections.meshBatches.length) * 100)
-        });
-      }
-    }
+    // Upload chunks
+    for (let i = 0; i < totalChunks; i++) {
+      const chunk = serializedData.slice(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE);
+      const formData = new FormData();
+      formData.append('projectId', projectId);
+      formData.append('octreeId', octreeInfo.name);
+      formData.append('chunkIndex', i);
+      formData.append('totalChunks', totalChunks);
+      formData.append('chunkData', new Blob([chunk]));
 
-    // Helper function to upload individual sections
-    async function uploadSection(sectionType, sectionData, currentSection, totalSections) {
-      try {
-        const serializedData = safeSerialize(sectionData);
-        const CHUNK_SIZE = 512 * 1024; // 512KB chunks - smaller for safety
-        const totalChunks = Math.ceil(serializedData.length / CHUNK_SIZE);
-        
-        console.log(`Uploading ${sectionType}: ${serializedData.length} chars in ${totalChunks} chunks`);
-        
-        // Upload chunks for this section
-        for (let i = 0; i < totalChunks; i++) {
-          const chunk = serializedData.slice(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE);
-          const formData = new FormData();
-          formData.append('projectId', projectId);
-          formData.append('octreeId', octreeInfo.name);
-          formData.append('sectionType', sectionType);
-          formData.append('chunkIndex', i);
-          formData.append('totalChunks', totalChunks);
-          formData.append('sectionIndex', currentSection);
-          formData.append('totalSections', totalSections);
-          formData.append('chunkData', new Blob([chunk], { type: 'application/json' }));
-
-          const maxRetries = 3;
-          for (let retry = 0; retry < maxRetries; retry++) {
-            try {
-              await axios.post(`${url}/api/octree/chunk`, formData, {
-                headers: { 'Content-Type': 'multipart/form-data' },
-                timeout: 30000, // 30 second timeout
-                onUploadProgress: (progress) => {
-                  const percent = Math.round((progress.loaded / progress.total) * 100);
-                  updateProgress({
-                    stage: "Uploading Octree",
-                    subStage: `${sectionType} - Chunk ${i+1}/${totalChunks}`,
-                    subProgress: percent
-                  });
-                }
-              });
-              break; // Success, exit retry loop
-            } catch (error) {
-              console.error(`Upload attempt ${retry + 1} failed for ${sectionType} chunk ${i}:`, error);
-              if (retry === maxRetries - 1) throw error; // Last retry failed
-              await new Promise(resolve => setTimeout(resolve, 1000 * (retry + 1))); // Progressive backoff
-            }
-          }
+      await axios.post(`${url}/api/octree/chunk`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+        onUploadProgress: (progress) => {
+          const percent = Math.round((progress.loaded / progress.total) * 100);
+          updateProgress({
+            stage: "Uploading Octree",
+            subStage: `Chunk ${i+1}/${totalChunks}`,
+            subProgress: percent
+          });
         }
-      } catch (error) {
-        console.error(`Failed to upload section ${sectionType}:`, error);
-        throw new Error(`Section upload failed: ${sectionType} - ${error.message}`);
-      }
+      });
     }
 
-    // Finalize upload with section information
-    console.log('Finalizing octree upload...');
+    // Finalize upload
     await axios.post(`${url}/api/octree/finalize`, {
       projectId,
       octreeId: octreeInfo.name,
-      sections: Object.keys(octreeSections).filter(key => key !== 'meshBatches'),
-      meshBatchCount: octreeSections.meshBatches?.length || 0,
-      totalSections: totalSections
-    }, { timeout: 60000 }); // 60 second timeout for finalize
+      totalChunks
+    },{timeout:20000});
 
-    console.log('Octree upload completed successfully');
     return { success: true };
-    
   } catch (error) {
-    console.error('Octree upload failed:', error);
-    
-    // Provide more specific error information
-    if (error.message.includes('Invalid string length')) {
-      throw new Error('Octree data is too large to process. Consider reducing the detail level or splitting into smaller models.');
-    } else if (error.message.includes('timeout')) {
-      throw new Error('Upload timed out. Please check your network connection and try again.');
-    } else if (error.response?.status === 413) {
-      throw new Error('File too large for server. The octree data exceeds server limits.');
-    } else if (error.response?.status >= 500) {
-      throw new Error('Server error occurred. Please try again later.');
-    } else {
-      throw new Error(`Upload failed: ${error.message}`);
-    }
-  }
-};
-
-// Alternative: Emergency fallback function for extremely large octrees
-const sendOctreeMetadataOnly = async (octreeInfo) => {
-  try {
-    console.log('Using emergency fallback - uploading metadata only...');
-    
-    // Send only essential metadata
-    const minimalOctree = {
-      name: octreeInfo.name,
-      bounds: octreeInfo.bounds,
-      properties: octreeInfo.properties,
-      statistics: {
-        ...octreeInfo.statistics,
-        meshCount: octreeInfo.data?.blockHierarchy?.meshInfos?.length || 0,
-        nodeCount: octreeInfo.statistics?.nodeCount || 'unknown'
-      },
-      timestamp: octreeInfo.timestamp || Date.now(),
-      fallbackMode: true
-    };
-    
-    const serializedData = JSON.stringify(minimalOctree);
-    
-    const formData = new FormData();
-    formData.append('projectId', projectId);
-    formData.append('octreeId', octreeInfo.name);
-    formData.append('fallbackMode', 'true');
-    formData.append('octreeData', new Blob([serializedData], { type: 'application/json' }));
-
-    await axios.post(`${url}/api/octree/fallback`, formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-      timeout: 30000
-    });
-    
-    console.log('Fallback upload completed');
-    return { success: true, fallback: true };
-    
-  } catch (error) {
-    console.error('Even fallback upload failed:', error);
+    console.error('Upload failed:', error);
     throw error;
   }
 };
-// const sendOctreeToBackend = async (octreeInfo) => {
-//   try {
-//     // Use a proper serialization library for circular references
-//     const serializeOctree = (data) => {
-//       const seen = new WeakSet();
-//       return JSON.stringify(data, (key, value) => {
-//         if (typeof value === 'object' && value !== null) {
-//           if (seen.has(value)) return '[Circular]';
-//           seen.add(value);
-//         }
-//         return value;
-//       });
-//     };
-
-//     const CHUNK_SIZE = 1 * 1024 * 1024; // 1MB chunks
-//     const serializedData = serializeOctree(octreeInfo);
-//     const totalChunks = Math.ceil(serializedData.length / CHUNK_SIZE);
-
-//     // Upload chunks
-//     for (let i = 0; i < totalChunks; i++) {
-//       const chunk = serializedData.slice(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE);
-//       const formData = new FormData();
-//       formData.append('projectId', projectId);
-//       formData.append('octreeId', octreeInfo.name);
-//       formData.append('chunkIndex', i);
-//       formData.append('totalChunks', totalChunks);
-//       formData.append('chunkData', new Blob([chunk]));
-
-//       await axios.post(`${url}/api/octree/chunk`, formData, {
-//         headers: { 'Content-Type': 'multipart/form-data' },
-//         onUploadProgress: (progress) => {
-//           const percent = Math.round((progress.loaded / progress.total) * 100);
-//           updateProgress({
-//             stage: "Uploading Octree",
-//             subStage: `Chunk ${i+1}/${totalChunks}`,
-//             subProgress: percent
-//           });
-//         }
-//       });
-//     }
-
-//     // Finalize upload
-//     await axios.post(`${url}/api/octree/finalize`, {
-//       projectId,
-//       octreeId: octreeInfo.name,
-//       totalChunks
-//     },{timeout:6000});
-
-//     return { success: true };
-//   } catch (error) {
-//     console.error('Upload failed:', error);
-//     throw error;
-//   }
-// };
   // Helper functions
   const getMinBounds = (meshInfos) => {
     return meshInfos.reduce((min, info) => {
@@ -1041,390 +794,51 @@ const sendOctreeMetadataOnly = async (octreeInfo) => {
   const handleloadModels = async () => {
     await loadModels();
   };
+// const loadOctree = async () => {
+//   const db = await initDB();
+//   const tx = db.transaction(['octree'], 'readonly');
+  
+//   const octreeRequest = await tx.objectStore('octree').get('mainOctree');
+  
+//   console.log(octreeRequest?.data);
 
-  // UPDATED: Enhanced octree analysis function with improved structure detection
-  const analyzeOctree = async () => {
-    try {
-      const db = await initDB();
+//   // Send octree data to the backend
+//   // await sendOctreeToBackend(octreeData.data);
+// }
 
-      // Get the main octree from the database
-      const octreeData = await new Promise((resolve, reject) => {
-        const transaction = db.transaction("octree", "readonly");
-        const store = transaction.objectStore("octree");
-        const request = store.get("mainOctree");
-
-        request.onsuccess = () => resolve(request.result);
-        request.onerror = () => reject(request.error);
-      });
-
-      if (!octreeData) {
-        console.error("No octree data found in the database");
-        return;
-      }
-
-      // Debug: Log the high-level structure to examine it without overwhelming the console
-      console.log(
-        "Octree data structure:",
-        JSON.stringify(
-          Object.keys(octreeData).reduce((obj, key) => {
-            obj[key] =
-              typeof octreeData[key] === "object"
-                ? "[Object]"
-                : octreeData[key];
-            return obj;
-          }, {})
-        )
-      );
-
-      // Structure to hold node and mesh counts per depth
-      const stats = {
-        nodesByDepth: {}, // { depth: nodeCount }
-        meshesByDepth: {}, // { depth: Set of meshIds }
-        // Track processed nodes to avoid double-counting
-        processedNodes: new Set(),
-      };
-
-      // Initialize stats for depths 0-4
-      for (let i = 0; i <= 4; i++) {
-        stats.nodesByDepth[i] = 0;
-        stats.meshesByDepth[i] = new Set(); // Use Set to avoid duplicate mesh IDs
-      }
-
-      // Improved recursive function to analyze octree structure
-      // Returns a boolean indicating if the object was identified as a block
-      const analyzeBlock = (block, depth = 0, path = "", nodeId = null) => {
-        if (!block || typeof block !== "object") return false;
-
-        // Try to identify a unique ID for this node to avoid double-counting
-        const id =
-          nodeId ||
-          (block.properties && block.properties.nodeNumber) ||
-          block.nodeNumber ||
-          path;
-
-        // Skip if we've already processed this node
-        if (stats.processedNodes.has(id)) {
-          return true; // Return true to indicate this was a block, but already processed
-        }
-
-        // Check if this is a block node using multiple indicators
-        let isBlock = false;
-
-        // Check for common block properties
-        if (
-          // Standard octree node structure
-          (block.bounds && (block.bounds.min || block.bounds.max)) ||
-          // Alternative structures
-          (block.min && block.max) ||
-          // Check for meshInfos
-          (block.meshInfos && Array.isArray(block.meshInfos)) ||
-          // Check for properties that indicate this is a node
-          (block.properties && block.properties.depth !== undefined) ||
-          // Check if it has child blocks
-          (block.relationships && block.relationships.childBlocks)
-        ) {
-          isBlock = true;
-          stats.processedNodes.add(id);
-          stats.nodesByDepth[depth] = (stats.nodesByDepth[depth] || 0) + 1;
-
-          // Process meshInfos if present
-          if (block.meshInfos && Array.isArray(block.meshInfos)) {
-            const meshIds = block.meshInfos
-              .filter((mesh) => mesh && mesh.id)
-              .map((mesh) => mesh.id);
-
-            if (meshIds.length > 0) {
-              meshIds.forEach((id) => stats.meshesByDepth[depth].add(id));
-              console.log(
-                `  Found ${meshIds.length} meshes at depth ${depth}, path: ${path}`
-              );
-            }
-          }
-
-          // Look for child blocks - check multiple possible child block properties
-          const childArrays = [
-            block.relationships?.childBlocks,
-            block.blocks,
-            block.children,
-            block.subdivisions,
-            block.subBlocks,
-          ].filter((arr) => arr && Array.isArray(arr));
-
-          // Process all child arrays
-          childArrays.forEach((childArray) => {
-            console.log(
-              `  Processing ${childArray.length} children at depth ${depth}`
-            );
-
-            childArray.forEach((child, i) => {
-              if (child) {
-                const childNodeId =
-                  (child.properties && child.properties.nodeNumber) ||
-                  child.nodeNumber ||
-                  `${id}-child-${i}`;
-                analyzeBlock(child, depth + 1, `${path}[${i}]`, childNodeId);
-              }
-            });
-          });
-        }
-
-        // If not explicitly a block, check if it contains a blockHierarchy
-        if (!isBlock && block.data && block.data.blockHierarchy) {
-          return analyzeBlock(
-            block.data.blockHierarchy,
-            depth,
-            `${path}.data.blockHierarchy`
-          );
-        }
-
-        // If not explicitly a block, recursively check properties
-        if (!isBlock) {
-          // For arrays
-          if (Array.isArray(block)) {
-            block.forEach((item, i) => {
-              if (item && typeof item === "object") {
-                const wasBlock = analyzeBlock(item, depth, `${path}[${i}]`);
-                isBlock = isBlock || wasBlock;
-              }
-            });
-          }
-          // For objects
-          else {
-            for (const key of Object.keys(block)) {
-              if (block[key] && typeof block[key] === "object") {
-                // Skip some properties that are unlikely to contain block structures
-                if (
-                  [
-                    "min",
-                    "max",
-                    "bounds",
-                    "transforms",
-                    "boundingInfo",
-                  ].includes(key)
-                )
-                  continue;
-
-                const wasBlock = analyzeBlock(
-                  block[key],
-                  depth,
-                  `${path}.${key}`
-                );
-                isBlock = isBlock || wasBlock;
-              }
-            }
-          }
-        }
-
-        return isBlock;
-      };
-
-      // Start analysis from the root
-      console.log("Starting octree analysis...");
-
-      // Try to analyze from different potential starting points
-      let foundStructure = false;
-
-      // 1. Try the standard expected path
-      if (octreeData.data && octreeData.data.blockHierarchy) {
-        console.log("Analyzing from data.blockHierarchy...");
-        foundStructure = analyzeBlock(
-          octreeData.data.blockHierarchy,
-          0,
-          "blockHierarchy"
-        );
-      }
-
-      // 2. Try other common paths if the first attempt didn't find anything
-      if (!foundStructure && octreeData.blockHierarchy) {
-        console.log("Analyzing from blockHierarchy...");
-        foundStructure = analyzeBlock(
-          octreeData.blockHierarchy,
-          0,
-          "blockHierarchy"
-        );
-      }
-
-      // 3. As a last resort, start from the root
-      if (!foundStructure) {
-        console.log("Analyzing from root...");
-        foundStructure = analyzeBlock(octreeData, 0, "root");
-      }
-
-      // Log results
-      console.log("\n===== OCTREE ANALYSIS RESULTS =====");
-      console.log("Node counts by depth:");
-
-      // Print node counts for depths 0-4
-      for (let depth = 0; depth <= 4; depth++) {
-        console.log(`  Depth ${depth}: ${stats.nodesByDepth[depth]} nodes`);
-      }
-
-      console.log("\nMesh IDs by depth:");
-
-      // Print mesh IDs for depths 0-4
-      for (let depth = 0; depth <= 4; depth++) {
-        const meshIds = Array.from(stats.meshesByDepth[depth] || []);
-        console.log(`  Depth ${depth}: ${meshIds.length} unique meshes`);
-        if (meshIds.length > 0) {
-          console.log(
-            `    Mesh IDs: ${meshIds.slice(0, 10).join(", ")}${
-              meshIds.length > 10 ? "..." : ""
-            }`
-          );
-        }
-
-        // Check for shared meshes with other depths
-        for (let otherDepth = 0; otherDepth <= 4; otherDepth++) {
-          if (otherDepth !== depth) {
-            const otherMeshIds = stats.meshesByDepth[otherDepth];
-            if (otherMeshIds && otherMeshIds.size > 0) {
-              const shared = new Set(
-                [...meshIds].filter((id) => otherMeshIds.has(id))
-              );
-              if (shared.size > 0) {
-                console.log(
-                  `    WARNING: ${shared.size} meshes also appear at depth ${otherDepth}!`
-                );
-                console.log(
-                  `    Shared IDs: ${Array.from(shared)
-                    .slice(0, 5)
-                    .join(", ")}${shared.size > 5 ? "..." : ""}`
-                );
-              }
-            }
-          }
-        }
-      }
-
-      // Calculate total metrics
-      const totalNodes = Object.values(stats.nodesByDepth).reduce(
-        (sum, count) => sum + count,
-        0
-      );
-      const totalMeshes = new Set(
-        Object.values(stats.meshesByDepth).flatMap((set) => Array.from(set))
-      ).size;
-
-      console.log("\nSummary:");
-      console.log(`  Total nodes: ${totalNodes}`);
-      console.log(`  Total unique meshes: ${totalMeshes}`);
-      console.log(`  Processed node count: ${stats.processedNodes.size}`);
-      console.log("==================================");
-
-      // Get the original mesh data for reference
-      try {
-        const meshDataRequest = await new Promise((resolve, reject) => {
-          const transaction = db.transaction("originalMeshes", "readonly");
-          const store = transaction.objectStore("originalMeshes");
-          const request = store.get("meshData");
-
-          request.onsuccess = () => resolve(request.result);
-          request.onerror = () => reject(request.error);
-        });
-
-        if (meshDataRequest && Array.isArray(meshDataRequest)) {
-          console.log(
-            `For reference: Total meshes in originalMeshes store: ${meshDataRequest.length}`
-          );
-
-          // Cross-check with octree
-          const originalMeshIds = new Set(
-            meshDataRequest
-              .filter((mesh) => mesh && mesh.metadata && mesh.metadata.id)
-              .map((mesh) => mesh.metadata.id)
-          );
-
-          const octreeMeshIds = new Set(
-            Object.values(stats.meshesByDepth).flatMap((set) => Array.from(set))
-          );
-
-          const missingInOctree = new Set(
-            [...originalMeshIds].filter((id) => !octreeMeshIds.has(id))
-          );
-
-          const extraInOctree = new Set(
-            [...octreeMeshIds].filter((id) => !originalMeshIds.has(id))
-          );
-
-          console.log(`  Meshes missing from octree: ${missingInOctree.size}`);
-          if (missingInOctree.size > 0) {
-            console.log(
-              `    Missing IDs: ${Array.from(missingInOctree)
-                .slice(0, 10)
-                .join(", ")}${missingInOctree.size > 10 ? "..." : ""}`
-            );
-          }
-
-          console.log(`  Extra meshes in octree: ${extraInOctree.size}`);
-          if (extraInOctree.size > 0) {
-            console.log(
-              `    Extra IDs: ${Array.from(extraInOctree)
-                .slice(0, 10)
-                .join(", ")}${extraInOctree.size > 10 ? "..." : ""}`
-            );
-          }
-        }
-      } catch (error) {
-        console.error("Error accessing mesh data:", error);
-      }
-    } catch (error) {
-      console.error("Error analyzing octree:", error);
-      console.error("Error stack:", error.stack);
+const loadOctree = async () => {
+  try {
+    const db = await initDB();
+    const tx = db.transaction(['octree'], 'readonly');
+    const store = tx.objectStore('octree');
+    
+    // Get the octree data
+    const octreeRequest = store.get('mainOctree');
+    
+    // Wait for the request to complete
+    const result = await new Promise((resolve, reject) => {
+      octreeRequest.onsuccess = () => resolve(octreeRequest.result);
+      octreeRequest.onerror = () => reject(octreeRequest.error);
+    });
+    
+    if (result && result.data) {
+      console.log('Octree data loaded:', result);
+       await sendOctreeToBackend(result);
+  
+    } else {
+      console.log('No octree data found in storage');
+      return null;
     }
-  };
+    
+  } catch (error) {
+    console.error('Error loading octree data:', error);
+    throw error;
+  }
+};
 
-  // React Progress Component
-  const ProgressDisplay = ({ progress }) => {
-    const { stage, processingStage, subStage, subProgress, current, total } =
-      progress;
 
-    return (
-      <div className="progress-container">
-        <div className="main-stage">
-          <h3>
-            Stage {processingStage}: {stage}
-          </h3>
-          <div className="progress-bar">
-            <div
-              className="progress-fill"
-              style={{ width: `${subProgress}%` }}
-            />
-          </div>
-          <p>
-            {subProgress}% - {subStage}
-          </p>
-          {current && total && (
-            <p>
-              {current} / {total} items processed
-            </p>
-          )}
-        </div>
 
-        <div className="stage-indicators">
-          {[
-            "Processing Files",
-            "Storing Meshes",
-            "Creating Octree",
-            "Processing Models",
-            "Complete",
-          ].map((stageName, index) => (
-            <div
-              key={index}
-              className={`stage-indicator ${
-                index + 1 < processingStage
-                  ? "completed"
-                  : index + 1 === processingStage
-                  ? "active"
-                  : "pending"
-              }`}
-            >
-              {stageName}
-            </div>
-          ))}
-        </div>
-      </div>
-    );
-  };
+
 
 
   return (
@@ -1468,6 +882,7 @@ const sendOctreeMetadataOnly = async (octreeInfo) => {
                     className="ms-1"
                     disabled={isProcessing}
                   />
+                  <button onClick={loadOctree}>load octree</button>
                   <button onClick={handleloadModels}>load models</button>
                  
                   {status && (
