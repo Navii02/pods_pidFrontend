@@ -56,7 +56,7 @@ import {
   updateCommentField,
 } from "../services/CommentApi";
 import { AllSavedView, SaveSavedView } from "../services/CommonApis";
-
+import  {BabylonVRHelper}  from "../Utils/VrHelper";
 const Iroamer = forwardRef(
   (
     {
@@ -112,8 +112,9 @@ const Iroamer = forwardRef(
     const [waterSettingParameter, setWaterSettingParameter] = useState(null);
     const [baseSettingParameter, setBaseSettingParameter] = useState(null);
     const [groundSettingParameter, setGroundSettingParameter] = useState(null);
-
-    // ------------------------------------PID--------------------------
+    const [vrHelper, setVrHelper] = useState(null);
+    const [isVRSupported, setIsVRSupported] = useState(false);
+    const [isInVR, setIsInVR] = useState(false);
 
     const [showAxis, setShowAxis] = useState(true);
     const [backgroundTheme, setBackgroundTheme] = useState("DEFAULT");
@@ -1888,8 +1889,8 @@ const Iroamer = forwardRef(
         const scene = sceneRef.current;
         const canvas = scene.getEngine().getRenderingCanvas();
         const canvasParent = canvas?.parentElement;
-        
-      const camera = sceneRef.current.activeCamera;
+
+        const camera = sceneRef.current.activeCamera;
 
         // === Prevent native browser context menu ===
         const preventContextMenu = (e) => {
@@ -1952,21 +1953,21 @@ const Iroamer = forwardRef(
                   intersectionPointX: intersectionPoint.x,
                   intersectionPointY: intersectionPoint.y,
                   intersectionPointZ: intersectionPoint.z,
-                    posX: camera.position.x,
-        posY: camera.position.y,
-        posZ: camera.position.z,
-        targX:
-          camera instanceof BABYLON.ArcRotateCamera
-            ? camera.target.x
-            : camera.getTarget().x,
-        targY:
-          camera instanceof BABYLON.ArcRotateCamera
-            ? camera.target.y
-            : camera.getTarget().y,
-        targZ:
-          camera instanceof BABYLON.ArcRotateCamera
-            ? camera.target.z
-            : camera.getTarget().z,
+                  posX: camera.position.x,
+                  posY: camera.position.y,
+                  posZ: camera.position.z,
+                  targX:
+                    camera instanceof BABYLON.ArcRotateCamera
+                      ? camera.target.x
+                      : camera.getTarget().x,
+                  targY:
+                    camera instanceof BABYLON.ArcRotateCamera
+                      ? camera.target.y
+                      : camera.getTarget().y,
+                  targZ:
+                    camera instanceof BABYLON.ArcRotateCamera
+                      ? camera.target.z
+                      : camera.getTarget().z,
                 });
 
                 setFileInfoDetails(mesh.metadata.tagNo.fileDetails);
@@ -2002,7 +2003,7 @@ const Iroamer = forwardRef(
 
                 // When setting the data:
                 settaginfo({
-                  filename:mesh.metadata.tagNo.tag,
+                  filename: mesh.metadata.tagNo.tag,
                   meshname: mesh.name,
                   linelistDetails: linelistDetails || null,
                   equipmentlistDetails: equipmentlistDetails || null,
@@ -3233,7 +3234,6 @@ const Iroamer = forwardRef(
         setCustomAlert(true);
         setModalMessage("Error applying view");
       }
-     
     };
 
     const handleclosecommentinfo = () => {
@@ -3545,593 +3545,8 @@ const Iroamer = forwardRef(
       setViewHideThreeunassigned({});
       setIsMenuOpen(false);
     };
-     const handleCopyVisibleTagsLink = async () => {
-  try {
-    // Get all currently visible tags
-    const visibleTags = selectedTags.filter(tag => {
-      const tagKey = `${tag.area}-${tag.disc}-${tag.sys}-${tag.tag}`;
-      return viewHideThree[tagKey] === true || 
-             viewHideThreeunassigned[tag.tag] === true;
-    });
 
-    if (visibleTags.length === 0) {
-      setCustomAlert(true);
-      setModalMessage("No visible tags to create link!");
-      setIsMenuOpen(false);
-      return;
-    }
-
-    const currentUrl = window.location.origin + window.location.pathname;
-    const tagParams = new URLSearchParams();
-    
-    tagParams.set('projectId', projectId);
-    
-    // Create comma-separated values for multiple tags
-    const tagNames = visibleTags.map(tag => tag.tag || tag.filename).join(',');
-    const areas = visibleTags.map(tag => tag.area || '').join(',');
-    const discs = visibleTags.map(tag => tag.disc || '').join(',');
-    const systems = visibleTags.map(tag => tag.sys || '').join(',');
-    
-    tagParams.set('tags', tagNames);
-    tagParams.set('areas', areas);
-    tagParams.set('discs', discs);
-    tagParams.set('systems', systems);
-
-    const multiTagLink = `${currentUrl}?${tagParams.toString()}`;
-    
-    await navigator.clipboard.writeText(multiTagLink);
-    setCustomAlert(true);
-    setModalMessage(`Link for ${visibleTags.length} visible tags copied to clipboard!`);
-    setIsMenuOpen(false);
-    
-  } catch (error) {
-    console.error("Failed to copy visible tags link:", error);
-    setCustomAlert(true);
-    setModalMessage("Failed to copy tags link to clipboard!");
-    setIsMenuOpen(false);
-  }
-};
-
-const handleExportSelection = async () => {
-  try {
-    const visibleTags = selectedTags.filter(tag => {
-      const tagKey = `${tag.area}-${tag.disc}-${tag.sys}-${tag.tag}`;
-      return viewHideThree[tagKey] === true || 
-             viewHideThreeunassigned[tag.tag] === true;
-    });
-
-    const exportData = {
-      projectId: projectId,
-      exportDate: new Date().toISOString(),
-      visibleTags: visibleTags.map(tag => ({
-        tag: tag.tag,
-        filename: tag.filename,
-        area: tag.area,
-        disc: tag.disc,
-        sys: tag.sys
-      })),
-      viewSettings: {
-        backgroundTheme,
-        viewMode,
-        cameraMode: mode
-      }
-    };
-
-    const jsonString = JSON.stringify(exportData, null, 2);
-    await navigator.clipboard.writeText(jsonString);
-    
-    setCustomAlert(true);
-    setModalMessage(`Selection exported to clipboard! (${visibleTags.length} tags)`);
-    setIsMenuOpen(false);
-    
-  } catch (error) {
-    console.error("Failed to export selection:", error);
-    setCustomAlert(true);
-    setModalMessage("Failed to export selection!");
-    setIsMenuOpen(false);
-  }
-};
-
-const handleImportSelection = async () => {
-  try {
-    const clipboardText = await navigator.clipboard.readText();
-    const importData = JSON.parse(clipboardText);
-    
-    if (!importData.visibleTags || !Array.isArray(importData.visibleTags)) {
-      throw new Error("Invalid selection format");
-    }
-
-    // Clear current selection
-    setViewHideThree({});
-    setViewHideThreeunassigned({});
-    
-    // Apply imported selection
-    const newViewHideThree = {};
-    const newViewHideThreeunassigned = {};
-    let foundTags = 0;
-
-    importData.visibleTags.forEach(importTag => {
-      const matchingTag = selectedTags.find(tag => 
-        tag.tag === importTag.tag && 
-        tag.filename === importTag.filename
-      );
-
-      if (matchingTag) {
-        if (importTag.area && importTag.disc && importTag.sys) {
-          const tagKey = `${importTag.area}-${importTag.disc}-${importTag.sys}-${importTag.tag}`;
-          newViewHideThree[tagKey] = true;
-        } else {
-          newViewHideThreeunassigned[importTag.tag] = true;
-        }
-        foundTags++;
-      }
-    });
-
-    setViewHideThree(newViewHideThree);
-    setViewHideThreeunassigned(newViewHideThreeunassigned);
-
-    // Apply view settings if available
-    if (importData.viewSettings) {
-      if (importData.viewSettings.backgroundTheme) {
-        setBackgroundTheme(importData.viewSettings.backgroundTheme);
-      }
-      if (importData.viewSettings.viewMode) {
-        setViewMode(importData.viewSettings.viewMode);
-      }
-    }
-    
-    setCustomAlert(true);
-    setModalMessage(`Selection imported! ${foundTags}/${importData.visibleTags.length} tags found`);
-    setIsMenuOpen(false);
-    
-  } catch (error) {
-    console.error("Failed to import selection:", error);
-    setCustomAlert(true);
-    setModalMessage("Failed to import selection! Please check clipboard format.");
-    setIsMenuOpen(false);
-  }
-};
-// 1. Add this function to your Iroamer component (similar to your example)
-const copyLinkToTags = async () => {
-  try {
-    const highlightedMeshes = getHighlightedMeshes();
-    
-    if (!highlightedMeshes || highlightedMeshes.length === 0) {
-      setCustomAlert(true);
-      setModalMessage("No highlighted tags to copy link for!");
-      return;
-    }
-
-    // Extract unique tag names from highlighted meshes
-    const tags = [];
-    highlightedMeshes.forEach(function(mesh) {
-      const tagName = mesh.metadata?.tagNo?.tag || mesh.name;
-      if (tags.indexOf(tagName) === -1) {
-        tags.push(tagName);
-      }
-    });
-
-    // Create semicolon-separated tag string (matching your existing format)
-    let urlTags = '';
-    tags.forEach(tag => {
-      urlTags += tag + ';';
-    });
-
-    // Create URL with hash-based parameters (matching your format)
-    const baseUrl = window.location.origin + window.location.pathname;
-    const params = new URLSearchParams();
-    params.set('tags', urlTags);
-    params.set('projectId', projectId);
-    
-    // Use hash fragment format like your existing URLs
-    const finalUrl = `${baseUrl}#?${params.toString()}`;
-    
-    await navigator.clipboard.writeText(finalUrl);
-    
-    setCustomAlert(true);
-    setModalMessage(`Link copied for ${tags.length} highlighted tags!`);
-    setIsMenuOpen(false);
-
-    console.log("📋 Copied link:", finalUrl);
-    console.log("🏷️ Tags included:", tags);
-
-  } catch (error) {
-    console.error("Failed to copy tags link:", error);
-    setCustomAlert(true);
-    setModalMessage("Failed to copy tags link to clipboard!");
-  }
-};
-
-// Updated handleCopyTagLink function
-const handleCopyTagLink = async (includeViewSettings = false) => {
-  if (!taginfo.filename) {
-    setCustomAlert(true);
-    setModalMessage("No tag selected to copy link!");
-    setIsMenuOpen(false);
-    return;
-  }
-
-  try {
-    const currentUrl = window.location.origin + window.location.pathname;
-    
-    // Create tag parameters
-    const tagParams = new URLSearchParams({
-      tag: taginfo.filename,
-      area: selectedMeshRef.current[0]?.metadata?.tagNo?.area || '',
-      disc: selectedMeshRef.current[0]?.metadata?.tagNo?.disc || '',
-      sys: selectedMeshRef.current[0]?.metadata?.tagNo?.sys || '',
-      projectId: projectId
-    });
-
-    // Optionally include view settings
-    if (includeViewSettings) {
-      tagParams.set('theme', backgroundTheme);
-      tagParams.set('view', viewMode);
-      tagParams.set('mode', mode);
-    }
-
-    // Use hash fragment format to match your system
-    const tagLink = `${currentUrl}#?${tagParams.toString()}`;
-
-    await navigator.clipboard.writeText(tagLink);
-    
-    setCustomAlert(true);
-    setModalMessage(`Tag link copied to clipboard! ${includeViewSettings ? '(with view settings)' : ''}`);
-    setIsMenuOpen(false);
-
-    console.log("Tag link created:", tagLink);
-    
-  } catch (error) {
-    console.error("Failed to copy tag link:", error);
-    setCustomAlert(true);
-    setModalMessage("Failed to copy tag link to clipboard!");
-    setIsMenuOpen(false);
-  }
-};
-    const menuOptionsOne = [
-      { label: "Hide all", action: hideAllItems },
-      { label: "Unhide all", action: unhideAllItems },
-    ];
-    const menuOptions = [
-      { label: taginfo.filename ? `${taginfo.filename}` : "" },
-      { label: selectedItemName ? `${selectedItemName.name}` : "" },
-      { label: "Add Comment", action: handleAddComment },
-      {
-        label: "Info",
-        children: [
-          { label: "Tag info", action: handleShowlineEqpInfo },
-          { label: "Tag GenInfo", action: handleTagInfo },
-          { label: "File Info", action: handleShowFileInfo },
-        ],
-      },
-      { label: "Change Color", action: handleColorChange },
-      { label: "Deselect", action: handleDeselect },
-      { label: "Select tag", action: handleSelectTag },
-      {
-        label: "Visibility",
-        children: [
-          { label: "Hide all", action: hideAllItems },
-          { label: "Unhide all", action: unhideAllItems },
-          { label: "Hide selected", action: hideSelectedItem },
-          { label: "Hide unselected", action: hideUnselectedItems },
-        ],
-      },
-      { label: "Zoom selected", action: handleZoomSelected },
-      { label: "Focus Selected", action: handleFocusSelected },
-      // { label: "Reload", action: handleReload },
-      { label: "Share & Links",
-   children: [
-      { label: "Copy tag link", action: () => handleCopyTagLink(false) },
-      { label: "Copy tag link + view", action: () => handleCopyTagLink(true) },
-      { label: "Copy all visible tags link", action: copyLinkToTags },
-      { label: "Export selection", action: handleExportSelection },
-      { label: "Import selection", action: handleImportSelection },
-    ],
-}
-    ];
-
-
-
-// 2. Helper function to get highlighted meshes (equivalent to bjsView.getHighlightedMeshes())
-const getHighlightedMeshes = () => {
-  if (!sceneRef.current) return [];
-  
-  const highlightedMeshes = [];
-  
-  // Method 1: Get meshes from highlight layer
-  if (selectionHighlightLayerRef.current) {
-    const highlightLayer = selectionHighlightLayerRef.current;
-    sceneRef.current.meshes.forEach(mesh => {
-      if (highlightLayer._meshes.indexOf(mesh) !== -1) {
-        highlightedMeshes.push(mesh);
-      }
-    });
-  }
-  
-  // Method 2: Get currently selected meshes
-  if (selectedMeshRef.current && Array.isArray(selectedMeshRef.current)) {
-    selectedMeshRef.current.forEach(mesh => {
-      if (highlightedMeshes.indexOf(mesh) === -1) {
-        highlightedMeshes.push(mesh);
-      }
-    });
-  } else if (selectedMeshRef.current && highlightedMeshes.indexOf(selectedMeshRef.current) === -1) {
-    highlightedMeshes.push(selectedMeshRef.current);
-  }
-  
-  // Method 3: Get meshes marked as highlighted in metadata
-  sceneRef.current.meshes.forEach(mesh => {
-    if (mesh.metadata?.isHighlighted && highlightedMeshes.indexOf(mesh) === -1) {
-      highlightedMeshes.push(mesh);
-    }
-  });
-  
-  return highlightedMeshes;
-};
-
-
-// Add these state variables at the top of your component (with other useState declarations)
-const [isFromTagLink, setIsFromTagLink] = useState(false);
-const [linkLoadedTags, setLinkLoadedTags] = useState([]);
-
-// Add keyboard shortcut handler (add this useEffect)
-useEffect(() => {
-  const handleKeyDown = (event) => {
-    // Ctrl+Shift+C to copy tag link
-    if (event.ctrlKey && event.shiftKey && event.key === 'C') {
-      event.preventDefault();
-      if (taginfo.filename) {
-        handleCopyTagLink();
-      }
-    }
-    
-    // Ctrl+Shift+V to paste/import selection
-    if (event.ctrlKey && event.shiftKey && event.key === 'V') {
-      event.preventDefault();
-      // handleImportSelection();
-    }
-  };
-
-  window.addEventListener('keydown', handleKeyDown);
-  return () => window.removeEventListener('keydown', handleKeyDown);
-}, [taginfo.filename]);
-
-// Add this improved version to replace your existing handleTagLinkNavigation function
-
-// Add this helper function at the top of your component or in a utils file
-const getUrlParams = () => {
-  // Check both query string and hash fragment
-  let urlParams = new URLSearchParams(window.location.search);
-  
-  // If no params in search, check hash fragment (for URLs like #?param=value)
-  if (urlParams.toString() === '' && window.location.hash.includes('?')) {
-    const hashParams = window.location.hash.split('?')[1];
-    urlParams = new URLSearchParams(hashParams);
-  }
-  
-  return urlParams;
-};
-
-const handleTagLinkNavigation = () => {
-  console.log("🔗 handleTagLinkNavigation called");
-  
-  // Use the helper function
-  const urlParams = getUrlParams();
-  
-  console.log("📄 URL params:", urlParams.toString());
-  console.log("🌐 Full URL:", window.location.href);
-  console.log("🔍 Hash:", window.location.hash);
-  console.log("🔍 Search:", window.location.search);
-  
-  // Debug sessionStorage
-  const projectString = sessionStorage.getItem("selectedProject");
-  console.log("📦 SessionStorage selectedProject:", projectString);
-  
-  const projectIdFromUrl = urlParams.get('projectId');
-  console.log("🆔 Project ID from URL:", projectIdFromUrl, "Current project ID:", projectId);
-
-  // Early exit if no project ID available
-  if (!projectId) {
-    console.log("⚠️ No project ID available yet, will retry when project loads");
-    return;
-  }
-
-  // Early exit if no URL parameters at all
-  if (urlParams.toString() === '') {
-    console.log("ℹ️ No URL parameters found");
-    return;
-  }
-
-  // Check if project matches (allow for string/number comparison)
-  if (projectIdFromUrl && projectIdFromUrl !== String(projectId)) {
-    console.log("❌ Project ID mismatch, exiting");
-    return;
-  }
-
-  // Handle single tag
-  const singleTag = urlParams.get('tag');
-  const area = urlParams.get('area');
-  const disc = urlParams.get('disc');
-  const sys = urlParams.get('sys');
-  
-  // Handle multiple tags
-  const multipleTags = urlParams.get('tags');
-  const areas = urlParams.get('areas');
-  const discs = urlParams.get('discs');
-  const systems = urlParams.get('systems');
-  
-  console.log("🏷️ Single tag:", singleTag, "Multiple tags:", multipleTags);
-  console.log("📍 Areas:", areas, "Discs:", discs, "Systems:", systems);
-
-  if (singleTag || multipleTags) {
-    console.log("✅ Found tags in URL, processing...");
-    setIsFromTagLink(true);
-    
-    // Wait for scene and tags to be loaded
-    const checkAndHighlight = () => {
-      console.log("🔍 Checking scene and tags...", 
-        "Scene exists:", !!sceneRef.current, 
-        "Tags count:", selectedTags.length,
-        "ProjectId:", projectId
-      );
-      
-      if (!sceneRef.current) {
-        console.log("⏳ Scene not ready, retrying in 1 second...");
-        setTimeout(checkAndHighlight, 1000);
-        return;
-      }
-
-      if (selectedTags.length === 0) {
-        console.log("⏳ Tags not loaded yet, retrying in 1 second...");
-        setTimeout(checkAndHighlight, 1000);
-        return;
-      }
-
-      const loadedTagsList = [];
-      let foundTags = 0;
-
-      // Handle single tag
-      if (singleTag) {
-        console.log("🎯 Processing single tag:", singleTag);
-        
-        const targetTag = selectedTags.find(tag => {
-          const matches = tag.tag === singleTag || 
-                         tag.filename === singleTag ||
-                         (area && disc && sys && 
-                          tag.area === area && tag.disc === disc && 
-                          tag.sys === sys && tag.tag === singleTag);
-          
-          if (matches) {
-            console.log("✅ Found matching tag:", tag);
-          }
-          return matches;
-        });
-
-        if (targetTag) {
-          const tagKey = area && disc && sys 
-            ? `${area}-${disc}-${sys}-${singleTag}`
-            : singleTag;
-
-          console.log("🔑 Tag key:", tagKey);
-          
-          // Set the tag as visible and highlighted
-          setHighlightedTagKey(tagKey);
-          setViewHideThree(prev => ({ ...prev, [tagKey]: true }));
-          
-          // Highlight in scene
-          if (targetTag.filename) {
-            highlightTagInScene(targetTag.filename);
-          }
-          
-          loadedTagsList.push(singleTag);
-          foundTags++;
-        } else {
-          console.log("❌ Single tag not found in selectedTags");
-          console.log("Available tags:", selectedTags.map(t => ({
-            tag: t.tag, 
-            filename: t.filename, 
-            area: t.area, 
-            disc: t.disc, 
-            sys: t.sys
-          })));
-        }
-      }
-
-      // Handle multiple tags
-      if (multipleTags) {
-        console.log("🎯 Processing multiple tags:", multipleTags);
-        
-        const tagList = multipleTags.split(',');
-        const areaList = areas ? areas.split(',') : [];
-        const discList = discs ? discs.split(',') : [];
-        const systemList = systems ? systems.split(',') : [];
-        
-        tagList.forEach((tag, index) => {
-          const tagArea = areaList[index] || '';
-          const tagDisc = discList[index] || '';
-          const tagSys = systemList[index] || '';
-          
-          const targetTag = selectedTags.find(selectedTag => {
-            return selectedTag.tag === tag || 
-                   selectedTag.filename === tag ||
-                   (tagArea && tagDisc && tagSys && 
-                    selectedTag.area === tagArea && 
-                    selectedTag.disc === tagDisc && 
-                    selectedTag.sys === tagSys && 
-                    selectedTag.tag === tag);
-          });
-
-          if (targetTag) {
-            const tagKey = tagArea && tagDisc && tagSys 
-              ? `${tagArea}-${tagDisc}-${tagSys}-${tag}`
-              : tag;
-
-            console.log("🔑 Multi-tag key:", tagKey);
-            
-            // Set visibility
-            setViewHideThree(prev => ({ ...prev, [tagKey]: true }));
-            
-            // Highlight in scene
-            if (targetTag.filename) {
-              highlightTagInScene(targetTag.filename);
-            }
-            
-            loadedTagsList.push(tag);
-            foundTags++;
-          }
-        });
-      }
-
-      // Store the loaded tags for reference
-      setLinkLoadedTags(loadedTagsList);
-
-      // Show success message
-      if (foundTags > 0) {
-        setCustomAlert(true);
-        setModalMessage(`${foundTags} tag(s) loaded from link: ${loadedTagsList.join(', ')}`);
-        
-        // Clear URL parameters after handling (both search and hash)
-        const newUrl = window.location.origin + window.location.pathname;
-        window.history.replaceState({}, document.title, newUrl);
-        
-        console.log("✅ Successfully processed", foundTags, "tags from URL");
-      } else {
-        console.log("❌ No matching tags found");
-        setCustomAlert(true);
-        setModalMessage("No matching tags found from the link");
-      }
-
-      // Auto-hide the link loaded indicator after 5 seconds
-      setTimeout(() => {
-        setIsFromTagLink(false);
-        setLinkLoadedTags([]);
-      }, 5000);
-    };
-
-    // Start checking after a short delay to ensure component is mounted
-    setTimeout(checkAndHighlight, 500);
-  } else {
-    console.log("ℹ️ No tags found in URL parameters");
-  }
-};
-
-// Update the useEffect to only run when we have a valid projectId
-useEffect(() => {
-  // Only run if we have a projectId and the component is mounted
-  if (projectId && sceneRef.current) {
-    handleTagLinkNavigation();
-  }
-}, [selectedTags, projectId]); // Keep the same dependencies
-
-// Add a separate useEffect to handle initial URL check when component mounts
-useEffect(() => {
-  // Check if there are URL parameters on mount
-  const urlParams = new URLSearchParams(window.location.search);
-  if (urlParams.toString() !== '') {
-    console.log("🔍 URL parameters detected on mount, will process when project loads");
-  }
-}, []); // Run only once on mount
-
+ 
     const disposeScene = () => {
       if (sceneRef.current) {
         sceneRef.current.dispose(); // Disposes all scene elements and frees memory
@@ -4185,6 +3600,8 @@ useEffect(() => {
 
       // Setup lighting
       setupLighting(scene, camera);
+      // Initialize VR Helper
+       initializeVR(scene, camera);
       return scene;
     };
 
@@ -5041,7 +4458,20 @@ useEffect(() => {
         boundingBoxCenter: center.clone(),
         modelRadius: distanceToFit,
       };
-
+// Set VR boundaries based on model bounds
+if (vrHelper) {
+  const boundaryMargin = 10.0; // 10 meter margin around model
+  vrHelper.setBoundariesFromModelBounds(
+    boundingInfo.min.x,
+    boundingInfo.min.y,
+    boundingInfo.min.z,
+    boundingInfo.max.x,
+    boundingInfo.max.y,
+    boundingInfo.max.z,
+    boundaryMargin
+  );
+  console.log("🎯 VR boundaries configured based on model bounding box");
+}
       // // Set common camera properties
       scene.activeCamera.minZ = 0.001;
       scene.activeCamera.maxZ = distanceToFit * 100;
@@ -5880,6 +5310,267 @@ useEffect(() => {
       }
     }, [fov]);
 
+    // VR button handler
+const handleVRToggle = async () => {
+  if (!vrHelper) {
+    console.log("VR Helper not initialized");
+    return;
+  }
+
+  try {
+    if (!isInVR) {
+      await vrHelper.xrHelper.baseExperience.enterXRAsync("immersive-vr", "local-floor");
+    } else {
+      await vrHelper.xrHelper.baseExperience.exitXRAsync();
+    }
+  } catch (error) {
+    console.error("VR toggle failed:", error);
+    setCustomAlert(true);
+    setModalMessage("VR not available or failed to initialize");
+  }
+};
+
+// Check VR support
+const checkVRSupport = async () => {
+  try {
+    const supported = await BABYLON.WebXRSessionManager.IsSessionSupportedAsync("immersive-vr");
+    setIsVRSupported(supported);
+    console.log("VR supported:", supported);
+  } catch (error) {
+    console.log("VR check failed:", error);
+    setIsVRSupported(false);
+  }
+};
+
+// VR initialization function
+const initializeVR = async (scene, camera) => {
+  try {
+    console.log("Initializing VR Helper...");
+    
+    const helper = new BabylonVRHelper(scene, camera);
+    
+    helper.setVRChangeListener((state) => {
+      if (state === BabylonVRHelper.VR.ENTER) {
+        setIsInVR(true);
+        setActiveButton("vr");
+        console.log("🎮 VR session started!");
+      } else {
+        setIsInVR(false);
+        setActiveButton("");
+        console.log("VR session ended");
+      }
+    });
+
+    helper.setMovementSpeed(0.08);
+    helper.setRotationSpeed(0.015);
+    helper.setBoundaryEnabled(true);
+
+    setVrHelper(helper);
+    console.log("VR Helper initialized successfully");
+
+  } catch (error) {
+    console.error("VR initialization failed:", error);
+    setVrHelper(null);
+  }
+};
+// Add VR support check on component mount
+useEffect(() => {
+  checkVRSupport();
+}, []);
+
+// Add VR cleanup on component unmount
+useEffect(() => {
+  return () => {
+    if (vrHelper) {
+      vrHelper.dispose();
+    }
+  };
+}, []);
+// Function to generate tag link URL
+const generateTagLink = (tagInfo) => {
+  if (!tagInfo || !tagInfo.filename) {
+    return null;
+  }
+
+  // Get current URL base
+  const currentUrl = new URL(window.location.href);
+  const baseUrl = `${currentUrl.protocol}//${currentUrl.host}${currentUrl.pathname}`;
+  
+  // Create URL with tag parameters
+  const tagUrl = new URL(baseUrl);
+  tagUrl.searchParams.set('projectId', projectId);
+  tagUrl.searchParams.set('tag', tagInfo.filename);
+  
+  // If tag has area, disc, sys information, include them
+  if (tagInfo.linelistDetails || tagInfo.equipmentlistDetails || tagInfo.originalUsertagInfoDetails) {
+    // Try to get area, disc, sys from the tag structure
+    const tagParts = selectedMeshRef.current?.[0]?.metadata?.tagNo;
+    if (tagParts) {
+      if (tagParts.area) tagUrl.searchParams.set('area', tagParts.area);
+      if (tagParts.disc) tagUrl.searchParams.set('disc', tagParts.disc);
+      if (tagParts.sys) tagUrl.searchParams.set('sys', tagParts.sys);
+    }
+  }
+  
+  return tagUrl.toString();
+};
+
+// Function to copy tag link to clipboard
+const copyTagLink = async () => {
+  if (!taginfo || !taginfo.filename) {
+    setCustomAlert(true);
+    setModalMessage("No tag selected to copy link");
+    return;
+  }
+
+  try {
+    const tagLink = generateTagLink(taginfo);
+    if (!tagLink) {
+      setCustomAlert(true);
+      setModalMessage("Failed to generate tag link");
+      return;
+    }
+
+    // Copy to clipboard
+    await navigator.clipboard.writeText(tagLink);
+    
+    setCustomAlert(true);
+    setModalMessage(`Tag link copied to clipboard: ${taginfo.filename}`);
+    setIsMenuOpen(false);
+    
+    console.log('Tag link copied:', tagLink);
+  } catch (error) {
+    console.error('Failed to copy tag link:', error);
+    setCustomAlert(true);
+    setModalMessage("Failed to copy tag link to clipboard");
+  }
+};
+
+// Function to parse URL parameters and highlight tag
+const parseAndHighlightTagFromUrl = () => {
+  const urlParams = new URLSearchParams(window.location.search);
+  const tagParam = urlParams.get('tag');
+  const projectParam = urlParams.get('projectId');
+  const areaParam = urlParams.get('area');
+  const discParam = urlParams.get('disc');
+  const sysParam = urlParams.get('sys');
+
+  // Verify project matches
+  if (projectParam && projectParam !== projectId) {
+    console.warn('Project ID in URL does not match current project');
+    return;
+  }
+
+  if (tagParam) {
+    console.log('Tag found in URL:', tagParam);
+    
+    // Wait for scene and tags to be loaded
+    const highlightTagFromUrl = () => {
+      if (!sceneRef.current || selectedTags.length === 0) {
+        // Retry after a short delay if scene or tags not ready
+        setTimeout(highlightTagFromUrl, 500);
+        return;
+      }
+
+      // Find the tag in selectedTags
+      let foundTag = selectedTags.find(tag => 
+        tag.filename === tagParam + '.glb' || 
+        tag.filename === tagParam || 
+        tag.tag === tagParam
+      );
+
+      // If we have area, disc, sys parameters, use them for more precise matching
+      if (!foundTag && areaParam && discParam && sysParam) {
+        foundTag = selectedTags.find(tag => 
+          tag.area === areaParam && 
+          tag.disc === discParam && 
+          tag.sys === sysParam && 
+          (tag.tag === tagParam || tag.filename === tagParam)
+        );
+      }
+
+      if (foundTag) {
+        console.log('Found tag to highlight:', foundTag);
+        
+        // Create the tag key for highlighting
+        if (foundTag.area && foundTag.disc && foundTag.sys) {
+          const tagKey = `${foundTag.area}-${foundTag.disc}-${foundTag.sys}-${foundTag.tag}`;
+          setHighlightedTagKey(tagKey);
+          setBackgroundColorTag({ [tagKey]: true });
+        }
+        
+        // Highlight the tag in the scene
+        highlightTagInScene(foundTag.filename);
+        
+        // Focus camera on the tag
+        setTimeout(() => {
+          if (selectedMeshRef.current && selectedMeshRef.current.length > 0) {
+            focusOnSelectedMesh(sceneRef.current, selectedMeshRef.current);
+          }
+        }, 1000);
+        
+        // Clear URL parameters to avoid re-triggering
+        const newUrl = new URL(window.location.href);
+        newUrl.searchParams.delete('tag');
+        newUrl.searchParams.delete('area');
+        newUrl.searchParams.delete('disc');
+        newUrl.searchParams.delete('sys');
+        window.history.replaceState({}, '', newUrl.toString());
+      } else {
+        console.warn('Tag not found in loaded tags:', tagParam);
+        setCustomAlert(true);
+        setModalMessage(`Tag "${tagParam}" not found in current project`);
+      }
+    };
+
+    highlightTagFromUrl();
+  }
+};
+
+// Add useEffect to check URL parameters on component mount and when tags change
+useEffect(() => {
+  parseAndHighlightTagFromUrl();
+}, [selectedTags, projectId]); // Re-run when tags are loaded or project changes
+
+   const menuOptionsOne = [
+      { label: "Hide all", action: hideAllItems },
+      { label: "Unhide all", action: unhideAllItems },
+    ];
+    const menuOptions = [
+      { label: taginfo.filename ? `${taginfo.filename}` : "" },
+      { label: selectedItemName ? `${selectedItemName.name}` : "" },
+      { label: "Add Comment", action: handleAddComment },
+      {
+        label: "Info",
+        children: [
+          { label: "Tag info", action: handleShowlineEqpInfo },
+          { label: "Tag GenInfo", action: handleTagInfo },
+          { label: "File Info", action: handleShowFileInfo },
+        ],
+      },
+      { label: "Change Color", action: handleColorChange },
+      { label: "Deselect", action: handleDeselect },
+      { label: "Select tag", action: handleSelectTag },
+      {
+        label: "Visibility",
+        children: [
+          { label: "Hide all", action: hideAllItems },
+          { label: "Unhide all", action: unhideAllItems },
+          { label: "Hide selected", action: hideSelectedItem },
+          { label: "Hide unselected", action: hideUnselectedItems },
+        ],
+      },
+      { label: "Zoom selected", action: handleZoomSelected },
+      { label: "Focus Selected", action: handleFocusSelected },
+      // { label: "Reload", action: handleReload },
+      {
+        label: "Share & Links",
+        children: [
+          { label: "Copy tag link",action:copyTagLink},
+        ],
+      },
+    ];
+
     return (
       <div className="d-flex">
         <div className="w-100">
@@ -5897,23 +5588,6 @@ useEffect(() => {
             }}
           />
 
-          {isFromTagLink && linkLoadedTags.length > 0 && (
-  <div style={{
-    position: 'absolute',
-    top: '10px',
-    right: '10px',
-    backgroundColor: '#4CAF50',
-    color: 'white',
-    padding: '10px 15px',
-    borderRadius: '5px',
-    zIndex: 1000,
-    fontSize: '14px',
-    boxShadow: '0 2px 5px rgba(0,0,0,0.2)'
-  }}>
-    <i className="fa-solid fa-link" style={{ marginRight: '5px' }}></i>
-    Loaded from link: {linkLoadedTags.join(', ')}
-  </div>
-)}
           {/* progress bar */}
           {isLoading && (
             <div
@@ -5954,13 +5628,11 @@ useEffect(() => {
           {/* CAD Axis */}
 
           {showAxis && sceneRef.current && (
-            
             <CADTopViewAxisIndicator scene={sceneRef.current} />
           )}
 
           {/* Speed bar */}
           {speedBar}
-
 
           {clippingSetting && (
             <div id="groundSettings" className="contextMenu">
@@ -7526,6 +7198,25 @@ useEffect(() => {
                   </span>
                 </div>
               </li>
+
+              <li className={activeButton === "vr" ? "active" : ""}>
+  <div className="tooltip-container">
+    <span
+      className={`icon-tooltip ${!isVRSupported ? 'disabled' : ''}`}
+      onClick={isVRSupported ? () => handleVRToggle("vr") : undefined}
+      title={isVRSupported ? (isInVR ? "Exit VR" : "Enter VR") : "VR Not Supported"}
+      style={{ 
+        opacity: isVRSupported ? 1 : 0.5,
+        cursor: isVRSupported ? 'pointer' : 'not-allowed'
+      }}
+    >
+ <img
+                      className="button"
+                      src="/images/web-vr-free.png"
+                      alt=""
+                    />    </span>
+  </div>
+</li>
               <li className={activeButton === "select" ? "active" : ""}>
                 <div className="tooltip-container">
                   <span

@@ -1,38 +1,86 @@
 import React, { useContext } from "react";
+
 import { useNavigate } from "react-router-dom";
+
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+
 import { faArrowRightFromBracket } from "@fortawesome/free-solid-svg-icons";
+
 import { iroamerContext, updateProjectContext } from "../context/ContextShare";
+
+import { useMsal } from "@azure/msal-react"; // Import MSAL hook
 
 const Header = () => {
   const navigate = useNavigate();
-    const {setIroamerfieldEmpty,setModaldata} =
-      useContext(iroamerContext);
+
+  const { instance } = useMsal(); // Get MSAL instance
+
+  const { setIroamerfieldEmpty, setModaldata } = useContext(iroamerContext);
+
   const { setUpdateProject } = useContext(updateProjectContext);
+
   const projectString = sessionStorage.getItem("selectedProject");
+
   const project = projectString ? JSON.parse(projectString) : null;
 
   const handleLogout = async () => {
- 
-    sessionStorage.clear();
+    try {
+      // Clear all session storage
 
-    setUpdateProject("No data");
-    setIroamerfieldEmpty(false)
-    setModaldata([])
-    navigate("/");
+      // Clear context states
+
+      setUpdateProject("No data");
+
+      setIroamerfieldEmpty(false);
+
+      setModaldata([]);
+
+      // MSAL logout - using popup for better UX
+
+      await instance.logoutPopup({
+        postLogoutRedirectUri: "/", // Redirect to home after logout
+
+        mainWindowRedirectUri: "/", // For popup window
+      });
+
+      sessionStorage.clear();
+
+      // Navigate to home page
+
+      navigate("/");
+
+      // Optional: Force reload to ensure clean state
+
+      window.location.reload();
+    } catch (error) {
+      console.error("Logout failed:", error);
+
+      // Fallback cleanup if MSAL logout fails
+
+      sessionStorage.clear();
+
+      navigate("/");
+    }
   };
-
-  //console.log(project?.projectName);
 
   return (
     <header>
-      <img id="logoPD" src="/images/logo-pd.png" alt="" onClick={() => navigate("/")} />
+      <img
+        id="logoPD"
+        src="/images/logo-pd.png"
+        alt=""
+        onClick={() => navigate("/")}
+        style={{ cursor: "pointer" }}
+      />
 
-     <p className="text-light">
-  {project?.projectName || ""}
-  {project?.projectName && project?.projectNumber ? "--" : ""}
-  {project?.projectNumber || ""}
-</p>
+      <p className="text-light">
+        {project?.projectName || ""}
+
+        {project?.projectName && project?.projectNumber ? " -- " : ""}
+
+        {project?.projectNumber || ""}
+      </p>
+
       <div
         id="logout"
         className="me-3"
@@ -50,10 +98,6 @@ const Header = () => {
       </div>
     </header>
   );
-};
-
-Header.propTypes = {
-  // Add prop types if needed
 };
 
 export default Header;

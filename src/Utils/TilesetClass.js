@@ -2411,8 +2411,8 @@ clearAllHighlights() {
 
   setDistanceThresholds(maxDistance) {
     this.maxDistance = maxDistance;
-    this.threshold30Percent = maxDistance * 0.5;
-    this.threshold80Percent = maxDistance * 0.9;
+    this.threshold30Percent = maxDistance * 0.3;
+    this.threshold80Percent = maxDistance * 0.8;
   }
 
   async processOctreeNodes(rootBlock, depth = 0, parent = null) {

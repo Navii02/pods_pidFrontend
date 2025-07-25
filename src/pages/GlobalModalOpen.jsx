@@ -13,19 +13,6 @@ import { useLocation } from "react-router-dom";
 import { useEffect } from "react";
 
 function GlobalModalOpen({ leftNavVisible }) {
-  const [isModalOpen, setIsModalOpen] = useState(false);
-
-  const mockContent = {
-    intersectionPointX: 100,
-    intersectionPointY: 200,
-    intersectionPointZ: 300,
-  };
-
-  const mockStatusList = [
-    { statusname: "Open" },
-    { statusname: "Resolved" },
-    { statusname: "Pending" },
-  ];
 
   const [viewMode, setViewMode] = useState("Top View");
 
@@ -247,9 +234,13 @@ function GlobalModalOpen({ leftNavVisible }) {
                   <span
                     className="icon-tooltip"
                     onClick={() => handleEnterVR("webxr")}
-                    title="Fly camera"
+                    title="VR mode"
                   >
-                    <i class="fa-solid fa-shield  fs-4"></i>
+                      <img
+                      className="button"
+                      src="/images/web-vr-free.png"
+                      alt=""
+                    />
                   </span>
                 </div>
               </li>
