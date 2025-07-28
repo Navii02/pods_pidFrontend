@@ -28,6 +28,8 @@ import DeleteConfirm from "../components/DeleteConfirm";
 import Alert from "../components/Alert";
 import { Modal } from "react-bootstrap";
 import * as XLSX from "xlsx";
+import { canAccess } from "../Utils/accessControl";
+
 
 function TreeReview() {
   const { updateTree, setUpdatetree } = useContext(TreeresponseContext);
@@ -368,6 +370,14 @@ function TreeReview() {
 
   const isImportModalOpen = importArea || importDisc || importSys;
 
+   const canView = canAccess(projectId, "tree_management", "VIEWER");
+  const canEdit = canAccess(projectId, "tree_management", "EDITOR");
+
+  if (!canView) {
+    return <div className="alert alert-danger">Access Denied</div>;
+  }
+
+
   return (
     <div>
       <form>
@@ -379,6 +389,8 @@ function TreeReview() {
                 <th className="wideHead">Code</th>
                 <th className="wideHead">Name</th>
                 <th className="mediumHead">
+                   {canEdit && (
+                  <>
                   <i
                     className="fa-solid fa-trash-can ms-1"
                     title="Delete all"
@@ -390,6 +402,8 @@ function TreeReview() {
                     onClick={() => handleImportTag("area")}
                     style={{ cursor: "pointer" }}
                   ></i>
+                      </>
+                )}
                   <i
                     className="fa-solid fa-download ms-1"
                     title="Export"
@@ -413,6 +427,7 @@ function TreeReview() {
                       tag.area
                     )}
                   </td>
+                 
                   <td className="text-center">
                     {editedAreaRowIndex === index ? (
                       <input
@@ -425,6 +440,8 @@ function TreeReview() {
                     )}
                   </td>
                   <td style={{ backgroundColor: "#f0f0f0" }}>
+                      {canEdit && (
+                  <>
                     {editedAreaRowIndex === index ? (
                       <>
                         <i
@@ -450,7 +467,10 @@ function TreeReview() {
                         ></i>
                       </>
                     )}
+                              </>
+                )}
                   </td>
+            
                 </tr>
               ))}
             </tbody>
@@ -463,6 +483,8 @@ function TreeReview() {
                 <th className="wideHead">Code</th>
                 <th className="wideHead">Name</th>
                 <th className="mediumHead">
+                   {canEdit && (
+                  <>
                   <i
                     className="fa-solid fa-trash-can ms-1"
                     title="Delete all"
@@ -476,6 +498,8 @@ function TreeReview() {
                     onClick={() => handleImportTag("disc")}
                     style={{ cursor: "pointer" }}
                   ></i>
+                      </>
+                )}
                   <i
                     className="fa-solid fa-download ms-1"
                     title="Export"
@@ -510,7 +534,10 @@ function TreeReview() {
                       tag.name
                     )}
                   </td>
+                
                   <td style={{ backgroundColor: "#f0f0f0" }}>
+                       {canEdit && (
+                  <>
                     {editedDiscRowIndex === index ? (
                       <>
                         <i
@@ -536,7 +563,10 @@ function TreeReview() {
                         ></i>
                       </>
                     )}
+                              </>
+                )}
                   </td>
+            
                 </tr>
               ))}
             </tbody>
@@ -549,6 +579,8 @@ function TreeReview() {
                 <th className="wideHead">Code</th>
                 <th className="wideHead">Name</th>
                 <th className="mediumHead">
+                   {canEdit && (
+                  <>
                   <i
                     className="fa-solid fa-trash-can ms-3"
                     title="Delete all"
@@ -560,6 +592,8 @@ function TreeReview() {
                     onClick={() => handleImportTag("sys")}
                     style={{ cursor: "pointer" }}
                   ></i>
+                      </>
+                )}
                   <i
                     className="fa-solid fa-download ms-1"
                     title="Export"
@@ -594,7 +628,10 @@ function TreeReview() {
                       tag.name
                     )}
                   </td>
+                 
                   <td style={{ backgroundColor: "#f0f0f0" }}>
+                      {canEdit && (
+                                    <>
                     {editedSysRowIndex === index ? (
                       <>
                         <i
@@ -620,7 +657,10 @@ function TreeReview() {
                         ></i>
                       </>
                     )}
+                           </>
+                )}
                   </td>
+               
                 </tr>
               ))}
             </tbody>

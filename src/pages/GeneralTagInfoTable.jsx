@@ -11,6 +11,8 @@ import {
 } from "../services/TagApi";
 import { updateProjectContext } from "../context/ContextShare";
 import Alert from '../components/Alert';
+import { canAccess } from "../Utils/accessControl";
+
 
 function GeneralTagInfoTable({}) {
   const [editedTagId, setEditedTagId] = useState(null); // Changed from editedRowIndex
@@ -328,6 +330,14 @@ function GeneralTagInfoTable({}) {
 
   // Calculate the number of checked fields for column span
   const checkedFieldsCount = displayFields.filter(field => field.statuscheck === "checked").length;
+  
+     const canView = canAccess(projectId, "taglist", "VIEWER");
+    const canEdit = canAccess(projectId, "taglist", "EDITOR");
+  
+    if (!canView) {
+      return <div className="alert alert-danger">Access Denied</div>;
+    }
+  
 
   return (
     <div
@@ -416,6 +426,7 @@ function GeneralTagInfoTable({}) {
                     </td>
 
                     <td style={{ backgroundColor: "#f0f0f0" }}>
+                      
                       <>
                         {editRowIndex === index ? (
                           <>
@@ -476,13 +487,15 @@ function GeneralTagInfoTable({}) {
                   )}
                   <th>
                     <i
-                      className="fa fa-upload"
+                      className="fa fa-download"
                       title="Export"
                       onClick={handleExport}
                       style={{ cursor: "pointer" }}
                     ></i>
+                   {canEdit && (
+                  <>
                     <i
-                      className="fa fa-download ms-2"
+                      className="fa fa-upload ms-2"
                       title="Import"
                       onClick={handleImportClick}
                       style={{ cursor: "pointer" }}
@@ -493,6 +506,9 @@ function GeneralTagInfoTable({}) {
                       onClick={handleMultipleDelete}
                       style={{ cursor: "pointer" }}
                     ></i>
+                  
+                              </>
+                   )}
                   </th>
                 </tr>
 
@@ -559,6 +575,7 @@ function GeneralTagInfoTable({}) {
                               </td>
                             );
                           })}
+                          
                         <td style={{ backgroundColor: "#f0f0f0" }}>
                           {editedTagId === info.tagId ? (
                             <>

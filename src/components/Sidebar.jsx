@@ -30,6 +30,7 @@ import {
 } from "../services/CommonApis";
 import DeleteConfirm from "./DeleteConfirm";
 import { clearGlobalModal } from "../services/GlobalModalApi";
+import { canAccess } from "../Utils/accessControl";
 
 function Sidebar({
   onToggle,
@@ -58,7 +59,6 @@ function Sidebar({
     systemRegister: false,
   });
   const [allSavedViews, setAllSavedViews] = useState([]);
-
   const [showContents, setShowCOntents] = useState(false);
   const [activeLink, setActiveLink] = useState(() => {
     return sessionStorage.getItem("activeLink") || "three";
@@ -74,17 +74,12 @@ function Sidebar({
   const [modalMessage, setModalMessage] = useState("");
 
   const userDetails = JSON.parse(sessionStorage.getItem("userDetails"));
-const userRole = userDetails?.role || "user";
+  const userRole = userDetails?.role || "user";
 
-const projects = JSON.parse(sessionStorage.getItem("projects") || "{}");
-const selectedProjectId = project?.projectId;
-
-console.log(selectedProjectId)
-
-const selectedProjectAccess = projects[selectedProjectId]?.features?.project_access;
-console.log(selectedProjectAccess)
-const isUserAdminOnProject = userRole === "user" && selectedProjectAccess === "project_admin";
-
+  const projects = JSON.parse(sessionStorage.getItem("projects") || "{}");
+  const selectedProjectId = project?.projectId;
+  const selectedProjectAccess = projects[selectedProjectId]?.features?.project_access;
+  const isUserAdminOnProject = userRole === "user" && selectedProjectAccess === "project_admin";
 
   // Reset to iRoamer when no project is selected (post-logout)
   useEffect(() => {
@@ -132,31 +127,71 @@ const isUserAdminOnProject = userRole === "user" && selectedProjectAccess === "p
     }));
   };
 
-  const handleSubItemClick = (label, path, isModal = false, modalName = "",action=null) => {
+  const handleSubItemClick = (label, path, isModal = false, modalName = "", action = null, parentFeature = null) => {
+  // Skip access check for admin panel sub-items
+  if (["Assign Tokens", "Assign Projects", "Project Details", "Features assign"].includes(label)) {
     setActiveItem(label);
     setActiveTab(label);
-    if(action && actionMap[action]) {
-    actionMap[action](); 
-    }
-    else if (isModal) {
+    if (action && actionMap[action]) {
+      actionMap[action]();
+    } else if (isModal) {
       handleOpenModal(modalName);
     } else {
       navigate(path);
     }
-  };
+    return;
+  }
 
-const handleMoveToSavedView = (view) => {
-  const activeItem = sessionStorage.getItem("activeItem");
+  // Determine required role
+  const requiredRole = (isModal || action) ? "EDITOR" : "VIEWER";
+  const feature = parentFeature || getFeatureFromName(label);
+  
+  // Debug access check
+  console.log("Checking access:", { label, feature, requiredRole, projectId });
+  const accessGranted = canAccess(projectId, feature, requiredRole);
+  console.log("Access granted:", accessGranted);
 
-  if (view) {
-    if (activeItem === "Open Global Model") {
-      navigate("/global-model/open",  { state: { view: view } });
-    } else {
-      navigate("/iroamer", { state: { view: view } });
-    }
+  // Temporary bypass for "Review" under "Tags"
+  if (label === "Review" && feature === "taglist") {
+    console.log("Bypassing access check for Tags > Review");
+    setActiveItem(label);
+    setActiveTab(label);
+    navigate(path);
+    return;
+  }
+
+  if (!accessGranted) {
+    console.log(`Access denied for feature: ${feature}, role: ${requiredRole}, projectId: ${projectId}`);
+    alert("You do not have permission to access this feature.");
+    return;
+  }
+
+  setActiveItem(label);
+  setActiveTab(label);
+  if (action && actionMap[action]) {
+    actionMap[action]();
+  } else if (isModal) {
+    handleOpenModal(modalName);
+  } else {
+    navigate(path);
   }
 };
 
+  const handleMoveToSavedView = (view) => {
+    const activeItem = sessionStorage.getItem("activeItem");
+    if (!canAccess(projectId, "global_model", "VIEWER") && !canAccess(projectId, "iroamer", "VIEWER")) {
+      alert("You do not have permission to access saved views.");
+      return;
+    }
+
+    if (view) {
+      if (activeItem === "Open Global Model") {
+        navigate("/global-model/open", { state: { view: view } });
+      } else {
+        navigate("/iroamer", { state: { view: view } });
+      }
+    }
+  };
 
   const [openMenus, setOpenMenus] = useState({
     documents: false,
@@ -166,9 +201,67 @@ const handleMoveToSavedView = (view) => {
     tagInfo: false,
     specManagement: false,
     mto: false,
+    commentManagement: false,
   });
 
   const handleItemClick = (item) => {
+    // Skip access check for admin panels
+    if (item.name === "Super admin panel" || item.name === "Admin panel") {
+      setActiveItem(item.name);
+      setActiveLink(
+        item.activeLink || item.name.toLowerCase().replace(/\s+/g, "")
+      );
+
+      if (item.toggleMenu) {
+        const newOpenMenus = { ...openMenus };
+        newOpenMenus[item.toggleMenu] = true;
+
+        Object.keys(newOpenMenus).forEach((key) => {
+          if (key !== item.toggleMenu) {
+            newOpenMenus[key] = false;
+          }
+        });
+
+        if (
+          !openMenus[item.toggleMenu] &&
+          item.subItems &&
+          item.subItems.length > 0
+        ) {
+          const firstSubItem = item.subItems[0];
+          setActiveItem(firstSubItem.name);
+          setActiveTab(firstSubItem.name);
+          if (firstSubItem.path) {
+            navigate(firstSubItem.path);
+          }
+        } else if (openMenus[item.toggleMenu] && item.path) {
+          navigate(item.path);
+        }
+
+        setOpenMenus(newOpenMenus);
+      } else if (item.path) {
+        setOpenMenus({
+          documents: false,
+          tags: false,
+          treeManagement: false,
+          globalModel: false,
+          tagInfo: false,
+          specManagement: false,
+          mto: false,
+          commentManagement: false,
+        });
+        navigate(item.path);
+      }
+      return;
+    }
+
+    // Check access for other main menu items
+    const feature = getFeatureFromName(item.name);
+    if (!canAccess(projectId, feature, "VIEWER")) {
+      console.log(`Access denied for feature: ${feature}, role: VIEWER, projectId: ${projectId}`);
+      alert("You do not have permission to access this feature.");
+      return;
+    }
+
     setActiveItem(item.name);
     setActiveLink(
       item.activeLink || item.name.toLowerCase().replace(/\s+/g, "")
@@ -190,10 +283,15 @@ const handleMoveToSavedView = (view) => {
         item.subItems.length > 0
       ) {
         const firstSubItem = item.subItems[0];
-        setActiveItem(firstSubItem.name);
-        setActiveTab(firstSubItem.name);
-        if (firstSubItem.path) {
-          navigate(firstSubItem.path);
+        if (canAccess(projectId, firstSubItem.parentFeature || getFeatureFromName(firstSubItem.name), "VIEWER") || 
+            ["Assign Tokens", "Assign Projects", "Project Details", "Features assign"].includes(firstSubItem.name)) {
+          setActiveItem(firstSubItem.name);
+          setActiveTab(firstSubItem.name);
+          if (firstSubItem.path) {
+            navigate(firstSubItem.path);
+          }
+        } else {
+          alert("You do not have permission to access this feature.");
         }
       } else if (openMenus[item.toggleMenu] && item.path) {
         navigate(item.path);
@@ -213,6 +311,39 @@ const handleMoveToSavedView = (view) => {
       });
       navigate(item.path);
     }
+  };
+
+  // Helper function to map menu item names to feature names
+  const getFeatureFromName = (name) => {
+    const featureMap = {
+      "iRoamer": "iroamer",
+      "Bulk Model Import": "bulk_model",
+      "Unassigned Tags": "unassigned_tags",
+      "Tree Management": "tree_management",
+      "Area Register": "area",
+      "Discipline Register": "discipline",
+      "System Register": "system",
+      "Global Model": "global_model",
+      "Open Global Model": "global_model",
+      "Create Global Model": "global_model",
+      "Delete Global Model": "global_model",
+      "Tags": "taglist",
+      "Review": "taglist",
+      "Register": "taglist",
+      "Tag Info": "tag_info",
+      "Documents": "documents",
+      "Line List": "line_list",
+      "Equipment List": "equipment_list",
+      "Valve List": "valve_list",
+      "Smart P&ID": "spid",
+      "Spec Management": "spec_management",
+      "MTO": "mto",
+      "Comment Management": "comment",
+      "Color Management": "color_management",
+      "Work Package": "work_package",
+      "4D Plan": "4d_plan",
+    };
+    return featureMap[name] || name.toLowerCase().replace(/\s+/g, "_");
   };
 
   useEffect(() => {
@@ -242,48 +373,81 @@ const handleMoveToSavedView = (view) => {
       }
     };
   }, []);
-    function clearAllPipingStores() {
-      const confirmClear = window.confirm(
-        "Are you sure you want to Delete Global modal ?. The This action cannot be undone."
-      );
-  
-      if (!confirmClear) return; // ❌ User canceled
-  
-      const request = indexedDB.open("piping");
-  
-      request.onsuccess = function (event) {
-        const db = event.target.result;
-        const storeNames = Array.from(db.objectStoreNames);
-  
-        const transaction = db.transaction(storeNames, "readwrite");
-  
-        storeNames.forEach((storeName) => {
-          const store = transaction.objectStore(storeName);
-          store.clear().onsuccess = () => {};
-          store.clear().onerror = (e) => {
-            console.error(`Error clearing store ${storeName}:`, e);
-          };
-        });
-  
-        transaction.oncomplete = async () => {
-          db.close();
-          const response = await clearGlobalModal(projectId);
-          if (response.status === 200) {
-            alert(response.data.message);
-          } else {
-            alert("Something went wrong");
-          }
-        };
-      };
-  
-      request.onerror = function (event) {
-        console.error("❌ Failed to open database:", event.target.error);
-        alert("Failed to open the 'piping' database.");
-      };
+
+  function clearAllPipingStores() {
+    if (!canAccess(projectId, "global_model", "EDITOR")) {
+      alert("You do not have permission to perform this action.");
+      return;
     }
-const actionMap = {
-  clearAllPipingStores: clearAllPipingStores,
-  // Add more actions here if needed in future
+
+    const confirmClear = window.confirm(
+      "Are you sure you want to Delete Global modal? This action cannot be undone."
+    );
+
+    if (!confirmClear) return;
+
+    const request = indexedDB.open("piping");
+
+    request.onsuccess = function (event) {
+      const db = event.target.result;
+      const storeNames = Array.from(db.objectStoreNames);
+
+      const transaction = db.transaction(storeNames, "readwrite");
+
+      storeNames.forEach((storeName) => {
+        const store = transaction.objectStore(storeName);
+        store.clear().onsuccess = () => {};
+        store.clear().onerror = (e) => {
+          console.error(`Error clearing store ${storeName}:`, e);
+        };
+      });
+
+      transaction.oncomplete = async () => {
+        db.close();
+        const response = await clearGlobalModal(projectId);
+        if (response.status === 200) {
+          setCustomAlert(true);
+          setModalMessage(response.data.message);
+        } else {
+          setCustomAlert(true);
+          setModalMessage("Something went wrong");
+        }
+      };
+    };
+
+    request.onerror = function (event) {
+      console.error("❌ Failed to open database:", event.target.error);
+      setCustomAlert(true);
+      setModalMessage("Failed to open the 'piping' database.");
+    };
+  }
+
+  const actionMap = {
+    clearAllPipingStores: clearAllPipingStores,
+  };
+
+  // Filter sub-items based on user access
+const getFilteredSubItems = (subItems) => {
+  return subItems.filter(subItem => {
+    // Bypass permission checks for admin panel items
+    if (["Assign Tokens", "Assign Projects", "Project Details", "Features assign"].includes(subItem.name)) {
+      return true;
+    }
+    
+    const feature = subItem.parentFeature || getFeatureFromName(subItem.name);
+    
+    // Determine required role
+    const isRegisterItem = subItem.name === "Register";
+    const isCreateGlobalModel = subItem.name === "Create Global Model";
+    const isDeleteGlobalModel = subItem.name === "Delete Global Model";
+    
+    const requiredRole = 
+      isRegisterItem || isCreateGlobalModel || isDeleteGlobalModel || subItem.isModal || subItem.action 
+        ? "EDITOR" 
+        : "VIEWER";
+    
+    return canAccess(projectId, feature, requiredRole);
+  });
 };
 
   const menuItems = [
@@ -293,32 +457,32 @@ const actionMap = {
       path: "/iroamer",
       activeLink: "three",
     },
-       ...(userRole === "admin" ? [{
-    icon: faUsersLine,
-    name: "Super admin panel",
-    path: "/superadmin",
-    activeLink: "superAdmin",
-    toggleMenu: "superAdmin",
-    subItems: [
-      { name: "Assign Tokens", path: "/superadmin" },
-      { name: "Assign Projects", path: "/superadmin/assignProjects" },
-    ],
-  }] : []),
-   ...(isUserAdminOnProject
-    ? [
-        {
-          icon: faUserTie,
-          name: "Admin panel",
-          path: "/admin",
-          activeLink: "admin",
-          toggleMenu: "admin",
-          subItems: [
-            { name: "Project Details", path: "/admin" },
-            { name: "Features assign", path: "/admin/featureAssign" },
-          ],
-        },
-      ]
-    : []),
+    ...(userRole === "admin" ? [{
+      icon: faUsersLine,
+      name: "Super admin panel",
+      path: "/superadmin",
+      activeLink: "superAdmin",
+      toggleMenu: "superAdmin",
+      subItems: [
+        { name: "Assign Tokens", path: "/superadmin" },
+        { name: "Assign Projects", path: "/superadmin/assignProjects" },
+      ],
+    }] : []),
+    ...(isUserAdminOnProject
+      ? [
+          {
+            icon: faUserTie,
+            name: "Admin panel",
+            path: "/admin",
+            activeLink: "admin",
+            toggleMenu: "admin",
+            subItems: [
+              { name: "Project Details", path: "/admin" },
+              { name: "Features assign", path: "/admin/featureAssign" },
+            ],
+          },
+        ]
+      : []),
     {
       icon: faArchive,
       name: "Bulk Model Import",
@@ -338,22 +502,10 @@ const actionMap = {
       toggleMenu: "treeManagement",
       activeLink: "treemanagement",
       subItems: [
-        { name: "Review", path: "/tree-management/review" },
-        {
-          name: "Area Register",
-          isModal: true,
-          modalName: "areaRegister",
-        },
-        {
-          name: "Discipline Register",
-          isModal: true,
-          modalName: "disciplineRegister",
-        },
-        {
-          name: "System Register",
-          isModal: true,
-          modalName: "systemRegister",
-        },
+        { name: "Review", path: "/tree-management/review", parentFeature: "tree_management" },
+        { name: "Area Register", isModal: true, modalName: "areaRegister", parentFeature: "area" },
+        { name: "Discipline Register", isModal: true, modalName: "disciplineRegister", parentFeature: "discipline" },
+        { name: "System Register", isModal: true, modalName: "systemRegister", parentFeature: "system" },
       ],
     },
     {
@@ -363,9 +515,9 @@ const actionMap = {
       toggleMenu: "globalModel",
       activeLink: "expandglobal",
       subItems: [
-        { name: "Open Global Model", path: "/global-model/open" },
-        { name: "Create Global Model", path: "/global-model/create" },
-        { name: "Delete Global Model", action: "clearAllPipingStores",},
+        { name: "Open Global Model", path: "/global-model/open", parentFeature: "global_model" },
+        { name: "Create Global Model", path: "/global-model/create", parentFeature: "global_model" },
+        { name: "Delete Global Model", action: "clearAllPipingStores", parentFeature: "global_model" }
       ],
     },
     {
@@ -375,8 +527,8 @@ const actionMap = {
       toggleMenu: "tags",
       activeLink: "expandtag",
       subItems: [
-        { name: "Review", path: "/tags/review" },
-        { name: "Register", path: "/tags/register" },
+        { name: "Review", path: "/tags/review", parentFeature: "taglist" },
+        { name: "Register", path: "/tags/register", parentFeature: "taglist" },
       ],
     },
     {
@@ -385,7 +537,7 @@ const actionMap = {
       path: "/tag-info/review",
       toggleMenu: "tagInfo",
       activeLink: "taginfo",
-      subItems: [{ name: "Review", path: "/tag-info/review" }],
+      subItems: [{ name: "Review", path: "/tag-info/review", parentFeature: "tag_info" }],
     },
     {
       icon: faBook,
@@ -394,8 +546,8 @@ const actionMap = {
       toggleMenu: "documents",
       activeLink: "expanddocument",
       subItems: [
-        { name: "Review", path: "/documents/review" },
-        { name: "Register", path: "/documents/register" },
+        { name: "Review", path: "/documents/review", parentFeature: "documents" },
+        { name: "Register", path: "/documents/register", parentFeature: "documents" },
       ],
     },
     {
@@ -429,11 +581,11 @@ const actionMap = {
       toggleMenu: "specManagement",
       activeLink: "specmanagement",
       subItems: [
-        { name: "Spec 1", path: "/spec-management/1" },
-        { name: "Spec 2", path: "/spec-management/2" },
-        { name: "Spec 3", path: "/spec-management/3" },
-        { name: "Spec 4", path: "/spec-management/4" },
-        { name: "Spec 5", path: "/spec-management/5" },
+        { name: "Spec 1", path: "/spec-management/1", parentFeature: "spec_management" },
+        { name: "Spec 2", path: "/spec-management/2", parentFeature: "spec_management" },
+        { name: "Spec 3", path: "/spec-management/3", parentFeature: "spec_management" },
+        { name: "Spec 4", path: "/spec-management/4", parentFeature: "spec_management" },
+        { name: "Spec 5", path: "/spec-management/5", parentFeature: "spec_management" },
       ],
     },
     {
@@ -443,9 +595,9 @@ const actionMap = {
       toggleMenu: "mto",
       activeLink: "mto",
       subItems: [
-        { name: "MTO 1", path: "/mto/1" },
-        { name: "MTO 2", path: "/mto/2" },
-        { name: "MTO 3", path: "/mto/3" },
+        { name: "MTO 1", path: "/mto/1", parentFeature: "mto" },
+        { name: "MTO 2", path: "/mto/2", parentFeature: "mto" },
+        { name: "MTO 3", path: "/mto/3", parentFeature: "mto" },
       ],
     },
     {
@@ -455,8 +607,8 @@ const actionMap = {
       toggleMenu: "commentManagement",
       activeLink: "comment",
       subItems: [
-        { name: "Comment Review", path: "/comment-review" },
-        { name: "Comment Status Table", path: "/comment-status" },
+        { name: "Comment Review", path: "/comment-review", parentFeature: "comment" },
+        { name: "Comment Status Table", path: "/comment-status", parentFeature: "comment" },
       ],
     },
     {
@@ -482,7 +634,15 @@ const actionMap = {
   const handleShowContents = () => {
     setShowCOntents(!showContents);
   };
+
   const getAllSavedViews = async (projectId) => {
+    const hasGlobalModelAccess = canAccess(projectId, "global_model", "VIEWER");
+    const hasIroamerAccess = canAccess(projectId, "iroamer", "VIEWER");
+
+    if (!hasGlobalModelAccess && !hasIroamerAccess) {
+      return;
+    }
+
     try {
       const response = await AllSavedView(projectId);
       if (response.status === 200) {
@@ -490,14 +650,25 @@ const actionMap = {
       }
     } catch (error) {
       console.error("Failed to fetch all saved views table data:", error);
+      setCustomAlert(true);
+      setModalMessage("Failed to fetch saved views. Please try again.");
     }
   };
 
   useEffect(() => {
     getAllSavedViews(projectId);
-  }, [updateProject,view]);
+  }, [updateProject, view]);
 
   const handleEditClick = (view) => {
+    const canEditGlobalModel = canAccess(projectId, "global_model", "EDITOR");
+    const canEditIroamer = canAccess(projectId, "iroamer", "EDITOR");
+
+    if (!canEditGlobalModel && !canEditIroamer) {
+      setCustomAlert(true);
+      setModalMessage("You do not have permission to edit views.");
+      return;
+    }
+
     setEditingView(view);
     setEditViewName(view.name);
     setEditViewDialog(true);
@@ -508,24 +679,46 @@ const actionMap = {
     setEditingView(null);
     setEditViewName("");
   };
+
   const handleDeleteView = (saveViewMenu) => {
+    const canEditGlobalModel = canAccess(projectId, "global_model", "EDITOR");
+    const canEditIroamer = canAccess(projectId, "iroamer", "EDITOR");
+
+    if (!canEditGlobalModel && !canEditIroamer) {
+      setCustomAlert(true);
+      setModalMessage("You do not have permission to delete views.");
+      return;
+    }
+
     setCurrentDeleteNumber(saveViewMenu);
     setConfirmMessage("Are you sure you want to delete?");
     setShowConfirm(true);
   };
+
   const handleUpdateView = async () => {
-    if (!editViewName.trim()) {
+    const canEditGlobalModel = canAccess(projectId, "global_model", "EDITOR");
+    const canEditIroamer = canAccess(projectId, "iroamer", "EDITOR");
+
+    if (!canEditGlobalModel && !canEditIroamer) {
+      setCustomAlert(true);
+      setModalMessage("You do not have permission to edit views.");
       return;
     }
-    // Check if a view with the same name already exists
+
+    if (!editViewName.trim()) {
+      setCustomAlert(true);
+      setModalMessage("View name cannot be empty.");
+      return;
+    }
+
     const trimmedName = editViewName.trim();
     const viewExists = allSavedViews.some(
-      (view) => view.name.trim().toLowerCase() === trimmedName.toLowerCase()
+      (view) => view.name.trim().toLowerCase() === trimmedName.toLowerCase() && view.id !== editingView.id
     );
-    console.log("viewExists", viewExists);
+
     if (viewExists) {
       setCustomAlert(true);
-      setModalMessage("A view with this name already exists");
+      setModalMessage("A view with this name already exists.");
       return;
     }
 
@@ -534,29 +727,52 @@ const actionMap = {
       oldName: editingView.name,
       newName: editViewName,
     };
-    console.log(data);
-    const response = await UpdateSavedView(data);
-    if (response.status === 200) {
+
+    try {
+      const response = await UpdateSavedView(data);
+      if (response.status === 200) {
+        setCustomAlert(true);
+        setModalMessage("View updated successfully.");
+        getAllSavedViews(projectId);
+        handleCloseEditView();
+      } else {
+        throw new Error("Update failed");
+      }
+    } catch (error) {
       setCustomAlert(true);
-      setModalMessage("View updated..");
-      getAllSavedViews(projectId);
-      handleCloseEditView();
-    } else {
-      setCustomAlert(true);
-      setModalMessage("Something went wrong on updatio.Please try again..");
+      setModalMessage("Something went wrong on update. Please try again.");
       handleCloseEditView();
     }
   };
+
   const handleCancelDelete = () => {
     setShowConfirm(false);
   };
-  const handleConfirmDelete = async () => {
-    const response = await DeleteSavedView(projectId, currentDeleteNumber);
 
-    if (response.status === 200) {
+  const handleConfirmDelete = async () => {
+    const canEditGlobalModel = canAccess(projectId, "global_model", "EDITOR");
+    const canEditIroamer = canAccess(projectId, "iroamer", "EDITOR");
+
+    if (!canEditGlobalModel && !canEditIroamer) {
+      alert("You do not have permission to delete views.");
+      return;
+    }
+
+    try {
+      const response = await DeleteSavedView(projectId, currentDeleteNumber);
+
+      if (response.status === 200) {
+        setCustomAlert(true);
+        setModalMessage("View deleted successfully.");
+        getAllSavedViews(projectId);
+        setShowConfirm(false);
+        setCurrentDeleteNumber(null);
+      } else {
+        throw new Error("Delete failed");
+      }
+    } catch (error) {
       setCustomAlert(true);
-      setModalMessage("View deleted successfully..");
-      getAllSavedViews(projectId);
+      setModalMessage("Something went wrong while deleting. Please try again.");
       setShowConfirm(false);
       setCurrentDeleteNumber(null);
     }
@@ -568,11 +784,11 @@ const actionMap = {
         <li>
           <div
             id="openFileButton"
-            class="dropdown"
+            className="dropdown"
             onClick={onOpenProjectModal}
           >
-            <i class="fa fa-folder-open"></i>Open Project
-            <div class="dropdown-content"></div>
+            <i className="fa fa-folder-open"></i>Open Project
+            <div className="dropdown-content"></div>
           </div>
           {showProjectName &&
             (showContents ? (
@@ -585,7 +801,7 @@ const actionMap = {
                 }}
               >
                 <i
-                  class="fa-solid fa-caret-down fs-3 text-secondary"
+                  className="fa-solid fa-caret-down fs-3 text-secondary"
                   onClick={handleShowContents}
                 ></i>
               </div>
@@ -598,8 +814,8 @@ const actionMap = {
                         showProjectDetails={showProjectDetails}
                         setShowProjectDetails={setShowProjectDetails}
                         onAddArea={() => console.log("Add area clicked")}
-                            setActiveItem={setActiveItem}
-                          setActiveLink={setActiveLink}
+                        setActiveItem={setActiveItem}
+                        setActiveLink={setActiveLink}
                       />
                     )}
                   </div>
@@ -613,7 +829,7 @@ const actionMap = {
                   }}
                 >
                   <i
-                    class="fa-solid fa-caret-up fs-3 text-secondary"
+                    className="fa-solid fa-caret-up fs-3 text-secondary"
                     onClick={handleShowContents}
                   ></i>
                 </div>
@@ -636,7 +852,7 @@ const actionMap = {
             </div>
             {item.subItems && openMenus[item.toggleMenu] && (
               <ul className="sub-menu">
-                {item.subItems.map((subItem, subIndex) => (
+                {getFilteredSubItems(item.subItems).map((subItem, subIndex) => (
                   <li key={subIndex}>
                     <div
                       className={
@@ -648,7 +864,8 @@ const actionMap = {
                           subItem.path,
                           subItem.isModal,
                           subItem.modalName,
-                          subItem.action
+                          subItem.action,
+                          subItem.parentFeature
                         )
                       }
                       style={{ cursor: "pointer" }}
@@ -682,7 +899,7 @@ const actionMap = {
                   </a>
                   <i
                     className="fa-solid fa-pencil"
-                    title="Edite"
+                    title="Edit"
                     onClick={() => handleEditClick(view)}
                   ></i>
                   <img
@@ -715,7 +932,7 @@ const actionMap = {
           <div className="title-dialog">
             <p className="text-light">Edit view</p>
             <p className="text-light cross" onClick={handleCloseEditView}>
-              &times;
+              ×
             </p>
           </div>
           <div className="dialog-input">

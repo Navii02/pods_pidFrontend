@@ -5,6 +5,7 @@ import { getUnassignedmodel, deleteUnassignedModel, deleteAllUnassignedModels, A
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faTrash, faSquareCheck, faPlusCircle, faTimes } from '@fortawesome/free-solid-svg-icons';
 import { Modal } from "react-bootstrap";
+import { canAccess } from "../Utils/accessControl";
 
 function UnAssignedtags() {
   const [unassignedModels, setUnassignedModels] = useState([]);
@@ -159,6 +160,12 @@ function UnAssignedtags() {
       .filter(model => selectedModels.includes(model.number))
       .map(model => model.fileName);
   };
+ const canView = canAccess(projectId, "taglist", "VIEWER");
+  const canEdit = canAccess(projectId, "taglist", "EDITOR");
+
+  if (!canView) {
+    return <div className="alert alert-danger">Access Denied</div>;
+  }
 
   return (
     <div style={{
@@ -177,7 +184,10 @@ function UnAssignedtags() {
               </th>
               <th className="wideHead">Number</th>
               <th className="wideHead">File Name</th>
+               {canEdit && (
+                 <>
               <th className="tableActionCell" style={{ textAlign: "right" }}>
+                
                 <FontAwesomeIcon
                   icon={faTrash}
                   title="Delete All"
@@ -207,13 +217,18 @@ function UnAssignedtags() {
                     }}
                   />
                 )}
+              
               </th>
+                  </>
+                )}
             </tr>
           </thead>
           <tbody>
             {unassignedModels.length > 0 ? (
               unassignedModels.map((model, index) => (
                 <tr key={model.number} style={{ color: "black" }}>
+                     {canEdit && (
+                <>
                   <td style={{ backgroundColor: "#f0f0f0" }}>
                     <input 
                       type="checkbox" 
@@ -221,8 +236,12 @@ function UnAssignedtags() {
                       onChange={(e) => handleSelectModel(e, model.number)}
                     />
                   </td>
+                    </>
+                )}
                   <td style={{ backgroundColor: "#f0f0f0" }}>{index + 1}</td>
                   <td>{model.fileName}</td>
+                     {canEdit && (
+                <>
                   <td style={{ backgroundColor: "#f0f0f0", textAlign: "right" }}>
                     <FontAwesomeIcon
                       icon={faTrash}
@@ -230,6 +249,8 @@ function UnAssignedtags() {
                       style={{ cursor: "pointer" }}
                     />
                   </td>
+                    </>
+                )}
                 </tr>
               ))
             ) : (
