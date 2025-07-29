@@ -14,6 +14,8 @@ import {
   faTrash,
 } from "@fortawesome/free-solid-svg-icons";
 import { deletevalveList, getvalvelist, saveimportedValveList, EditValvelist } from "../services/TagApi";
+import { canAccess } from "../Utils/accessControl";
+
 
 function ValveList() {
   const [editedValveId, setEditedValveId] = useState(null); // Changed from editedRowIndex
@@ -378,6 +380,14 @@ const validateValveImportData = (data) => {
   const filteredValveList = allValveList?.filter((valve) =>
     valve.tag?.toLowerCase().includes(searchQuery.toLowerCase())
   );
+   const canView = canAccess(projectId, "valvelist", "VIEWER");
+  const canEdit = canAccess(projectId, "valvelist", "EDITOR");
+
+  if (!canView) {
+    return <div className="alert alert-danger">Access Denied</div>;
+  }
+
+
 
   return (
     <div
@@ -436,6 +446,8 @@ const validateValveImportData = (data) => {
                     onClick={handleExport}
                     style={{ cursor: "pointer" }}
                   />
+                    {canEdit && (
+                <>
                   <FontAwesomeIcon
                     icon={faUpload}
                     title="Import"
@@ -448,6 +460,8 @@ const validateValveImportData = (data) => {
                     onClick={handleMultipleDelete}
                     style={{ cursor: "pointer", marginLeft: "10px" }}
                   />
+                   </>
+                )}
                 </th>
               </tr>
               <tr>
@@ -698,6 +712,8 @@ const validateValveImportData = (data) => {
                     )}
                   </td>
                   <td style={{ backgroundColor: "#f0f0f0" }}>
+                      {canEdit && (
+                <>
                     {editedValveId === valve.tagId ? (
                       <>
                         <FontAwesomeIcon
@@ -728,6 +744,8 @@ const validateValveImportData = (data) => {
                         />
                       </>
                     )}
+                     </>
+                )}
                   </td>
                 </tr>
               ))}

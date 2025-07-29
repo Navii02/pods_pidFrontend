@@ -331,8 +331,8 @@ function GeneralTagInfoTable({}) {
   // Calculate the number of checked fields for column span
   const checkedFieldsCount = displayFields.filter(field => field.statuscheck === "checked").length;
   
-     const canView = canAccess(projectId, "taglist", "VIEWER");
-    const canEdit = canAccess(projectId, "taglist", "EDITOR");
+     const canView = canAccess(projectId, "tag_info", "VIEWER");
+    const canEdit = canAccess(projectId, "tag_info", "EDITOR");
   
     if (!canView) {
       return <div className="alert alert-danger">Access Denied</div>;

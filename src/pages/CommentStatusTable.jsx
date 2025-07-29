@@ -16,6 +16,8 @@ import { updateProjectContext } from "../context/ContextShare";
 import * as XLSX from "xlsx";
 import Alert from "../components/Alert";
 import DeleteConfirm from "../components/DeleteConfirm";
+import { canAccess } from "../Utils/accessControl";
+
 
 const CommentStatusTable = () => {
   const { updateProject } = useContext(updateProjectContext);
@@ -249,6 +251,14 @@ const handleImportClick = async () => {
   const filteredData = tableData.filter(item =>
     item.statusname?.toLowerCase()?.includes(searchTerm?.toLowerCase())
   );
+   const canView = canAccess(projectId, "comment", "VIEWER");
+  const canEdit = canAccess(projectId, "comment", "EDITOR");
+
+  if (!canView) {
+    return <div className="alert alert-danger">Access Denied</div>;
+  }
+
+
 
   return (
     <div style={{ width: "100%", backgroundColor: "white" }}>
@@ -266,7 +276,8 @@ const handleImportClick = async () => {
                   onClick={handleExport}
                   style={{ cursor: "pointer" }}
                 />
-               
+                 {canEdit && (
+                <>
                 <FontAwesomeIcon 
                   icon={faUpload} 
                   title="Import"
@@ -279,6 +290,8 @@ const handleImportClick = async () => {
                   onClick={handleAdd}
                   style={{ cursor: "pointer", marginLeft: "15px" }}
                 />
+                 </>
+                )}
               </th>
             </tr>
             <tr>
@@ -337,6 +350,8 @@ const handleImportClick = async () => {
                     )}
                   </td>
                   <td style={{ backgroundColor: "#f0f0f0" }}>
+                      {canEdit && (
+                <>
                     {editedRowIndex === index ? (
                       <>
                         <FontAwesomeIcon
@@ -375,6 +390,8 @@ const handleImportClick = async () => {
                         )}
                       </>
                     )}
+                     </>
+                )}
                   </td>
                 </tr>
               ))

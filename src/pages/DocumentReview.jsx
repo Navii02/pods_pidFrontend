@@ -5,7 +5,8 @@ import { getDocumentsdetails } from "../services/CommonApis";
 import { updateProjectContext } from "../context/ContextShare";
 import DeleteConfirm from "../components/DeleteConfirm";
 import Alert from "../components/Alert";
-import { Modal } from "react-bootstrap";
+import { Modal } from "react-bootstrap";import { canAccess } from "../Utils/accessControl";
+
 
 const Review = () => {
   const { updateProject } = useContext(updateProjectContext);
@@ -86,6 +87,13 @@ const Review = () => {
     doc.number.toLowerCase().includes(searchQuery.toLowerCase()) ||
     doc.title.toLowerCase().includes(searchQuery.toLowerCase())
   );
+ const canView = canAccess(projectId, "documents", "VIEWER");
+  const canEdit = canAccess(projectId, "documents", "EDITOR");
+
+  if (!canView) {
+    return <div className="alert alert-danger">Access Denied</div>;
+  }
+
 
   return (
     <div style={{
@@ -106,12 +114,16 @@ const Review = () => {
               <th>Type</th>
               <th>File</th>
               <th className="tableActionCell">
+                  {canEdit && (
+                <>
                 <FontAwesomeIcon 
                   icon={faUpload} 
                   className="me-2" 
                   title="Export" 
                   // onClick={handleExport} 
                 />
+                 </>
+                )}
                 <FontAwesomeIcon 
                   icon={faDownload} 
                   title="Import" 
@@ -181,6 +193,8 @@ const Review = () => {
                 </td>
                 <td>{doc.filename}</td>
                 <td style={{ backgroundColor: "#f0f0f0" }}>
+                    {canEdit && (
+                <>
                   {editedRowIndex === index ? (
                     <>
                       <FontAwesomeIcon
@@ -207,6 +221,8 @@ const Review = () => {
                       />
                     </>
                   )}
+                   </>
+                )}
                 </td>
               </tr>
             ))}

@@ -9,9 +9,11 @@ import {
   getLineList,
   saveimportedLineList,
 } from "../services/TagApi";
+import { canAccess } from "../Utils/accessControl";
+
 
 function LineList() {
-  const [editedLineId, setEditedLineId] = useState(null); // Changed from editedRowIndex to editedLineId
+  const [editedLineId, setEditedLineId] = useState(null); 
   const [editedLineData, setEditedLineData] = useState({});
   const [lineToDelete, setLineToDelete] = useState(null);
   const [showConfirm, setShowConfirm] = useState(false);
@@ -300,6 +302,14 @@ function LineList() {
   const filteredLineList = allLineList?.filter((line) =>
     line.tag.toLowerCase().includes(searchQuery.toLowerCase())
   );
+   const canView = canAccess(projectId, "linelist", "VIEWER");
+    const canEdit = canAccess(projectId, "linelist", "EDITOR");
+  
+    if (!canView) {
+      return <div className="alert alert-danger">Access Denied</div>;
+    }
+  
+  
 
   return (
     <div
@@ -362,22 +372,27 @@ function LineList() {
                 <th>Chemical cleaning</th>
                 <th>PWHT</th>
                 <th className="tableActionCell">
+                    <i
+                    className="fa fa-download ms-2"
+                    title="Import"
+                    onClick={handleImportTag}
+                  ></i>
+                    {canEdit && (
+                <>
                   <i
                     className="fa fa-upload"
                     title="Export"
                     onClick={handleExport}
                   ></i>
-                  <i
-                    className="fa fa-download ms-2"
-                    title="Import"
-                    onClick={handleImportTag}
-                  ></i>
+                
                   <i
                     className="fa fa-trash ms-2"
                     title="Delete Selected"
                     onClick={handleMultipleDelete}
                     style={{ cursor: 'pointer' }}
                   ></i>
+                   </>
+                )}
                 </th>
               </tr>
               <tr>
@@ -741,6 +756,8 @@ function LineList() {
                   </td>
 
                   <td style={{ backgroundColor: "#f0f0f0" }}>
+                      {canEdit && (
+                <>
                     {editedLineId === line.tagId ? (
                       <>
                         <i
@@ -768,6 +785,8 @@ function LineList() {
                         ></i>
                       </>
                     )}
+                     </>
+                )}
                   </td>
                 </tr>
               ))}
