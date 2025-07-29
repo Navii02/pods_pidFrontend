@@ -46,6 +46,7 @@ import { iroamerContext, updateProjectContext } from "../context/ContextShare";
 import {
   fetchAllGentagInfo,
   fetchFromGentagInfoFields,
+  GetAllmodals,
   getequipmentList,
   getLineList,
 } from "../services/TagApi";
@@ -56,7 +57,7 @@ import {
   updateCommentField,
 } from "../services/CommentApi";
 import { AllSavedView, SaveSavedView } from "../services/CommonApis";
-import  {BabylonVRHelper}  from "../Utils/VrHelper";
+import { BabylonVRHelper } from "../Utils/VrHelper";
 const Iroamer = forwardRef(
   (
     {
@@ -85,6 +86,7 @@ const Iroamer = forwardRef(
       setViewHideThree,
       iroamerfieldEmpty,
       modalData,
+      setModaldata,
       setview,
     } = useContext(iroamerContext);
     const location = useLocation();
@@ -429,6 +431,12 @@ const Iroamer = forwardRef(
     const [lightColor, setLightColor] = useState("#ffffff");
     const [specularColor, setSpecularColor] = useState("#ffffff");
     const [lightShadowsEnabled, setLightShadowsEnabled] = useState(false);
+
+    // copy multiple tag link 
+     const [selectedTagsForLink, setSelectedTagsForLink] = useState([]);
+    const [isMultiSelectMode, setIsMultiSelectMode] = useState(false);
+    const [multiTagNotification, setMultiTagNotification] = useState(null);
+
 
     const projectString = sessionStorage.getItem("selectedProject");
     const project = projectString ? JSON.parse(projectString) : null;
@@ -3326,6 +3334,7 @@ const Iroamer = forwardRef(
       }
     };
     const colorInputRef = useRef(null);
+    const [pendingColorChange, setPendingColorChange] = useState(null);
 
     const handleColorChange = () => {
       if (!sceneRef.current || !selectedMeshRef.current) {
@@ -3341,32 +3350,11 @@ const Iroamer = forwardRef(
     const handleColorSelected = (event) => {
       const selectedColor = event.target.value; // hex color like "#ff00ff"
 
-      const scene = sceneRef.current;
-      const meshes = selectedMeshRef.current;
-
-      if (!scene || !meshes) return;
-
-      const color3 = BABYLON.Color3.FromHexString(selectedColor);
-
-      meshes.forEach((mesh) => {
-        let material;
-        if (mesh.material && mesh.material instanceof BABYLON.PBRMaterial) {
-          material = mesh.material.clone("clonedPBR");
-          material.albedoColor = color3;
-          mesh.material = material;
-        } else {
-          material = new BABYLON.StandardMaterial("mat", scene);
-          material.diffuseColor = color3;
-          mesh.material = material;
-        }
-
-        mesh.metadata = {
-          ...mesh.metadata,
-          color: color3.toHexString(),
-        };
-      });
-
-      setIsMenuOpen(false);
+      // Store the selected color and show confirmation instead of applying immediately
+      setPendingColorChange(selectedColor);
+      setupdateBackground({ type: "change-color", color: selectedColor });
+      setConfirmMessage("Are you sure you want to change the color?");
+      setShowConfirm(true);
     };
 
     const handleSelectTag = () => {
@@ -3546,7 +3534,6 @@ const Iroamer = forwardRef(
       setIsMenuOpen(false);
     };
 
- 
     const disposeScene = () => {
       if (sceneRef.current) {
         sceneRef.current.dispose(); // Disposes all scene elements and frees memory
@@ -3601,7 +3588,7 @@ const Iroamer = forwardRef(
       // Setup lighting
       setupLighting(scene, camera);
       // Initialize VR Helper
-       initializeVR(scene, camera);
+      initializeVR(scene, camera);
       return scene;
     };
 
@@ -4201,6 +4188,7 @@ const Iroamer = forwardRef(
     const handleCancelDelete = () => {
       setShowConfirm(false);
       setupdateBackground(null);
+      setPendingColorChange(null);
     };
 
     const handleConfirm = async () => {
@@ -4297,6 +4285,69 @@ const Iroamer = forwardRef(
             setActiveSection(null);
             fetchBaseSettinngs(projectId);
           }
+        }
+
+        if (updateBackground?.type === "change-color") {
+          // Apply the color change
+          const selectedColor = updateBackground.color;
+          const scene = sceneRef.current;
+          const meshes = selectedMeshRef.current;
+
+          if (!scene || !meshes) {
+            setCustomAlert(true);
+            setModalMessage("No mesh selected for color change");
+            return;
+          }
+
+          const color3 = BABYLON.Color3.FromHexString(selectedColor);
+
+          // Apply color to selected meshes
+          if (Array.isArray(meshes)) {
+            meshes.forEach((mesh) => {
+              let material;
+              if (
+                mesh.material &&
+                mesh.material instanceof BABYLON.PBRMaterial
+              ) {
+                material = mesh.material.clone("clonedPBR");
+                material.albedoColor = color3;
+                mesh.material = material;
+              } else {
+                material = new BABYLON.StandardMaterial("mat", scene);
+                material.diffuseColor = color3;
+                mesh.material = material;
+              }
+
+              mesh.metadata = {
+                ...mesh.metadata,
+                color: color3.toHexString(),
+              };
+            });
+          } else {
+            // Handle single mesh
+            let material;
+            if (
+              meshes.material &&
+              meshes.material instanceof BABYLON.PBRMaterial
+            ) {
+              material = meshes.material.clone("clonedPBR");
+              material.albedoColor = color3;
+              meshes.material = material;
+            } else {
+              material = new BABYLON.StandardMaterial("mat", scene);
+              material.diffuseColor = color3;
+              meshes.material = material;
+            }
+
+            meshes.metadata = {
+              ...meshes.metadata,
+              color: color3.toHexString(),
+            };
+          }
+
+          setIsMenuOpen(false);
+          setCustomAlert(true);
+          setModalMessage("Color changed successfully!");
         }
       } catch (error) {
         console.error("Error saving settings:", error);
@@ -4458,20 +4509,20 @@ const Iroamer = forwardRef(
         boundingBoxCenter: center.clone(),
         modelRadius: distanceToFit,
       };
-// Set VR boundaries based on model bounds
-if (vrHelper) {
-  const boundaryMargin = 10.0; // 10 meter margin around model
-  vrHelper.setBoundariesFromModelBounds(
-    boundingInfo.min.x,
-    boundingInfo.min.y,
-    boundingInfo.min.z,
-    boundingInfo.max.x,
-    boundingInfo.max.y,
-    boundingInfo.max.z,
-    boundaryMargin
-  );
-  console.log("🎯 VR boundaries configured based on model bounding box");
-}
+      // Set VR boundaries based on model bounds
+      if (vrHelper) {
+        const boundaryMargin = 10.0; // 10 meter margin around model
+        vrHelper.setBoundariesFromModelBounds(
+          boundingInfo.min.x,
+          boundingInfo.min.y,
+          boundingInfo.min.z,
+          boundingInfo.max.x,
+          boundingInfo.max.y,
+          boundingInfo.max.z,
+          boundaryMargin
+        );
+        console.log("🎯 VR boundaries configured based on model bounding box");
+      }
       // // Set common camera properties
       scene.activeCamera.minZ = 0.001;
       scene.activeCamera.maxZ = distanceToFit * 100;
@@ -5311,84 +5362,175 @@ if (vrHelper) {
     }, [fov]);
 
     // VR button handler
-const handleVRToggle = async () => {
-  if (!vrHelper) {
-    console.log("VR Helper not initialized");
-    return;
-  }
+    const handleVRToggle = async () => {
+      if (!vrHelper) {
+        console.log("VR Helper not initialized");
+        return;
+      }
 
-  try {
-    if (!isInVR) {
-      await vrHelper.xrHelper.baseExperience.enterXRAsync("immersive-vr", "local-floor");
-    } else {
-      await vrHelper.xrHelper.baseExperience.exitXRAsync();
-    }
-  } catch (error) {
-    console.error("VR toggle failed:", error);
-    setCustomAlert(true);
-    setModalMessage("VR not available or failed to initialize");
-  }
-};
+      try {
+        if (!isInVR) {
+          await vrHelper.xrHelper.baseExperience.enterXRAsync(
+            "immersive-vr",
+            "local-floor"
+          );
+        } else {
+          await vrHelper.xrHelper.baseExperience.exitXRAsync();
+        }
+      } catch (error) {
+        console.error("VR toggle failed:", error);
+        setCustomAlert(true);
+        setModalMessage("VR not available or failed to initialize");
+      }
+    };
 
-// Check VR support
-const checkVRSupport = async () => {
-  try {
-    const supported = await BABYLON.WebXRSessionManager.IsSessionSupportedAsync("immersive-vr");
-    setIsVRSupported(supported);
-    console.log("VR supported:", supported);
-  } catch (error) {
-    console.log("VR check failed:", error);
-    setIsVRSupported(false);
-  }
-};
+    // Check VR support
+    const checkVRSupport = async () => {
+      try {
+        const supported =
+          await BABYLON.WebXRSessionManager.IsSessionSupportedAsync(
+            "immersive-vr"
+          );
+        setIsVRSupported(supported);
+        console.log("VR supported:", supported);
+      } catch (error) {
+        console.log("VR check failed:", error);
+        setIsVRSupported(false);
+      }
+    };
 
-// VR initialization function
-const initializeVR = async (scene, camera) => {
+    // VR initialization function
+    const initializeVR = async (scene, camera) => {
+      try {
+        console.log("Initializing VR Helper...");
+
+        const helper = new BabylonVRHelper(scene, camera);
+
+        helper.setVRChangeListener((state) => {
+          if (state === BabylonVRHelper.VR.ENTER) {
+            setIsInVR(true);
+            setActiveButton("vr");
+            console.log("🎮 VR session started!");
+          } else {
+            setIsInVR(false);
+            setActiveButton("");
+            console.log("VR session ended");
+          }
+        });
+
+        helper.setMovementSpeed(0.08);
+        helper.setRotationSpeed(0.015);
+        helper.setBoundaryEnabled(true);
+
+        setVrHelper(helper);
+        console.log("VR Helper initialized successfully");
+      } catch (error) {
+        console.error("VR initialization failed:", error);
+        setVrHelper(null);
+      }
+    };
+    // Add VR support check on component mount
+    useEffect(() => {
+      checkVRSupport();
+    }, []);
+
+    // Add VR cleanup on component unmount
+    useEffect(() => {
+      return () => {
+        if (vrHelper) {
+          vrHelper.dispose();
+        }
+      };
+    }, []);
+   
+
+// 4. ALTERNATIVE: DIRECT FETCH APPROACH (if you know the exact API endpoint)
+const fetchProjectTagsDirect = async (projectId) => {
+  console.log('🌐 Direct fetch for project tags:', projectId);
+  
   try {
-    console.log("Initializing VR Helper...");
-    
-    const helper = new BabylonVRHelper(scene, camera);
-    
-    helper.setVRChangeListener((state) => {
-      if (state === BabylonVRHelper.VR.ENTER) {
-        setIsInVR(true);
-        setActiveButton("vr");
-        console.log("🎮 VR session started!");
-      } else {
-        setIsInVR(false);
-        setActiveButton("");
-        console.log("VR session ended");
+    // Replace with your actual endpoint - check your network tab to see what API calls are made
+    // when you normally load a project
+    const response = await fetch(`/api/iroamer/project/${projectId}/tags`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        // Add any authentication headers if needed
+        // 'Authorization': 'Bearer ' + token,
       }
     });
-
-    helper.setMovementSpeed(0.08);
-    helper.setRotationSpeed(0.015);
-    helper.setBoundaryEnabled(true);
-
-    setVrHelper(helper);
-    console.log("VR Helper initialized successfully");
-
+    
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+    
+    const result = await response.json();
+    console.log('✅ Direct fetch result:', result);
+    
+    return result.data || result; // Adapt based on your API response structure
+    
   } catch (error) {
-    console.error("VR initialization failed:", error);
-    setVrHelper(null);
+    console.error('❌ Direct fetch failed:', error);
+    throw error;
   }
 };
-// Add VR support check on component mount
-useEffect(() => {
-  checkVRSupport();
-}, []);
 
-// Add VR cleanup on component unmount
+// Enhanced component initialization
 useEffect(() => {
-  return () => {
-    if (vrHelper) {
-      vrHelper.dispose();
+  // Only parse URL on initial component mount
+  if (!window.hasAttemptedUrlParse) {
+    window.hasAttemptedUrlParse = true;
+    console.log('🚀 Component mounted, checking for tag link...');
+    
+    // Check if this is a tag link (has both projectId and tag params)
+    const urlParams = new URLSearchParams(window.location.search);
+    const hasTagParam = urlParams.get('tag');
+    const hasProjectParam = urlParams.get('projectId');
+    
+    if (hasTagParam && hasProjectParam) {
+      console.log('🔗 Tag link detected, starting parse process...');
+      // Delay to ensure component is fully initialized
+      setTimeout(() => {
+        parseAndHighlightTagFromUrl();
+      }, 1000); // Increased delay for tag links
     }
-  };
-}, []);
-// Function to generate tag link URL
+  }
+}, []); // Empty dependency array - runs once on mount
+
+// Enhanced monitoring of tag data loading
+useEffect(() => {
+  console.log('📊 selectedTags updated, count:', selectedTags.length);
+  
+  // If we have a pending highlight and tags just loaded, try highlighting
+  if (window.pendingTagHighlight && selectedTags.length > 0) {
+    console.log('📦 Tags loaded with pending highlight, attempting...');
+    setTimeout(attemptTagHighlight, 1000);
+  }
+}, [selectedTags]); // Monitor selectedTags changes
+
+// Enhanced monitoring of modal data
+useEffect(() => {
+  console.log('📊 modalData updated:', modalData ? modalData.length : 0, 'items');
+  
+  // Process modal data into selectedTags when it arrives
+  if (modalData && modalData.length > 0) {
+    console.log('🔄 Processing modal data into selectedTags...');
+    AllTags(); // This processes modalData into selectedTags
+  }
+}, [modalData]); // Monitor modalData changes
+
+// // Enhanced scene monitoring
+// useEffect(() => {
+//   if (window.pendingTagHighlight && sceneRef.current) {
+//     console.log('🎬 Scene ready with pending highlight, attempting...');
+//     setTimeout(attemptTagHighlight, 1500);
+//   }
+// }, [sceneRef.current]);
+
+
 const generateTagLink = (tagInfo) => {
   if (!tagInfo || !tagInfo.filename) {
+    console.warn('No tag info provided to generateTagLink');
     return null;
   }
 
@@ -5399,23 +5541,308 @@ const generateTagLink = (tagInfo) => {
   // Create URL with tag parameters
   const tagUrl = new URL(baseUrl);
   tagUrl.searchParams.set('projectId', projectId);
-  tagUrl.searchParams.set('tag', tagInfo.filename);
   
-  // If tag has area, disc, sys information, include them
-  if (tagInfo.linelistDetails || tagInfo.equipmentlistDetails || tagInfo.originalUsertagInfoDetails) {
-    // Try to get area, disc, sys from the tag structure
-    const tagParts = selectedMeshRef.current?.[0]?.metadata?.tagNo;
-    if (tagParts) {
-      if (tagParts.area) tagUrl.searchParams.set('area', tagParts.area);
-      if (tagParts.disc) tagUrl.searchParams.set('disc', tagParts.disc);
-      if (tagParts.sys) tagUrl.searchParams.set('sys', tagParts.sys);
+  // Get tag information from multiple sources with fallbacks
+  let tagName = tagInfo.filename;
+  let area, disc, sys, actualTag;
+
+  // Clean the filename - remove .glb extension if present
+  if (tagName.endsWith('.glb')) {
+    tagName = tagName.slice(0, -4);
+  }
+
+  // Priority 1: Get from selectedMeshRef metadata
+  const meshMetadata = selectedMeshRef.current?.[0]?.metadata?.tagNo;
+  if (meshMetadata) {
+    area = meshMetadata.area;
+    disc = meshMetadata.disc;
+    sys = meshMetadata.sys;
+    actualTag = meshMetadata.tag;
+  }
+
+  // Priority 2: Get from tagInfo object directly
+  if (!area && tagInfo.area) area = tagInfo.area;
+  if (!disc && tagInfo.disc) disc = tagInfo.disc;
+  if (!sys && tagInfo.sys) sys = tagInfo.sys;
+  if (!actualTag && tagInfo.tag) actualTag = tagInfo.tag;
+
+  // Priority 3: Find in selectedTags array
+  if (!area || !disc || !sys || !actualTag) {
+    const foundTag = selectedTags.find(tag => 
+      tag.filename === tagInfo.filename || 
+      tag.filename?.replace('.glb', '') === tagName ||
+      tag.tag === tagName
+    );
+    
+    if (foundTag) {
+      if (!area) area = foundTag.area;
+      if (!disc) disc = foundTag.disc;
+      if (!sys) sys = foundTag.sys;
+      if (!actualTag) actualTag = foundTag.tag;
     }
   }
+
+  // Set URL parameters
+  tagUrl.searchParams.set('tag', actualTag || tagName);
+  
+  if (area) tagUrl.searchParams.set('area', area);
+  if (disc) tagUrl.searchParams.set('disc', disc);
+  if (sys) tagUrl.searchParams.set('sys', sys);
+
+  console.log('Generated tag link:', {
+    originalTagInfo: tagInfo,
+    finalParams: { tag: actualTag || tagName, area, disc, sys },
+    url: tagUrl.toString()
+  });
   
   return tagUrl.toString();
 };
 
-// Function to copy tag link to clipboard
+
+// 3. ENHANCED findAndHighlightTag with better matching logic
+const findAndHighlightTag = (tagParam, areaParam, discParam, sysParam) => {
+  console.log('🔍 Searching for tag with params:', {
+    tag: tagParam,
+    area: areaParam,
+    disc: discParam,
+    sys: sysParam,
+    availableTagsCount: selectedTags.length
+  });
+
+  // Log first few available tags for debugging
+  console.log('📋 Sample available tags:', selectedTags.slice(0, 5).map(t => ({
+    filename: t.filename,
+    tag: t.tag,
+    area: t.area,
+    disc: t.disc,
+    sys: t.sys
+  })));
+
+  // Check if we have any tags with the expected area
+  if (areaParam) {
+    const areaMatches = selectedTags.filter(t => t.area === areaParam);
+    console.log(`🏷️ Found ${areaMatches.length} tags with area "${areaParam}"`);
+    
+    if (areaMatches.length === 0) {
+      console.warn(`❌ No tags found with area "${areaParam}"`);
+      const availableAreas = [...new Set(selectedTags.map(t => t.area).filter(Boolean))];
+      console.log('📍 Available areas:', availableAreas);
+    }
+  }
+
+  let foundTag = null;
+
+  // Strategy 1: Exact match with all parameters
+  if (areaParam && discParam && sysParam) {
+    foundTag = selectedTags.find(tag => 
+      tag.area === areaParam && 
+      tag.disc === discParam && 
+      tag.sys === sysParam && 
+      (tag.tag === tagParam || tag.filename?.replace('.glb', '') === tagParam)
+    );
+    if (foundTag) console.log('✅ Strategy 1 (exact match) - Found:', foundTag);
+  }
+
+  // Strategy 2: Match by tag name with partial area/disc/sys
+  if (!foundTag) {
+    foundTag = selectedTags.find(tag => {
+      const tagMatches = tag.tag === tagParam || 
+                        tag.filename === tagParam || 
+                        tag.filename?.replace('.glb', '') === tagParam;
+      
+      if (!tagMatches) return false;
+      
+      // If URL has area/disc/sys params, they should match
+      const areaMatches = !areaParam || tag.area === areaParam;
+      const discMatches = !discParam || tag.disc === discParam;
+      const sysMatches = !sysParam || tag.sys === sysParam;
+      
+      return areaMatches && discMatches && sysMatches;
+    });
+    if (foundTag) console.log('✅ Strategy 2 (partial match) - Found:', foundTag);
+  }
+
+  // Strategy 3: Filename-based search (more flexible)
+  if (!foundTag) {
+    foundTag = selectedTags.find(tag => {
+      const cleanFilename = tag.filename?.replace('.glb', '');
+      const cleanTag = tag.tag;
+      
+      return cleanFilename === tagParam || 
+             cleanTag === tagParam || 
+             tag.filename === tagParam ||
+             tag.filename === `${tagParam}.glb`;
+    });
+    if (foundTag) console.log('✅ Strategy 3 (filename match) - Found:', foundTag);
+  }
+
+  // Strategy 4: Case-insensitive search
+  if (!foundTag) {
+    foundTag = selectedTags.find(tag => {
+      const tagLower = tag.tag?.toLowerCase();
+      const filenameLower = tag.filename?.toLowerCase().replace('.glb', '');
+      const paramLower = tagParam.toLowerCase();
+      
+      return tagLower === paramLower || filenameLower === paramLower;
+    });
+    if (foundTag) console.log('✅ Strategy 4 (case insensitive) - Found:', foundTag);
+  }
+
+  if (foundTag) {
+    console.log('🎉 Tag found! Highlighting:', foundTag);
+    
+    try {
+      // Highlight the tag in the scene
+      highlightTagInScene(foundTag.filename);
+      
+      // Create the tag key for state management
+      if (foundTag.area && foundTag.disc && foundTag.sys) {
+        const tagKey = `${foundTag.area}-${foundTag.disc}-${foundTag.sys}-${foundTag.tag}`;
+        console.log('🔑 Setting tag key:', tagKey);
+        
+        setHighlightedTagKey(tagKey);
+        setBackgroundColorTag({ [tagKey]: true });
+        
+        // Make sure the tag is visible
+        setViewHideThree(prev => ({
+          ...prev,
+          [tagKey]: true
+        }));
+      }
+      
+      // Focus camera after a delay to ensure mesh is highlighted
+      setTimeout(() => {
+        if (selectedMeshRef.current && selectedMeshRef.current.length > 0) {
+          console.log('📷 Focusing camera on highlighted tag');
+          focusOnSelectedMesh(sceneRef.current, selectedMeshRef.current);
+        } else {
+          console.warn('⚠️ No mesh in selectedMeshRef to focus on');
+        }
+      }, 2000); // Longer delay for new tab loading
+      
+      // Success feedback
+      setTimeout(() => {
+        setCustomAlert(true);
+        setModalMessage(`✅ Successfully navigated to tag: ${foundTag.tag || foundTag.filename}`);
+      }, 2500);
+      
+      // Clean up
+      cleanupTagHighlight();
+      return true;
+      
+    } catch (error) {
+      console.error('❌ Error highlighting tag:', error);
+      setCustomAlert(true);
+      setModalMessage(`Error highlighting tag: ${error.message}`);
+      cleanupTagHighlight();
+      return false;
+    }
+    
+  } else {
+    console.warn('❌ Tag not found in available tags');
+    
+    // Show which tags are available for debugging
+    if (selectedTags.length > 0) {
+      const similarTags = selectedTags.filter(t => 
+        t.tag?.toLowerCase().includes(tagParam.toLowerCase()) ||
+        t.filename?.toLowerCase().includes(tagParam.toLowerCase())
+      );
+      
+      if (similarTags.length > 0) {
+        console.log('🔍 Similar tags found:', similarTags.map(t => t.tag || t.filename));
+      }
+    }
+    
+    return false;
+  }
+};
+
+
+
+
+// ENHANCED URL PARSING useEffect (replace your existing one)
+useEffect(() => {
+  if (!window.hasAttemptedUrlParse) {
+    window.hasAttemptedUrlParse = true;
+    console.log('🚀 Component mounted, checking for tag links...');
+    
+    const urlParams = new URLSearchParams(window.location.search);
+    const hasTagParam = urlParams.get('tag') || urlParams.get('tags');
+    const hasProjectParam = urlParams.get('projectId');
+    
+    if (hasTagParam && hasProjectParam) {
+      console.log('🔗 Tag link detected, determining type...');
+      const isMultiTag = urlParams.get('multiTag') === 'true' || urlParams.get('tags');
+      
+      setTimeout(() => {
+        if (isMultiTag) {
+          console.log('📦 Multi-tag link detected');
+          parseAndHighlightMultiTagFromUrl();
+        } else {
+          console.log('🏷️ Single tag link detected');
+          parseAndHighlightTagFromUrl();
+        }
+      }, 1000);
+    }
+  }
+}, []);
+
+// Monitor selectedTags changes for pending multi-tag highlights
+useEffect(() => {
+  if (window.pendingMultiTagHighlight && selectedTags.length > 0) {
+    console.log('📦 Tags loaded, continuing multi-tag highlight process...');
+    setTimeout(attemptMultiTagHighlight, 500);
+  }
+}, [selectedTags]);
+
+// Monitor scene readiness for pending multi-tag highlights
+useEffect(() => {
+  if (window.pendingMultiTagHighlight && sceneRef.current) {
+    console.log('🎬 Scene ready, continuing multi-tag highlight process...');
+    setTimeout(attemptMultiTagHighlight, 500);
+  }
+}, [sceneRef.current]);
+
+// Keyboard shortcuts handler
+useEffect(() => {
+  const handleKeyPress = (event) => {
+    if ((event.ctrlKey || event.metaKey) && event.key === 'm') {
+      event.preventDefault();
+      toggleMultiSelectMode();
+    }
+    
+    if (event.key === 'Escape' && isMultiSelectMode) {
+      toggleMultiSelectMode();
+    }
+    
+    if ((event.ctrlKey || event.metaKey) && event.key === 'l' && selectedTagsForLink.length > 0) {
+      event.preventDefault();
+      copyMultiTagLink();
+    }
+  };
+
+  window.addEventListener('keydown', handleKeyPress);
+  return () => window.removeEventListener('keydown', handleKeyPress);
+}, [isMultiSelectMode, selectedTagsForLink]);
+
+
+// 7. UTILITY: Clean up function
+const cleanupTagHighlight = () => {
+  window.pendingTagHighlight = null;
+  
+  // Clean URL parameters after successful highlight
+  const newUrl = new URL(window.location.href);
+  newUrl.searchParams.delete('tag');
+  newUrl.searchParams.delete('area');
+  newUrl.searchParams.delete('disc');
+  newUrl.searchParams.delete('sys');
+  newUrl.searchParams.delete('projectId');
+  window.history.replaceState({}, '', newUrl.toString());
+  
+  console.log('🧹 Cleaned up tag highlight process');
+};
+
+// 8. ENHANCED copyTagLink function for better debugging
 const copyTagLink = async () => {
   if (!taginfo || !taginfo.filename) {
     setCustomAlert(true);
@@ -5424,6 +5851,10 @@ const copyTagLink = async () => {
   }
 
   try {
+    console.log('📋 Starting copy tag link process...');
+    console.log('📝 Current taginfo:', taginfo);
+    console.log('🏷️ Available selectedTags count:', selectedTags.length);
+    
     const tagLink = generateTagLink(taginfo);
     if (!tagLink) {
       setCustomAlert(true);
@@ -5434,20 +5865,107 @@ const copyTagLink = async () => {
     // Copy to clipboard
     await navigator.clipboard.writeText(tagLink);
     
+    console.log('✅ Tag link copied successfully:', tagLink);
+    
     setCustomAlert(true);
-    setModalMessage(`Tag link copied to clipboard: ${taginfo.filename}`);
+    setModalMessage(`🔗 Tag link copied!\n\nTag: ${taginfo.tag || taginfo.filename}\n\nYou can now paste this link in a new tab to navigate directly to this tag.`);
     setIsMenuOpen(false);
     
-    console.log('Tag link copied:', tagLink);
   } catch (error) {
-    console.error('Failed to copy tag link:', error);
+    console.error('❌ Failed to copy tag link:', error);
     setCustomAlert(true);
     setModalMessage("Failed to copy tag link to clipboard");
   }
 };
 
-// Function to parse URL parameters and highlight tag
-const parseAndHighlightTagFromUrl = () => {
+// 9. DEBUG HELPER FUNCTION (add this to your component)
+const debugTagLinking = () => {
+  console.log('=== TAG LINKING DEBUG INFO ===');
+  console.log('Current project ID:', projectId);
+  console.log('Total selectedTags:', selectedTags.length);
+  console.log('Sample selectedTags:', selectedTags.slice(0, 3));
+  console.log('Current taginfo:', taginfo);
+  console.log('selectedMeshRef:', selectedMeshRef.current);
+  console.log('URL params:', Object.fromEntries(new URLSearchParams(window.location.search)));
+  console.log('Pending highlight:', window.pendingTagHighlight);
+  
+  if (taginfo) {
+    const testLink = generateTagLink(taginfo);
+    console.log('Generated test link:', testLink);
+  }
+};
+
+// SOLUTION FOR TAG LOADING TIMING ISSUE
+
+// 1. ENHANCED COMPONENT INITIALIZATION - Add this to your component
+useEffect(() => {
+  // Trigger tag loading when project ID is available
+  if (projectId && !selectedTags.length) {
+    console.log('🚀 Project loaded, triggering tag data fetch...');
+    AllTags(); // This loads tags from modalData
+    AlltagsPID(); // This loads tags from P&ID
+    GetAllUnAssignedPaths(); // This loads unassigned paths
+    
+    // Also fetch the modal data if needed
+    if (!modalData || modalData.length === 0) {
+      console.log('📦 Modal data not available, may need to fetch from API...');
+      // You might need to add a function to fetch modal data here
+      // fetchModalData(projectId);
+    }
+  }
+}, [projectId]); // Re-run when projectId changes
+
+
+// 3. HELPER FUNCTION TO PROCESS TAG DATA
+const processTagData = (data) => {
+  const fileDataArray = Array.isArray(data) ? data : [data];
+  
+  const formattedData = fileDataArray?.map((file) => ({
+    tag: file.tag,
+    tagId: file.tagId,
+    filePath: `${url}/tags/${projectId}/${file.filename}`,
+    filename: file.filename,
+    area: file.area,
+    disc: file.disc,
+    sys: file.sys,
+    fileDetails: file.file || {},
+  }));
+  
+  console.log('📋 Formatted tag data:', formattedData);
+  
+  setSelectedTags((prevTags) => {
+    // Create a new array to avoid duplicates
+    const newTags = formattedData?.filter(
+      (newTag) =>
+        !prevTags?.some(
+          (prevTag) =>
+            prevTag.tag === newTag.tag &&
+            prevTag.filename === newTag.filename &&
+            prevTag.area === newTag.area &&
+            prevTag.disc === newTag.disc &&
+            prevTag.sys === newTag.sys
+        )
+    );
+    
+    console.log('🆕 New tags to add:', newTags.length);
+    
+    // Highlight the tag in the scene
+    newTags?.forEach((tag) => {
+      const tagKey = `${tag.area}-${tag.disc}-${tag.sys}-${tag.tag}`;
+      if (viewHideThree[tagKey] === true) {
+        highlightTagInScene(tag.filename);
+      }
+    });
+
+    const updatedTags = [...prevTags, ...newTags];
+    console.log('📊 Total tags after update:', updatedTags.length);
+    
+    return updatedTags;
+  });
+};
+
+// Enhanced parseAndHighlightTagFromUrl function
+const parseAndHighlightTagFromUrl = async () => {
   const urlParams = new URLSearchParams(window.location.search);
   const tagParam = urlParams.get('tag');
   const projectParam = urlParams.get('projectId');
@@ -5455,121 +5973,1077 @@ const parseAndHighlightTagFromUrl = () => {
   const discParam = urlParams.get('disc');
   const sysParam = urlParams.get('sys');
 
-  // Verify project matches
-  if (projectParam && projectParam !== projectId) {
-    console.warn('Project ID in URL does not match current project');
+  console.log('🔗 Parsing URL params:', { 
+    tagParam, 
+    projectParam, 
+    areaParam, 
+    discParam, 
+    sysParam,
+    currentProjectId: projectId 
+  });
+
+  // If no tag parameter, nothing to do
+  if (!tagParam) {
+    console.log('ℹ️ No tag parameter in URL');
     return;
   }
 
-  if (tagParam) {
-    console.log('Tag found in URL:', tagParam);
-    
-    // Wait for scene and tags to be loaded
-    const highlightTagFromUrl = () => {
-      if (!sceneRef.current || selectedTags.length === 0) {
-        // Retry after a short delay if scene or tags not ready
-        setTimeout(highlightTagFromUrl, 500);
+  // Handle project loading
+  if (projectParam) {
+    if (!projectId) {
+      console.log('🔄 No current project, attempting auto-load...');
+      const loaded = await autoLoadProjectFromUrl();
+      if (loaded) {
+        return; // Page will reload
+      } else {
+        setCustomAlert(true);
+        setModalMessage(`Please select project "${projectParam}" from the project list to view this tag.`);
         return;
       }
-
-      // Find the tag in selectedTags
-      let foundTag = selectedTags.find(tag => 
-        tag.filename === tagParam + '.glb' || 
-        tag.filename === tagParam || 
-        tag.tag === tagParam
-      );
-
-      // If we have area, disc, sys parameters, use them for more precise matching
-      if (!foundTag && areaParam && discParam && sysParam) {
-        foundTag = selectedTags.find(tag => 
-          tag.area === areaParam && 
-          tag.disc === discParam && 
-          tag.sys === sysParam && 
-          (tag.tag === tagParam || tag.filename === tagParam)
-        );
-      }
-
-      if (foundTag) {
-        console.log('Found tag to highlight:', foundTag);
-        
-        // Create the tag key for highlighting
-        if (foundTag.area && foundTag.disc && foundTag.sys) {
-          const tagKey = `${foundTag.area}-${foundTag.disc}-${foundTag.sys}-${foundTag.tag}`;
-          setHighlightedTagKey(tagKey);
-          setBackgroundColorTag({ [tagKey]: true });
-        }
-        
-        // Highlight the tag in the scene
-        highlightTagInScene(foundTag.filename);
-        
-        // Focus camera on the tag
-        setTimeout(() => {
-          if (selectedMeshRef.current && selectedMeshRef.current.length > 0) {
-            focusOnSelectedMesh(sceneRef.current, selectedMeshRef.current);
-          }
-        }, 1000);
-        
-        // Clear URL parameters to avoid re-triggering
-        const newUrl = new URL(window.location.href);
-        newUrl.searchParams.delete('tag');
-        newUrl.searchParams.delete('area');
-        newUrl.searchParams.delete('disc');
-        newUrl.searchParams.delete('sys');
-        window.history.replaceState({}, '', newUrl.toString());
+    }
+    
+    if (projectId !== projectParam) {
+      console.warn('❌ Project ID mismatch, attempting to load correct project...');
+      const loaded = await autoLoadProjectFromUrl();
+      if (loaded) {
+        return; // Page will reload
       } else {
-        console.warn('Tag not found in loaded tags:', tagParam);
         setCustomAlert(true);
-        setModalMessage(`Tag "${tagParam}" not found in current project`);
+        setModalMessage(`Current project (${projectId}) doesn't match URL project (${projectParam}). Please select the correct project.`);
+        return;
       }
-    };
+    }
+  }
 
-    highlightTagFromUrl();
+  console.log('🎯 Project verified, checking tag data...');
+  
+  // ✅ NEW: Auto-load tag data if not available
+  if (!modalData || modalData.length === 0) {
+    console.log('📦 No modal data, auto-loading tag data for link...');
+    
+    try {
+      await autoLoadTagDataForLink(areaParam, discParam, sysParam, tagParam);
+    } catch (error) {
+      console.error('❌ Failed to auto-load tag data:', error);
+      setCustomAlert(true);
+      setModalMessage('Failed to load tag data. Please try again.');
+      return;
+    }
+  }
+  
+  // Store tag highlight data
+  window.pendingTagHighlight = {
+    tag: tagParam,
+    area: areaParam,
+    disc: discParam,
+    sys: sysParam,
+    timestamp: Date.now(),
+    attempts: 0,
+    maxAttempts: 40,
+    retryInterval: 2000
+  };
+  
+  // Start highlighting process
+  attemptTagHighlight();
+};
+
+// ✅ NEW: Auto-load tag data function
+const autoLoadTagDataForLink = async (area, disc, sys, tag) => {
+  console.log('🚀 Auto-loading tag data for link...', { area, disc, sys, tag });
+  
+  try {
+    // Build arrays for the API call
+    const areaIds = area ? [area] : [];
+    const discIds = disc ? [disc] : [];
+    const sysIds = sys ? [sys] : [];
+    const tagIds = tag ? [tag] : [];
+    
+    console.log('📡 Calling GetAllmodals with:', { areaIds, discIds, sysIds, tagIds });
+    
+    // Load the specific tag data
+    const response = await GetAllmodals(
+      projectId,
+      areaIds,
+      discIds, 
+      sysIds,
+      tagIds
+    );
+
+   
+    
+    if (response.status === 200 && response.data.data) {
+      console.log('✅ Tag data loaded successfully:', response.data.data.length, 'items');
+      setModaldata(response.data.data);
+      
+      // Give time for the data to be processed into selectedTags
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      return response.data.data;
+    } else {
+      throw new Error('No tag data returned from API');
+    }
+    
+  } catch (error) {
+    console.error('❌ Error auto-loading tag data:', error);
+    
+    // Fallback: Try to load broader data if specific tag fails
+    if (area) {
+      console.log('🔄 Fallback: Loading all data for area:', area);
+      try {
+        const fallbackResponse = await GetAllmodals(
+          projectId,
+          [area],
+          disc ? [disc] : [],
+          sys ? [sys] : [],
+          [] // Load all tags in the area/disc/sys
+        );
+        
+        if (fallbackResponse.status === 200 && fallbackResponse.data.data) {
+          console.log('✅ Fallback data loaded:', fallbackResponse.data.data.length, 'items');
+          setModaldata(fallbackResponse.data.data);
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          return fallbackResponse.data.data;
+        }
+      } catch (fallbackError) {
+        console.error('❌ Fallback also failed:', fallbackError);
+      }
+    }
+    
+    throw error;
+  }
+};
+// 5. IMPROVED attemptTagHighlight WITH BETTER WAITING LOGIC
+const attemptTagHighlight = () => {
+  const pendingTag = window.pendingTagHighlight;
+  if (!pendingTag) {
+    console.log('❌ No pending tag highlight');
+    return;
+  }
+
+  const { 
+    tag: tagParam, 
+    area: areaParam, 
+    disc: discParam, 
+    sys: sysParam, 
+    timestamp, 
+    attempts,
+    maxAttempts = 40,
+    retryInterval = 2000
+  } = pendingTag;
+  
+  // Update attempt counter
+  pendingTag.attempts = (attempts || 0) + 1;
+
+  console.log(`🔄 Highlight attempt ${pendingTag.attempts}/${maxAttempts} for tag: ${tagParam}`);
+
+  // Check timeout (2 minutes for tag loading)
+  if (Date.now() - timestamp > 120000) {
+    console.error('⏰ Tag highlight timeout after 2 minutes');
+    setCustomAlert(true);
+    setModalMessage(`Timeout: Tag "${tagParam}" could not be loaded after 2 minutes. The project may be large or there may be connectivity issues.`);
+    cleanupTagHighlight();
+    return;
+  }
+
+  // Check if we have exceeded max attempts
+  if (pendingTag.attempts > maxAttempts) {
+    console.error('🚫 Max attempts reached for tag highlight');
+    
+    // Show more helpful error message
+    const errorMsg = `Tag "${tagParam}" not found after ${pendingTag.attempts} attempts.\n\n` +
+                    `Diagnosis:\n` +
+                    `• Project loaded: ${!!projectId}\n` +
+                    `• Scene ready: ${!!sceneRef.current}\n` +
+                    `• Tags loaded: ${selectedTags.length}\n` +
+                    `• Modal data: ${modalData ? modalData.length : 0} items\n\n` +
+                    `The tag may not exist in this project, or there may be a data loading issue.`;
+    
+    setCustomAlert(true);
+    setModalMessage(errorMsg);
+    cleanupTagHighlight();
+    return;
+  }
+
+  // Check prerequisites
+  const sceneReady = !!sceneRef.current;
+  const tagsLoaded = selectedTags.length > 0;
+  const projectLoaded = !!projectId;
+  const modelsLoading = loadedFiles.length < selectedTags.length;
+
+  console.log('📊 Prerequisites check:', {
+    sceneReady,
+    projectLoaded,
+    tagsLoaded: `${selectedTags.length} tags`,
+    loadedFiles: `${loadedFiles.length} files`,
+    modalData: modalData ? `${modalData.length} items` : 'null',
+    modelsStillLoading: modelsLoading
+  });
+
+  // If project is loaded but no tags yet, try to trigger tag loading
+  if (projectLoaded && !tagsLoaded && pendingTag.attempts <= 5) {
+    console.log('🔄 Project loaded but no tags yet, triggering tag load...');
+    
+    // Try to trigger tag loading
+    if (modalData && modalData.length > 0) {
+      AllTags();
+    } else {
+      console.log('📭 No modal data available, may need to fetch from API');
+      // You might need to add API fetching logic here
+    }
+    
+    setTimeout(attemptTagHighlight, retryInterval);
+    return;
+  }
+
+  if (!sceneReady || !tagsLoaded || !projectLoaded) {
+    console.log(`⏳ Prerequisites not met, retrying in ${retryInterval/1000} seconds...`);
+    setTimeout(attemptTagHighlight, retryInterval);
+    return;
+  }
+
+  // Try to find and highlight the tag
+  const success = findAndHighlightTag(tagParam, areaParam, discParam, sysParam);
+  
+  if (!success) {
+    console.log(`❌ Tag not found, retrying in ${retryInterval/1000} seconds...`);
+    setTimeout(attemptTagHighlight, retryInterval);
   }
 };
 
-// Add useEffect to check URL parameters on component mount and when tags change
-useEffect(() => {
-  parseAndHighlightTagFromUrl();
-}, [selectedTags, projectId]); // Re-run when tags are loaded or project changes
+// 6. FORCE TAG LOADING FUNCTION (call this if needed)
+const forceLoadTags = async () => {
+  console.log('🔄 Force loading tags for project:', projectId);
+  
+  try {
+    // Call all your tag loading functions
+    await Promise.all([
+      AllTags(),
+      AlltagsPID(), 
+      GetAllUnAssignedPaths()
+    ]);
+    
+    console.log('✅ Tag loading completed');
+    
+    // If we have a pending highlight, try again
+    if (window.pendingTagHighlight) {
+      setTimeout(attemptTagHighlight, 1000);
+    }
+    
+  } catch (error) {
+    console.error('❌ Error force loading tags:', error);
+  }
+};
 
-   const menuOptionsOne = [
+
+
+// 8. ENHANCED useEffect FOR PROJECT CHANGES
+useEffect(() => {
+  if (projectId) {
+    console.log('🎯 Project ID changed to:', projectId);
+    
+    // Clear existing tags when project changes
+    setSelectedTags([]);
+    
+    // Force load tags for the new project
+    setTimeout(() => {
+      forceLoadTags();
+    }, 500);
+    
+    // If we have a pending highlight, reset the timer
+    if (window.pendingTagHighlight) {
+      window.pendingTagHighlight.timestamp = Date.now();
+      window.pendingTagHighlight.attempts = 0;
+    }
+  }
+}, [projectId]);
+
+// 1. GENERATE MULTI-TAG LINK
+const generateMultiTagLink = (tags) => {
+  if (!tags || tags.length === 0) {
+    console.warn('No tags provided to generateMultiTagLink');
+    return null;
+  }
+
+  const currentUrl = new URL(window.location.href);
+  const baseUrl = `${currentUrl.protocol}//${currentUrl.host}${currentUrl.pathname}`;
+  
+  const tagUrl = new URL(baseUrl);
+  tagUrl.searchParams.set('projectId', projectId);
+  
+  if (tags.length === 1) {
+    // Single tag - use existing format
+    const tag = tags[0];
+    let tagName = tag.filename || tag.tag;
+    if (tagName && tagName.endsWith('.glb')) {
+      tagName = tagName.slice(0, -4);
+    }
+    
+    tagUrl.searchParams.set('tag', tag.tag || tagName);
+    if (tag.area) tagUrl.searchParams.set('area', tag.area);
+    if (tag.disc) tagUrl.searchParams.set('disc', tag.disc);
+    if (tag.sys) tagUrl.searchParams.set('sys', tag.sys);
+  } else {
+    // Multiple tags - use new format
+    tagUrl.searchParams.set('multiTag', 'true');
+    
+    const tagNames = [];
+    const areas = [];
+    const discs = [];
+    const syss = [];
+    
+    tags.forEach((tagInfo) => {
+      let tagName = tagInfo.filename || tagInfo.tag;
+      if (tagName && tagName.endsWith('.glb')) {
+        tagName = tagName.slice(0, -4);
+      }
+      
+      tagNames.push(tagInfo.tag || tagName);
+      if (tagInfo.area) areas.push(tagInfo.area);
+      if (tagInfo.disc) discs.push(tagInfo.disc);
+      if (tagInfo.sys) syss.push(tagInfo.sys);
+    });
+
+    tagUrl.searchParams.set('tags', tagNames.join(','));
+    if (areas.length > 0) tagUrl.searchParams.set('areas', areas.join(','));
+    if (discs.length > 0) tagUrl.searchParams.set('discs', discs.join(','));
+    if (syss.length > 0) tagUrl.searchParams.set('syss', syss.join(','));
+  }
+
+  console.log('Generated link:', tagUrl.toString());
+  return tagUrl.toString();
+};
+
+// 2. TOGGLE MULTI-SELECT MODE
+const toggleMultiSelectMode = () => {
+  console.log('Toggling multi-select mode. Current:', isMultiSelectMode);
+  
+  setIsMultiSelectMode(!isMultiSelectMode);
+  
+  if (!isMultiSelectMode) {
+    setSelectedTagsForLink([]); // Clear selection when entering multi-select mode
+    setMultiTagNotification({
+      type: 'success',
+      message: 'Multi-select mode enabled. Click tags to select them for linking.'
+    });
+  } else {
+    setMultiTagNotification({
+      type: 'success',
+      message: 'Multi-select mode disabled.'
+    });
+  }
+  
+  // Clear notification after 3 seconds
+  setTimeout(() => setMultiTagNotification(null), 3000);
+};
+
+// 3. ADD/REMOVE TAG FROM SELECTION
+const addTagToSelection = (tagInfo) => {
+  if (!tagInfo || !tagInfo.filename) {
+    console.warn('Invalid tag info provided to addTagToSelection');
+    return;
+  }
+  
+  console.log('Adding/removing tag from selection:', tagInfo);
+  
+  setSelectedTagsForLink(prev => {
+    const isAlreadySelected = prev.some(tag => 
+      tag.filename === tagInfo.filename && 
+      tag.tag === tagInfo.tag
+    );
+    
+    if (isAlreadySelected) {
+      // Remove from selection
+      const updated = prev.filter(tag => 
+        !(tag.filename === tagInfo.filename && tag.tag === tagInfo.tag)
+      );
+      
+      setMultiTagNotification({
+        type: 'warning',
+        message: `Removed ${tagInfo.tag || tagInfo.filename} from selection. ${updated.length} tags selected.`
+      });
+      
+      setTimeout(() => setMultiTagNotification(null), 2000);
+      return updated;
+    } else {
+      // Add to selection
+      const updated = [...prev, tagInfo];
+      
+      setMultiTagNotification({
+        type: 'success',
+        message: `Added ${tagInfo.tag || tagInfo.filename} to selection. ${updated.length} tags selected.`
+      });
+      
+      setTimeout(() => setMultiTagNotification(null), 2000);
+      return updated;
+    }
+  });
+};
+
+// 4. CLEAR TAG SELECTION
+const clearTagSelection = () => {
+  console.log('Clearing tag selection');
+  setSelectedTagsForLink([]);
+  setMultiTagNotification({
+    type: 'success',
+    message: 'Tag selection cleared.'
+  });
+  setTimeout(() => setMultiTagNotification(null), 2000);
+};
+
+// 5. ENHANCED COPY TAG LINK FUNCTION
+const copyMultiTagLink = async () => {
+  const tagsToLink = isMultiSelectMode && selectedTagsForLink.length > 0 
+    ? selectedTagsForLink 
+    : taginfo?.filename ? [taginfo] : [];
+  
+  console.log('Copying link for tags:', tagsToLink);
+  
+  if (!tagsToLink.length) {
+    setCustomAlert(true);
+    setModalMessage("No tags selected to copy link");
+    return;
+  }
+
+  try {
+    const tagLink = generateMultiTagLink(tagsToLink);
+    if (!tagLink) {
+      setCustomAlert(true);
+      setModalMessage("Failed to generate tag link");
+      return;
+    }
+
+    // Copy to clipboard
+    await navigator.clipboard.writeText(tagLink);
+    
+    const message = tagsToLink.length === 1 
+      ? `🔗 Tag link copied!\n\nTag: ${tagsToLink[0].tag || tagsToLink[0].filename}`
+      : `🔗 Multi-tag link copied!\n\nTags: ${tagsToLink.map(t => t.tag || t.filename).join(', ')}\n\nTotal: ${tagsToLink.length} tags`;
+    
+    setCustomAlert(true);
+    setModalMessage(message + '\n\nYou can now paste this link to navigate directly to these tags.');
+    setIsMenuOpen(false);
+    
+  } catch (error) {
+    console.error('❌ Failed to copy multi-tag link:', error);
+    setCustomAlert(true);
+    setModalMessage("Failed to copy tag link to clipboard");
+  }
+};
+
+
+
+// 8. FIND AND HIGHLIGHT MULTIPLE TAGS
+const findAndHighlightMultipleTags = (tagNames, areas, discs, syss) => {
+  console.log('🔍 Searching for multiple tags:', { tagNames, areas, discs, syss });
+  
+  const foundTags = [];
+  const notFoundTags = [];
+  
+  tagNames.forEach((tagName, index) => {
+    const areaParam = areas[index];
+    const discParam = discs[index];
+    const sysParam = syss[index];
+    
+    let foundTag = null;
+    
+    // Strategy 1: Exact match with all parameters
+    if (areaParam && discParam && sysParam) {
+      foundTag = selectedTags.find(tag => 
+        tag.area === areaParam && 
+        tag.disc === discParam && 
+        tag.sys === sysParam && 
+        (tag.tag === tagName || tag.filename?.replace('.glb', '') === tagName)
+      );
+    }
+    
+    // Strategy 2: Filename-based search
+    if (!foundTag) {
+      foundTag = selectedTags.find(tag => {
+        const cleanFilename = tag.filename?.replace('.glb', '');
+        return cleanFilename === tagName || 
+               tag.tag === tagName || 
+               tag.filename === tagName ||
+               tag.filename === `${tagName}.glb`;
+      });
+    }
+    
+    if (foundTag) {
+      foundTags.push(foundTag);
+      console.log(`✅ Found tag ${index + 1}:`, foundTag);
+    } else {
+      notFoundTags.push(tagName);
+      console.log(`❌ Tag ${index + 1} not found:`, tagName);
+    }
+  });
+  
+  if (foundTags.length === 0) {
+    console.log('❌ No tags found at all');
+    return false;
+  }
+  
+  console.log(`🎉 Found ${foundTags.length}/${tagNames.length} tags! Highlighting...`);
+  
+  try {
+    const highlightedMeshes = [];
+    const tagKeys = [];
+    
+    // Highlight all found tags
+    foundTags.forEach(foundTag => {
+      highlightTagInScene(foundTag.filename);
+      
+      // Collect highlighted meshes
+      if (selectedMeshRef.current) {
+        if (Array.isArray(selectedMeshRef.current)) {
+          highlightedMeshes.push(...selectedMeshRef.current);
+        } else {
+          highlightedMeshes.push(selectedMeshRef.current);
+        }
+      }
+      
+      // Create tag keys for state management
+      if (foundTag.area && foundTag.disc && foundTag.sys) {
+        const tagKey = `${foundTag.area}-${foundTag.disc}-${foundTag.sys}-${foundTag.tag}`;
+        tagKeys.push(tagKey);
+      }
+    });
+    
+    // Update state for all highlighted tags
+    if (tagKeys.length > 0) {
+      const backgroundColorUpdate = {};
+      const viewHideUpdate = {};
+      
+      tagKeys.forEach(tagKey => {
+        backgroundColorUpdate[tagKey] = true;
+        viewHideUpdate[tagKey] = true;
+      });
+      
+      setBackgroundColorTag(backgroundColorUpdate);
+      setViewHideThree(prev => ({
+        ...prev,
+        ...viewHideUpdate
+      }));
+    }
+    
+    // Focus camera on all highlighted tags after a delay
+    setTimeout(() => {
+      if (highlightedMeshes.length > 0) {
+        console.log('📷 Focusing camera on multiple highlighted tags');
+        focusOnSelectedMesh(sceneRef.current, highlightedMeshes);
+      }
+    }, 2000);
+    
+    // Success feedback
+    setTimeout(() => {
+      setCustomAlert(true);
+      const successMsg = foundTags.length === tagNames.length 
+        ? `✅ Successfully navigated to all ${foundTags.length} tags!`
+        : `⚠️ Found ${foundTags.length}/${tagNames.length} tags.\n\nNot found: ${notFoundTags.join(', ')}`;
+      setModalMessage(successMsg);
+    }, 2500);
+    
+    // Clean up
+    cleanupMultiTagHighlight();
+    return true;
+    
+  } catch (error) {
+    console.error('❌ Error highlighting multiple tags:', error);
+    setCustomAlert(true);
+    setModalMessage(`Error highlighting tags: ${error.message}`);
+    cleanupMultiTagHighlight();
+    return false;
+  }
+};
+
+// 9. CLEANUP MULTI-TAG HIGHLIGHT
+const cleanupMultiTagHighlight = () => {
+  window.pendingMultiTagHighlight = null;
+  
+  const newUrl = new URL(window.location.href);
+  newUrl.searchParams.delete('multiTag');
+  newUrl.searchParams.delete('tags');
+  newUrl.searchParams.delete('areas');
+  newUrl.searchParams.delete('discs');
+  newUrl.searchParams.delete('syss');
+  newUrl.searchParams.delete('projectId');
+  window.history.replaceState({}, '', newUrl.toString());
+  
+  console.log('🧹 Cleaned up multi-tag highlight process');
+};
+
+
+// 1. FIX: Update autoLoadProjectFromUrl to handle both single and multi-tag links
+const autoLoadProjectFromUrl = async () => {
+  const urlParams = new URLSearchParams(window.location.search);
+  const projectParam = urlParams.get('projectId');
+  
+  // ✅ FIXED: Check for both single tag and multi-tag parameters
+  const tagParam = urlParams.get('tag');
+  const tagsParam = urlParams.get('tags');
+  const isMultiTag = urlParams.get('multiTag') === 'true';
+  
+  // Only auto-load if we have project and either single or multi-tag params
+  if (!projectParam || (!tagParam && !tagsParam)) {
+    console.log('ℹ️ Not a tag link, skipping auto-load');
+    return false;
+  }
+
+  // Check if we already have the correct project loaded
+  if (projectId === projectParam) {
+    console.log('✅ Correct project already loaded');
+    return true;
+  }
+
+  console.log('🔄 Auto-loading project from URL:', projectParam);
+  console.log('🏷️ Link type:', isMultiTag ? 'Multi-tag' : 'Single tag');
+
+  try {
+    // Create project data for the URL project
+    const projectData = {
+      projectId: projectParam,
+      projectName: `Project ${projectParam}`,
+      loadedFromUrl: true,
+      timestamp: Date.now(),
+      linkType: isMultiTag ? 'multi-tag' : 'single-tag'
+    };
+
+    // Store in sessionStorage
+    sessionStorage.setItem("selectedProject", JSON.stringify(projectData));
+    
+    console.log('✅ Project data stored, reloading page...');
+    
+    // Reload the page to pick up the new project
+    window.location.reload();
+    
+    return true;
+    
+  } catch (error) {
+    console.error('❌ Failed to auto-load project:', error);
+    return false;
+  }
+};
+
+// 2. FIX: Update parseAndHighlightMultiTagFromUrl to properly handle project loading
+const parseAndHighlightMultiTagFromUrl = async () => {
+  const urlParams = new URLSearchParams(window.location.search);
+  const isMultiTag = urlParams.get('multiTag') === 'true';
+  const projectParam = urlParams.get('projectId');
+  
+  // Handle single tag (existing functionality)
+  if (!isMultiTag) {
+    return parseAndHighlightTagFromUrl();
+  }
+
+  const tagsParam = urlParams.get('tags');
+  const areasParam = urlParams.get('areas');
+  const discsParam = urlParams.get('discs');
+  const syssParam = urlParams.get('syss');
+
+  console.log('🔗 Parsing multi-tag URL params:', { 
+    tagsParam, areasParam, discsParam, syssParam, projectParam, currentProjectId: projectId 
+  });
+
+  if (!tagsParam) {
+    console.log('ℹ️ No tags parameter in multi-tag URL');
+    return;
+  }
+
+  // ✅ FIXED: Handle project loading properly
+  if (projectParam) {
+    if (!projectId) {
+      console.log('🔄 No current project, attempting auto-load...');
+      const loaded = await autoLoadProjectFromUrl();
+      if (loaded) {
+        return; // Page will reload
+      } else {
+        setCustomAlert(true);
+        setModalMessage(`Please select project "${projectParam}" from the project list to view these tags.`);
+        return;
+      }
+    }
+    
+    if (projectId !== projectParam) {
+      console.warn('❌ Project ID mismatch, attempting to load correct project...');
+      const loaded = await autoLoadProjectFromUrl();
+      if (loaded) {
+        return; // Page will reload
+      } else {
+        setCustomAlert(true);
+        setModalMessage(`Current project (${projectId}) doesn't match URL project (${projectParam}). Please select the correct project.`);
+        return;
+      }
+    }
+  }
+
+  // Parse comma-separated values
+  const tagNames = tagsParam.split(',').map(t => t.trim());
+  const areas = areasParam ? areasParam.split(',').map(a => a.trim()) : [];
+  const discs = discsParam ? discsParam.split(',').map(d => d.trim()) : [];
+  const syss = syssParam ? syssParam.split(',').map(s => s.trim()) : [];
+
+  console.log('🎯 Parsed multi-tag data:', { tagNames, areas, discs, syss });
+  
+  // ✅ NEW: Auto-load tag data if not available (similar to single tag)
+  if (!modalData || modalData.length === 0) {
+    console.log('📦 No modal data, auto-loading tag data for multi-tag link...');
+    
+    try {
+      await autoLoadMultiTagDataForLink(areas, discs, syss, tagNames);
+    } catch (error) {
+      console.error('❌ Failed to auto-load multi-tag data:', error);
+      setCustomAlert(true);
+      setModalMessage('Failed to load tag data. Please try again.');
+      return;
+    }
+  }
+  
+  // Store multi-tag highlight data
+  window.pendingMultiTagHighlight = {
+    tags: tagNames,
+    areas: areas,
+    discs: discs,
+    syss: syss,
+    timestamp: Date.now(),
+    attempts: 0,
+    maxAttempts: 40,
+    retryInterval: 2000
+  };
+  
+  // Start highlighting process
+  attemptMultiTagHighlight();
+};
+
+// 3. NEW: Auto-load multi-tag data function
+const autoLoadMultiTagDataForLink = async (areas, discs, syss, tags) => {
+  console.log('🚀 Auto-loading multi-tag data for link...', { areas, discs, syss, tags });
+  
+  try {
+    // Build arrays for the API call - use unique values to avoid duplicates
+    const uniqueAreas = [...new Set(areas.filter(Boolean))];
+    const uniqueDiscs = [...new Set(discs.filter(Boolean))];
+    const uniqueSyss = [...new Set(syss.filter(Boolean))];
+    const uniqueTags = [...new Set(tags.filter(Boolean))];
+    
+    console.log('📡 Calling GetAllmodals with unique values:', { 
+      uniqueAreas, uniqueDiscs, uniqueSyss, uniqueTags 
+    });
+    
+    // Load the specific tag data
+    const response = await GetAllmodals(
+      projectId,
+      uniqueAreas,
+      uniqueDiscs, 
+      uniqueSyss,
+      uniqueTags
+    );
+    
+    if (response.status === 200 && response.data.data) {
+      console.log('✅ Multi-tag data loaded successfully:', response.data.data.length, 'items');
+      setModaldata(response.data.data);
+      
+      // Give time for the data to be processed into selectedTags
+      await new Promise(resolve => setTimeout(resolve, 1500));
+      
+      return response.data.data;
+    } else {
+      throw new Error('No multi-tag data returned from API');
+    }
+    
+  } catch (error) {
+    console.error('❌ Error auto-loading multi-tag data:', error);
+    
+    // Fallback: Try to load broader data if specific tags fail
+    if (areas.length > 0) {
+      console.log('🔄 Fallback: Loading all data for areas:', areas);
+      try {
+        const fallbackResponse = await GetAllmodals(
+          projectId,
+          areas,
+          [], // Load all discs
+          [], // Load all syss  
+          [] // Load all tags in the areas
+        );
+        
+        if (fallbackResponse.status === 200 && fallbackResponse.data.data) {
+          console.log('✅ Fallback data loaded:', fallbackResponse.data.data.length, 'items');
+          setModaldata(fallbackResponse.data.data);
+          await new Promise(resolve => setTimeout(resolve, 1500));
+          return fallbackResponse.data.data;
+        }
+      } catch (fallbackError) {
+        console.error('❌ Fallback also failed:', fallbackError);
+      }
+    }
+    
+    throw error;
+  }
+};
+
+// 4. FIX: Enhanced URL detection in initial useEffect
+useEffect(() => {
+  if (!window.hasAttemptedUrlParse) {
+    window.hasAttemptedUrlParse = true;
+    console.log('🚀 Component mounted, checking for tag links...');
+    
+    const urlParams = new URLSearchParams(window.location.search);
+    const hasTagParam = urlParams.get('tag');
+    const hasTagsParam = urlParams.get('tags');
+    const hasProjectParam = urlParams.get('projectId');
+    
+    // ✅ FIXED: Check for both single and multi-tag scenarios
+    if ((hasTagParam || hasTagsParam) && hasProjectParam) {
+      console.log('🔗 Tag link detected, determining type...');
+      const isMultiTag = urlParams.get('multiTag') === 'true' || (hasTagsParam && !hasTagParam);
+      
+      // ✅ IMPROVED: Longer delay for multi-tag links due to more complex processing
+      const delay = isMultiTag ? 1500 : 1000;
+      
+      setTimeout(() => {
+        if (isMultiTag) {
+          console.log('📦 Multi-tag link detected');
+          parseAndHighlightMultiTagFromUrl();
+        } else {
+          console.log('🏷️ Single tag link detected');
+          parseAndHighlightTagFromUrl();
+        }
+      }, delay);
+    }
+  }
+}, []);
+
+// 5. FIX: Enhanced attemptMultiTagHighlight with better error handling
+const attemptMultiTagHighlight = () => {
+  const pendingTags = window.pendingMultiTagHighlight;
+  if (!pendingTags) {
+    console.log('❌ No pending multi-tag highlight');
+    return;
+  }
+
+  const { 
+    tags: tagNames, 
+    areas, 
+    discs, 
+    syss, 
+    timestamp, 
+    attempts,
+    maxAttempts = 50, // ✅ Increased for multi-tag
+    retryInterval = 2000
+  } = pendingTags;
+  
+  pendingTags.attempts = (attempts || 0) + 1;
+
+  console.log(`🔄 Multi-tag highlight attempt ${pendingTags.attempts}/${maxAttempts} for tags:`, tagNames);
+
+  // Check timeout (4 minutes for multi-tag loading - longer than single tag)
+  if (Date.now() - timestamp > 240000) {
+    console.error('⏰ Multi-tag highlight timeout after 4 minutes');
+    setCustomAlert(true);
+    setModalMessage(
+      `Timeout: Multi-tag link could not be loaded after 4 minutes.\n\nTags: ${tagNames.join(', ')}\n\nThe project may be large or there may be connectivity issues.`
+    );
+    cleanupMultiTagHighlight();
+    return;
+  }
+
+  if (pendingTags.attempts > maxAttempts) {
+    console.error('🚫 Max attempts reached for multi-tag highlight');
+    
+    const errorMsg = `Multi-tag link not found after ${pendingTags.attempts} attempts.\n\nTags: ${tagNames.join(', ')}\n\nSome tags may not exist in this project, or there may be a data loading issue.`;
+    
+    setCustomAlert(true);
+    setModalMessage(errorMsg);
+    cleanupMultiTagHighlight();
+    return;
+  }
+
+  // Check prerequisites
+  const sceneReady = !!sceneRef.current;
+  const tagsLoaded = selectedTags.length > 0;
+  const projectLoaded = !!projectId;
+
+  console.log('📊 Multi-tag prerequisites check:', {
+    sceneReady,
+    projectLoaded,
+    tagsLoaded: `${selectedTags.length} tags`,
+    modalData: modalData ? `${modalData.length} items` : 'null',
+    targetTags: tagNames.length
+  });
+
+  // If project is loaded but no tags yet, try to trigger tag loading
+  if (projectLoaded && !tagsLoaded && pendingTags.attempts <= 5) {
+    console.log('🔄 Project loaded but no tags yet, triggering multi-tag load...');
+    
+    if (modalData && modalData.length > 0) {
+      AllTags();
+    } else {
+      console.log('📭 No modal data available, may need to fetch from API');
+    }
+    
+    setTimeout(attemptMultiTagHighlight, retryInterval);
+    return;
+  }
+
+  if (!sceneReady || !tagsLoaded || !projectLoaded) {
+    console.log(`⏳ Prerequisites not met, retrying in ${retryInterval/1000} seconds...`);
+    setTimeout(attemptMultiTagHighlight, retryInterval);
+    return;
+  }
+
+  // Try to find and highlight multiple tags
+  const success = findAndHighlightMultipleTags(tagNames, areas, discs, syss);
+  
+  if (!success) {
+    console.log(`❌ Some tags not found, retrying in ${retryInterval/1000} seconds...`);
+    setTimeout(attemptMultiTagHighlight, retryInterval);
+  }
+};
+
+// 6. DEBUGGING: Add this function to test multi-tag links
+const debugMultiTagLinking = () => {
+  console.log('=== MULTI-TAG LINKING DEBUG INFO ===');
+  console.log('Current project ID:', projectId);
+  console.log('Total selectedTags:', selectedTags.length);
+  console.log('Current modalData count:', modalData ? modalData.length : 0);
+  console.log('URL params:', Object.fromEntries(new URLSearchParams(window.location.search)));
+  console.log('Pending multi-tag highlight:', window.pendingMultiTagHighlight);
+  console.log('VR Helper initialized:', !!vrHelper);
+  
+  // Test multi-tag link generation
+  if (selectedTagsForLink.length > 1) {
+    const testLink = generateMultiTagLink(selectedTagsForLink);
+    console.log('Generated test multi-tag link:', testLink);
+  }
+  
+  // Check available areas, discs, sys for debugging
+  const availableAreas = [...new Set(selectedTags.map(t => t.area).filter(Boolean))];
+  const availableDiscs = [...new Set(selectedTags.map(t => t.disc).filter(Boolean))];
+  const availableSyss = [...new Set(selectedTags.map(t => t.sys).filter(Boolean))];
+  
+  console.log('Available areas:', availableAreas);
+  console.log('Available discs:', availableDiscs);
+  console.log('Available syss:', availableSyss);
+};
+
+    const menuOptionsOne = [
       { label: "Hide all", action: hideAllItems },
       { label: "Unhide all", action: unhideAllItems },
     ];
-    const menuOptions = [
-      { label: taginfo.filename ? `${taginfo.filename}` : "" },
-      { label: selectedItemName ? `${selectedItemName.name}` : "" },
-      { label: "Add Comment", action: handleAddComment },
-      {
-        label: "Info",
-        children: [
-          { label: "Tag info", action: handleShowlineEqpInfo },
-          { label: "Tag GenInfo", action: handleTagInfo },
-          { label: "File Info", action: handleShowFileInfo },
-        ],
-      },
-      { label: "Change Color", action: handleColorChange },
-      { label: "Deselect", action: handleDeselect },
-      { label: "Select tag", action: handleSelectTag },
-      {
-        label: "Visibility",
-        children: [
-          { label: "Hide all", action: hideAllItems },
-          { label: "Unhide all", action: unhideAllItems },
-          { label: "Hide selected", action: hideSelectedItem },
-          { label: "Hide unselected", action: hideUnselectedItems },
-        ],
-      },
-      { label: "Zoom selected", action: handleZoomSelected },
-      { label: "Focus Selected", action: handleFocusSelected },
-      // { label: "Reload", action: handleReload },
-      {
-        label: "Share & Links",
-        children: [
-          { label: "Copy tag link",action:copyTagLink},
-        ],
-      },
-    ];
+
+  //   const menuOptions = [
+  //     { label: taginfo.filename ? `${taginfo.filename}` : "" },
+  //     { label: selectedItemName ? `${selectedItemName.name}` : "" },
+  //     { label: "Add Comment", action: handleAddComment },
+  //     {
+  //       label: "Info",
+  //       children: [
+  //         { label: "Tag info", action: handleShowlineEqpInfo },
+  //         { label: "Tag GenInfo", action: handleTagInfo },
+  //         { label: "File Info", action: handleShowFileInfo },
+  //       ],
+  //     },
+  //     { label: "Change Color", action: handleColorChange },
+  //     { label: "Deselect", action: handleDeselect },
+  //     { label: "Select tag", action: handleSelectTag },
+  //     {
+  //       label: "Visibility",
+  //       children: [
+  //         { label: "Hide all", action: hideAllItems },
+  //         { label: "Unhide all", action: unhideAllItems },
+  //         { label: "Hide selected", action: hideSelectedItem },
+  //         { label: "Hide unselected", action: hideUnselectedItems },
+  //       ],
+  //     },
+  //     { label: "Zoom selected", action: handleZoomSelected },
+  //     { label: "Focus Selected", action: handleFocusSelected },
+  //     // { label: "Reload", action: handleReload },
+  //     {
+  //       label: "Share & Links",
+  //       children: [{ label: "Copy tag link", action: copyTagLink }],
+  //     },
+      
+  //  { label: "Debug Tag Link", action: debugTagLinking }
+  //   ];
+
+const getEnhancedMenuOptions = () => {
+  const baseMenuOptions = [
+    { label: taginfo.filename ? `${taginfo.filename}` : "" },
+    { label: selectedItemName ? `${selectedItemName.name}` : "" },
+    { label: "Add Comment", action: handleAddComment },
+    {
+      label: "Info",
+      children: [
+        { label: "Tag info", action: handleShowlineEqpInfo },
+        { label: "Tag GenInfo", action: handleTagInfo },
+        { label: "File Info", action: handleShowFileInfo },
+      ],
+    },
+    { label: "Change Color", action: handleColorChange },
+    { label: "Deselect", action: handleDeselect },
+    { label: "Select tag", action: handleSelectTag },
+    {
+      label: "Visibility",
+      children: [
+        { label: "Hide all", action: hideAllItems },
+        { label: "Unhide all", action: unhideAllItems },
+        { label: "Hide selected", action: hideSelectedItem },
+        { label: "Hide unselected", action: hideUnselectedItems },
+      ],
+    },
+    { label: "Zoom selected", action: handleZoomSelected },
+    { label: "Focus Selected", action: handleFocusSelected },
+  ];
+
+  // Enhanced Share & Links section with multi-tag support
+  const shareLinksChildren = [];
+  
+  // Add multi-select toggle option
+  shareLinksChildren.push({
+    label: isMultiSelectMode ? "Exit multi-select" : "Enable multi-select", 
+    action: toggleMultiSelectMode 
+  });
+  
+  // Add selection management options when in multi-select mode
+  if (isMultiSelectMode && taginfo.filename) {
+    const isSelected = selectedTagsForLink.some(tag => 
+      tag.filename === taginfo.filename && tag.tag === taginfo.tag
+    );
+    
+    shareLinksChildren.push({
+      label: isSelected ? "✓ Remove from selection" : "Add to selection",
+      action: () => addTagToSelection(taginfo)
+    });
+    
+    if (selectedTagsForLink.length > 0) {
+      shareLinksChildren.push({
+        label: `Clear selection (${selectedTagsForLink.length})`,
+        action: clearTagSelection
+      });
+    }
+  }
+  
+  // Add copy link option
+  const linkLabel = isMultiSelectMode && selectedTagsForLink.length > 0
+    ? `Copy multi-tag link (${selectedTagsForLink.length} tags)`
+    : "Copy tag link";
+    
+  shareLinksChildren.push({
+    label: linkLabel,
+    action: copyMultiTagLink
+  });
+
+  const shareLinksSection = {
+    label: "Share & Links",
+    children: shareLinksChildren
+  };
+
+  return [
+    ...baseMenuOptions,
+    shareLinksSection,
+    { label: "Debug Tag Link", action: debugMultiTagLinking }
+  ];
+};
+
+// REPLACE YOUR EXISTING menuOptions WITH THIS:
+const menuOptions = getEnhancedMenuOptions();
 
     return (
       <div className="d-flex">
@@ -7200,23 +8674,34 @@ useEffect(() => {
               </li>
 
               <li className={activeButton === "vr" ? "active" : ""}>
-  <div className="tooltip-container">
-    <span
-      className={`icon-tooltip ${!isVRSupported ? 'disabled' : ''}`}
-      onClick={isVRSupported ? () => handleVRToggle("vr") : undefined}
-      title={isVRSupported ? (isInVR ? "Exit VR" : "Enter VR") : "VR Not Supported"}
-      style={{ 
-        opacity: isVRSupported ? 1 : 0.5,
-        cursor: isVRSupported ? 'pointer' : 'not-allowed'
-      }}
-    >
- <img
+                <div className="tooltip-container">
+                  <span
+                    className={`icon-tooltip ${
+                      !isVRSupported ? "disabled" : ""
+                    }`}
+                    onClick={
+                      isVRSupported ? () => handleVRToggle("vr") : undefined
+                    }
+                    title={
+                      isVRSupported
+                        ? isInVR
+                          ? "Exit VR"
+                          : "Enter VR"
+                        : "VR Not Supported"
+                    }
+                    style={{
+                      opacity: isVRSupported ? 1 : 0.5,
+                      cursor: isVRSupported ? "pointer" : "not-allowed",
+                    }}
+                  >
+                    <img
                       className="button"
                       src="/images/web-vr-free.png"
                       alt=""
-                    />    </span>
-  </div>
-</li>
+                    />{" "}
+                  </span>
+                </div>
+              </li>
               <li className={activeButton === "select" ? "active" : ""}>
                 <div className="tooltip-container">
                   <span

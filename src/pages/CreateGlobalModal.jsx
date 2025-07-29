@@ -882,8 +882,8 @@ const loadOctree = async () => {
                     className="ms-1"
                     disabled={isProcessing}
                   />
-                  <button onClick={loadOctree}>load octree</button>
-                  <button onClick={handleloadModels}>load models</button>
+                  {/* <button onClick={loadOctree}>load octree</button>
+                  <button onClick={handleloadModels}>load models</button> */}
                  
                   {status && (
                     <div

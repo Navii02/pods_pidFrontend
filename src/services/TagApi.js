@@ -1,6 +1,34 @@
 import { commonApi } from "./apiStructure";
 import { url } from "./Url";
 
+
+
+export const GetAllmodals = async (projectId, areaIds = [], discIds = [], sysIds = [], tagIds = []) => {
+  try {
+    const areaParam = Array.isArray(areaIds) ? areaIds.join(',') : areaIds;
+    const discParam = Array.isArray(discIds) ? discIds.join(',') : discIds;
+    const sysParam = Array.isArray(sysIds) ? sysIds.join(',') : sysIds;
+    const tagParam = Array.isArray(tagIds) ? tagIds.join(',') : tagIds;
+
+    const queryParams = new URLSearchParams();
+    if (areaParam) queryParams.append('areas', areaParam);
+    if (discParam) queryParams.append('discs', discParam);
+    if (sysParam) queryParams.append('systems', sysParam);
+    if (tagParam) queryParams.append('tags', tagParam);
+
+    const queryString = queryParams.toString();
+    const endpoint = queryString 
+      ? `${url}/api/get-all-models/${projectId}?${queryString}`
+      : `${url}/api/get-all-models/${projectId}`;
+
+    const response = await commonApi("GET", endpoint);
+    return response;
+  } catch (error) {
+    throw error;
+  }
+};
+
+
 export const RegisterTag = async (formData) => {
   try {
     const response = await commonApi("POST", `${url}/api/addtag`, formData);

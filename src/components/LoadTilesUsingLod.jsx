@@ -416,24 +416,24 @@ const BabylonLODManager = ({
     }
   }, [highlightedTagKeyGlobal]);
 
-  // useEffect(() => {
-  //   if (!sceneRef.current) return;
-  //   const scene = sceneRef.current;
-  //   scene.onPointerDown = function (evt, pickResult) {
-  //     if (evt.button === 0 && !pickResult.hit) {
-  //       // dehighlightMesh();
-  //       setIsMenuOpenNormal(false);
+  useEffect(() => {
+    if (!sceneRef.current) return;
+    const scene = sceneRef.current;
+    scene.onPointerDown = function (evt, pickResult) {
+      if (evt.button === 0 && !pickResult.hit) {
+        // dehighlightMesh();
+        setIsMenuOpenNormal(false);
 
-  //       setHighlightedTagKeyGlobal(""); // Or however you're clearing it
-  //       selectedMeshRef.current = [];
-  //       setFileInfoDetails(null); // Clear file info
-  //       setSelectedMeshInfo({});
-  //       setIsMenuOpen(false);
+        setHighlightedTagKeyGlobal(""); // Or however you're clearing it
+        selectedMeshRef.current = [];
+        setFileInfoDetails(null); // Clear file info
+        setSelectedMeshInfo({});
+        setIsMenuOpen(false);
 
-  //       lastHighlightedTagRef.current = null; // Clear last highlighted tag reference
-  //     }
-  //   };
-  // });
+        lastHighlightedTagRef.current = null; // Clear last highlighted tag reference
+      }
+    };
+  });
 
   useEffect(() => {
     const scene = sceneRef.current;
@@ -1050,6 +1050,12 @@ const BabylonLODManager = ({
     camera.minZ = 0.1;
     camera.maxZ = 1000000;
 
+     // IMPORTANT: Remove crosshair cursor from canvas
+      if (canvasRef.current) {
+        canvasRef.current.classList.remove("cursor-crosshair");
+        canvasRef.current.classList.add("cursor-default");
+      }
+
     return camera;
   }, []);
 
@@ -1082,7 +1088,11 @@ const BabylonLODManager = ({
       camera.minZ = 0.1;
       camera.maxZ = 1000;
       camera.fov = 0.8;
-
+// IMPORTANT: Apply crosshair cursor to canvas
+      if (canvasRef.current) {
+        canvasRef.current.classList.remove("cursor-default");
+        canvasRef.current.classList.add("cursor-crosshair");
+      }
       return camera;
     },
     [cameraSpeed, multiplier]
