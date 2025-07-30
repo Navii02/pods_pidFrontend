@@ -28,7 +28,17 @@ import {
 const BATCH_SIZE = 10;
 const DB_BATCH_SIZE = 50;
 
-function CreateGlobalModal() {
+const PERFORMANCE_CONFIG = {
+  FILE_BATCH_SIZE: 50,           // Your current: 10
+  MESH_BATCH_SIZE: 500,          // New: process more meshes per batch  
+  DB_BATCH_SIZE: 1000,           // Your current: 50
+  API_BATCH_SIZE: 200,           // New: larger API batches
+  CHUNK_SIZE: 500,               // Your current: 100
+  MAX_CONCURRENT_FILES: 10,      // New: parallel processing
+  MEMORY_CLEANUP_INTERVAL: 100,  // New: cleanup every N meshes
+};
+
+function SampleCreate() {
   const [files, setFiles] = useState([]);
   const [status, setStatus] = useState("");
   const [progress, setProgress] = useState({ current: 0, total: 0 });
@@ -197,37 +207,42 @@ function CreateGlobalModal() {
   }, []);
 
   // Optimized batch storage
-  const batchStoreInDB = async (operations) => {
-    const db = await initDB();
-    const stores = new Map();
+const batchStoreInDBOptimized = async (operations) => {
+  const db = await initDB();
+  const stores = new Map();
 
-    // Group operations by store
-    operations.forEach((op) => {
-      if (!stores.has(op.store)) {
-        stores.set(op.store, []);
-      }
-      stores.get(op.store).push(op);
-    });
+  // Group operations by store
+  operations.forEach((op) => {
+    if (!stores.has(op.store)) {
+      stores.set(op.store, []);
+    }
+    stores.get(op.store).push(op);
+  });
 
-    // Process each store in parallel
-    await Promise.all(
-      Array.from(stores.entries()).map(([storeName, ops]) => {
-        const transaction = db.transaction(storeName, "readwrite");
-        const store = transaction.objectStore(storeName);
+  // Process each store with larger batches (500 instead of small batches)
+  const promises = Array.from(stores.entries()).map(async ([storeName, ops]) => {
+    const batchSize = 500; // Increased batch size
+    for (let i = 0; i < ops.length; i += batchSize) {
+      const batch = ops.slice(i, i + batchSize);
+      
+      const transaction = db.transaction(storeName, "readwrite");
+      const store = transaction.objectStore(storeName);
 
-        return Promise.all(
-          ops.map(
-            (op) =>
-              new Promise((resolve, reject) => {
-                const request = store.put(op.data, op.key);
-                request.onsuccess = resolve;
-                request.onerror = reject;
-              })
-          )
-        );
-      })
-    );
-  };
+      // Process batch in parallel
+      await Promise.all(
+        batch.map(op => 
+          new Promise((resolve, reject) => {
+            const request = store.put(op.data, op.key);
+            request.onsuccess = resolve;
+            request.onerror = reject;
+          })
+        )
+      );
+    }
+  });
+
+  await Promise.all(promises);
+};
 
   // Optimized file loading
   const loadFile = async (file) => {
@@ -259,44 +274,79 @@ function CreateGlobalModal() {
   };
 
   // Optimized mesh processing without simplification
-  const processMesh = async (mesh, fileId, ParentFile) => {
-    if (!mesh.geometry) return null;
+const processMeshOptimized = async (mesh, fileId, parentFile, materialCache = new Map()) => {
+  if (!mesh.geometry) return null;
 
-    const meshId = meshIdCounter.current++;
-    const originalMeshId = `ori${String(meshId).padStart(7, "0")}`;
+  const meshId = meshIdCounter.current++;
+  const originalMeshId = `ori${String(meshId).padStart(7, "0")}`;
 
-    const screenCoverage = calculateScreenCoverage(
-      mesh,
-      sceneRef.current.activeCamera,
-      engineRef.current
-    );
+  // Fast bounding box calculation
+  const boundingInfo = mesh.getBoundingInfo();
+ const bounds = {
+  minimumWorld: {
+    x: boundingInfo.boundingBox.minimumWorld.x,
+    y: boundingInfo.boundingBox.minimumWorld.y,
+    z: boundingInfo.boundingBox.minimumWorld.z
+  },
+  maximumWorld: {
+    x: boundingInfo.boundingBox.maximumWorld.x,
+    y: boundingInfo.boundingBox.maximumWorld.y,
+    z: boundingInfo.boundingBox.maximumWorld.z
+  }
+}
 
-    // Process mesh data in parallel
-    const [positions, normals, indices] = await Promise.all([
-      mesh.getVerticesData(BABYLON.VertexBuffer.PositionKind),
-      mesh.getVerticesData(BABYLON.VertexBuffer.NormalKind),
-      mesh.getIndices(),
-    ]);
+  // Fast screen coverage calculation
+  const camera = sceneRef.current.activeCamera;
+  const distance = BABYLON.Vector3.Distance(camera.position, boundingInfo.boundingSphere.centerWorld);
+  const radius = boundingInfo.boundingSphere.radiusWorld;
+  const screenCoverage = Math.min(1.0, radius / Math.max(distance, 0.1));
 
-    // Extract material color if available
-    let materialColor = null;
-    if (mesh.material && mesh.material instanceof BABYLON.PBRMaterial) {
-      const color = mesh.material.albedoColor || mesh.material._albedoColor;
-      materialColor = {
-        r: color.r,
-        g: color.g,
-        b: color.b,
-      };
+  // Optimized material handling with caching
+  let materialColor = null;
+  if (mesh.material) {
+    const materialId = mesh.material.uniqueId || mesh.material.id;
+    if (materialCache.has(materialId)) {
+      materialColor = materialCache.get(materialId);
+    } else {
+      if (mesh.material instanceof BABYLON.PBRMaterial) {
+        const color = mesh.material.albedoColor || mesh.material._albedoColor;
+        materialColor = color ? { r: color.r, g: color.g, b: color.b } : null;
+      }
+      materialCache.set(materialId, materialColor);
     }
+  }
 
-    const meshData = {
+  // Skip full vertex data for very small meshes
+  const vertexCount = mesh.getTotalVertices();
+  let positions, normals, indices;
+  
+  if (vertexCount < 100 && screenCoverage < 0.001) {
+    positions = [];
+    normals = [];
+    indices = [];
+  } else {
+    // Parallel data extraction
+    [positions, normals, indices] = await Promise.all([
+      Promise.resolve(mesh.getVerticesData(BABYLON.VertexBuffer.PositionKind) || []),
+      Promise.resolve(mesh.getVerticesData(BABYLON.VertexBuffer.NormalKind) || []),
+      Promise.resolve(mesh.getIndices() || [])
+    ]);
+  }
+
+  return {
+    meshInfo: {
+      metadata: { id: originalMeshId, fileId, screenCoverage, parentFile },
+      boundingInfo: { boundingBox: bounds },
+      transforms: { worldMatrix: mesh.getWorldMatrix().toArray() },
+    },
+    meshData: {
       fileName: originalMeshId,
       data: {
-        ParentFile: ParentFile,
-        positions: Array.from(positions),
-        normals: Array.from(normals),
-        indices: Array.from(indices),
-        boundingBox: mesh.getBoundingInfo().boundingBox,
+        parentFile: parentFile,
+        positions: positions ? Array.from(positions) : [],
+        normals: normals ? Array.from(normals) : [],
+        indices: indices ? Array.from(indices) : [],
+        boundingBox: bounds,
         name: mesh.name,
         color: materialColor,
         metadata: {
@@ -304,9 +354,9 @@ function CreateGlobalModal() {
           fileId,
           screenCoverage,
           geometryInfo: {
-            totalVertices: mesh.getTotalVertices(),
-            totalIndices: mesh.getTotalIndices(),
-            faceCount: mesh.getTotalIndices() / 3,
+            totalVertices: vertexCount,
+            totalIndices: indices?.length || 0,
+            faceCount: (indices?.length || 0) / 3,
           },
         },
         transforms: {
@@ -316,26 +366,9 @@ function CreateGlobalModal() {
           worldMatrix: mesh.getWorldMatrix().toArray(),
         },
       },
-    };
-
-    // Return processing results
-    return {
-      meshInfo: {
-        metadata: {
-          id: originalMeshId,
-          fileId,
-          screenCoverage,
-          ParentFile,
-        },
-        boundingInfo: mesh.getBoundingInfo(),
-        transforms: {
-          worldMatrix: mesh.getWorldMatrix().toArray(),
-        },
-      },
-      color: meshData.data.color,
-      meshData,
-    };
+    },
   };
+};
 
   const validateFile = (file) => {
     if (!file.name.toLowerCase().endsWith(".glb")) {
@@ -351,57 +384,67 @@ function CreateGlobalModal() {
   };
 
 const CHUNK_SIZE = 100;
+const saveToAPIOptimized = async (meshDataArray) => {
+  const API_BATCH_SIZE = PERFORMANCE_CONFIG.API_BATCH_SIZE;
+  const promises = [];
+  
+  for (let i = 0; i < meshDataArray.length; i += API_BATCH_SIZE) {
+    const batch = meshDataArray.slice(i, i + API_BATCH_SIZE);
+    
+    const apiData = batch.map(({ meshData }) => ({
+      MeshId: meshData.fileName,
+      data: meshData,
+      projectId: projectId,
+    }));
 
-const processFile = async (file) => {
+    const promise = SaveOrginalMesh({ meshes: apiData })
+      .catch(error => {
+        console.error(`API batch ${i / API_BATCH_SIZE + 1} failed:`, error);
+        throw error;
+      });
+    
+    promises.push(promise);
+    
+    // Limit concurrent API calls (max 5 at once)
+    if (promises.length >= 5) {
+      await Promise.all(promises);
+      promises.length = 0;
+    }
+  }
+  
+  if (promises.length > 0) {
+    await Promise.all(promises);
+  }
+};
+const processFileOptimized = async (file, materialCache) => {
   validateFile(file);
 
   const container = await loadFile(file);
   const fileNameWithoutExt = file.name.replace(/\.glb$/i, "");
   const fileId = fileNameWithoutExt;
-  const meshPromises = [];
-  const dbOperations = [];
 
   try {
-    // Process all meshes in parallel
-    for (const mesh of container.meshes) {
-      if (!mesh.geometry) continue;
-      meshPromises.push(processMesh(mesh, fileId, file.name));
+    // Filter valid meshes upfront
+    const validMeshes = container.meshes.filter(mesh => mesh.geometry);
+    
+    // Process in larger batches
+    const results = [];
+    for (let i = 0; i < validMeshes.length; i += PERFORMANCE_CONFIG.MESH_BATCH_SIZE) {
+      const batch = validMeshes.slice(i, i + PERFORMANCE_CONFIG.MESH_BATCH_SIZE);
+      
+      const batchResults = await Promise.all(
+        batch.map(mesh => processMeshOptimized(mesh, fileId, file.name, materialCache))
+      );
+      
+      results.push(...batchResults.filter(Boolean));
+      
+      // Memory cleanup every 100 meshes
+      if (i % PERFORMANCE_CONFIG.MEMORY_CLEANUP_INTERVAL === 0) {
+        if (global.gc) global.gc();
+      }
     }
 
-    const results = (await Promise.all(meshPromises)).filter(Boolean);
-
-    // Prepare DB and IndexedDB operations
-    for (const { meshData } of results) {
-      dbOperations.push({
-        store: "originalMeshes",
-        key: meshData.fileName,
-        data: meshData,
-      });
-    }
-
-    // ✅ Batching mesh data for server API
-    const chunks = [];
-    for (let i = 0; i < results.length; i += CHUNK_SIZE) {
-      const chunk = results.slice(i, i + CHUNK_SIZE).map(({ meshData }) => ({
-        MeshId: meshData.fileName,
-        data: meshData,
-        projectId: projectId,
-      }));
-      chunks.push(chunk);
-    }
-
-    // ✅ Send each chunk sequentially (or use Promise.all for parallel)
-    for (const chunk of chunks) {
-      await SaveOrginalMesh({ meshes: chunk });
-    }
-
-    // ✅ Save locally (IndexedDB or similar)
-    await batchStoreInDB(dbOperations);
-
-    return results.map((r) => r.meshInfo);
-  } catch (error) {
-    console.error(`Error processing file ${fileId}:`, error);
-    throw error;
+    return results.map(r => ({ meshInfo: r.meshInfo, meshData: r.meshData }));
   } finally {
     container.dispose();
   }
@@ -467,7 +510,7 @@ const processFile = async (file) => {
       for (let i = 0; i < files.length; i += BATCH_SIZE) {
         const batch = files.slice(i, i + BATCH_SIZE);
         const batchResults = await Promise.all(
-          batch.map((file) => processFile(file))
+          batch.map((file) => processFileOptimized(file))
         );
         allMeshInfos = allMeshInfos.concat(batchResults.flat());
 
@@ -507,7 +550,7 @@ const processFile = async (file) => {
         subStage: "Building octree structure",
         subProgress: 0,
       });
-
+console.log( getMinBounds(allMeshInfos),getMaxBounds(allMeshInfos))
       const octreeRoot = createOctreeBlock(
         sceneRef.current,
         getMinBounds(allMeshInfos),
@@ -523,7 +566,7 @@ const processFile = async (file) => {
         getMaxBounds(allMeshInfos)
       );
 
-      await batchStoreInDB([
+      await batchStoreInDBOptimized([
         {
           store: "octree",
           key: "mainOctree",
@@ -636,7 +679,7 @@ const handleCreateClickWithIsolatedMeshOptimization = useCallback(async () => {
     for (let i = 0; i < files.length; i += BATCH_SIZE) {
       const batch = files.slice(i, i + BATCH_SIZE);
       const batchResults = await Promise.all(
-        batch.map((file) => processFile(file))
+        batch.map((file) => processFileOptimized(file))
       );
       allMeshInfos = allMeshInfos.concat(batchResults.flat());
 
@@ -776,7 +819,7 @@ const handleCreateClickWithIsolatedMeshOptimization = useCallback(async () => {
       };
     }
 
-    await batchStoreInDB([
+    await batchStoreInDBOptimized([
       {
         store: "octree",
         key: "mainOctree",
@@ -799,8 +842,6 @@ const handleCreateClickWithIsolatedMeshOptimization = useCallback(async () => {
     allMeshInfos = [];
     optimizedMeshInfos = [];
 
-    // Continue with existing workflow...
-    // Step 4: Load Models with Worker (unchanged)
     updateProgress({
       stage: "Loading Models",
       processingStage: 4,
@@ -847,6 +888,536 @@ const handleCreateClickWithIsolatedMeshOptimization = useCallback(async () => {
       successMessage += ` Optimization: ${optimizationStats.removedCount} isolated meshes removed, ${optimizationStats.boundingBoxChange.reductionPercentage.toFixed(1)}% size reduction.`;
     }
     setStatus(successMessage);
+
+  } catch (error) {
+    console.error("Error:", error);
+    setStatus("Error: " + error.message);
+    updateProgress({
+      stage: "Error",
+      subStage: error.message,
+      subProgress: 0,
+    });
+  } finally {
+    setIsProcessing(false);
+  }
+}, [files, isProcessing]);
+
+const handleCreateClickOptimized = useCallback(async () => {
+  if (files.length === 0) {
+    setStatus("Please select files first.");
+    return;
+  }
+
+  if (isProcessing) {
+    setStatus("Processing already in progress.");
+    return;
+  }
+
+  setIsProcessing(true);
+  setStatus("Processing started with optimizations...");
+
+  try {
+    const startTime = Date.now();
+    let allResults = [];
+    const globalMaterialCache = new Map(); // Shared material cache
+
+    // Step 1: Process files in larger batches
+    updateProgress({
+      stage: "Processing Files (Optimized)",
+      current: 0,
+      total: files.length,
+      processingStage: 1,
+      subStage: "Processing with increased batch sizes",
+      subProgress: 0,
+      startTime: startTime,
+    });
+
+    // Process files in optimized batches
+    for (let i = 0; i < files.length; i += PERFORMANCE_CONFIG.FILE_BATCH_SIZE) {
+      const batch = files.slice(i, i + PERFORMANCE_CONFIG.FILE_BATCH_SIZE);
+      
+      const batchResults = await Promise.all(
+        batch.map(file => processFileOptimized(file, globalMaterialCache))
+      );
+      
+      allResults = allResults.concat(batchResults.flat());
+
+      updateProgress({
+        stage: "Processing Files (Optimized)",
+        processingStage: 1,
+        current: i + batch.length,
+        total: files.length,
+        subStage: `Processed ${i + batch.length}/${files.length} files`,
+        subProgress: Math.round(((i + batch.length) / files.length) * 100),
+      });
+    }
+
+    console.log(`Processed ${allResults.length} meshes in ${(Date.now() - startTime) / 1000}s`);
+
+    // Step 2: Bulk database storage
+    updateProgress({
+      stage: "Bulk Database Storage",
+      processingStage: 2,
+      subStage: "Storing in large batches",
+      subProgress: 0,
+    });
+
+    const dbOperations = allResults.map(({ meshData }) => ({
+      store: "originalMeshes",
+      key: meshData.fileName,
+      data: meshData,
+    }));
+
+    await batchStoreInDBOptimized(dbOperations);
+
+    updateProgress({
+      stage: "Bulk Database Storage",
+      processingStage: 2,
+      subStage: "Database storage completed",
+      subProgress: 100,
+    });
+
+    // Step 3: Optimized API upload
+    updateProgress({
+      stage: "Bulk API Upload",
+      processingStage: 3,
+      subStage: "Uploading in larger batches",
+      subProgress: 0,
+    });
+
+    await saveToAPIOptimized(allResults);
+
+    updateProgress({
+      stage: "Bulk API Upload",
+      processingStage: 3,
+      subStage: "API upload completed",
+      subProgress: 100,
+    });
+
+    // Continue with octree creation...
+    const meshInfos = allResults.map(r => r.meshInfo);
+    
+    const octreeRoot = createOctreeBlock(
+      sceneRef.current,
+      getMinBounds(meshInfos),
+      getMaxBounds(meshInfos),
+      meshInfos,
+      0,
+      null
+    );
+
+    const octreeInfo = createOctreeInfo(
+      octreeRoot,
+      getMinBounds(meshInfos),
+      getMaxBounds(meshInfos)
+    );
+
+    // Add performance data
+    octreeInfo.performance = {
+      processingTime: Date.now() - startTime,
+      meshCount: allResults.length,
+      fileCount: files.length,
+      optimizations: PERFORMANCE_CONFIG
+    };
+
+    await batchStoreInDBOptimized([
+      {
+        store: "octree",
+        key: "mainOctree",
+        data: octreeInfo,
+      },
+    ]);
+
+    await sendOctreeToBackend(octreeInfo);
+
+    const totalTime = (Date.now() - startTime) / 1000;
+    updateProgress({
+      stage: "Complete",
+      processingStage: 5,
+      subStage: `Completed in ${totalTime.toFixed(1)}s`,
+      subProgress: 100,
+    });
+
+    setStatus(`Processing completed! ${allResults.length} meshes processed in ${totalTime.toFixed(1)} seconds.`);
+
+  } catch (error) {
+    console.error("Error:", error);
+    setStatus("Error: " + error.message);
+  } finally {
+    setIsProcessing(false);
+  }
+}, [files, isProcessing]);
+
+// Helper function to transform mesh data for IsolatedMeshProcessor compatibility
+const transformMeshInfoForProcessor = (meshInfo) => {
+  // Check if boundingBox is in array format [min, max] and convert to object format
+  const boundingBox = meshInfo.boundingInfo.boundingBox;
+  
+  let transformedBoundingBox;
+  if (Array.isArray(boundingBox.min) && Array.isArray(boundingBox.max)) {
+    // Convert from array format to object format
+    transformedBoundingBox = {
+      minimumWorld: {
+        x: boundingBox.min[0],
+        y: boundingBox.min[1],
+        z: boundingBox.min[2]
+      },
+      maximumWorld: {
+        x: boundingBox.max[0],
+        y: boundingBox.max[1],
+        z: boundingBox.max[2]
+      }
+    };
+  } else if (boundingBox.minimumWorld && boundingBox.maximumWorld) {
+    // Already in correct format
+    transformedBoundingBox = boundingBox;
+  } else {
+    // Handle other possible formats
+    console.warn('Unknown bounding box format:', boundingBox);
+    transformedBoundingBox = {
+      minimumWorld: { x: 0, y: 0, z: 0 },
+      maximumWorld: { x: 1, y: 1, z: 1 }
+    };
+  }
+
+  return {
+    ...meshInfo,
+    boundingInfo: {
+      ...meshInfo.boundingInfo,
+      boundingBox: transformedBoundingBox
+    }
+  };
+};
+
+// Debug function to log mesh data structure
+const debugMeshStructure = (meshInfos, sampleCount = 3) => {
+  console.log('=== Mesh Data Structure Debug ===');
+  console.log(`Total meshes: ${meshInfos.length}`);
+  
+  const samples = meshInfos.slice(0, sampleCount);
+  samples.forEach((mesh, index) => {
+    console.log(`Sample mesh ${index + 1}:`, {
+      metadata: mesh.metadata,
+      boundingInfo: mesh.boundingInfo,
+      transforms: mesh.transforms ? 'present' : 'missing'
+    });
+    
+    if (mesh.boundingInfo?.boundingBox) {
+      console.log(`Bounding box structure:`, mesh.boundingInfo.boundingBox);
+    }
+  });
+  console.log('=== End Debug ===');
+};
+
+const handleCreateClickCombinedOptimized = useCallback(async () => {
+  if (files.length === 0) {
+    setStatus("Please select files first.");
+    return;
+  }
+
+  if (isProcessing) {
+    setStatus("Processing already in progress.");
+    return;
+  }
+
+  setIsProcessing(true);
+  setStatus("Processing started with full optimizations...");
+
+  try {
+    const startTime = Date.now();
+    let allResults = [];
+    const globalMaterialCache = new Map();
+    let optimizationStats = null; // Declare at function level
+
+    // Step 1: Process files with optimized batching
+    updateProgress({
+      stage: "Processing Files (Optimized)",
+      current: 0,
+      total: files.length,
+      processingStage: 1,
+      subStage: "Processing with increased batch sizes",
+      subProgress: 0,
+      startTime: startTime,
+    });
+
+    for (let i = 0; i < files.length; i += PERFORMANCE_CONFIG.FILE_BATCH_SIZE) {
+      const batch = files.slice(i, i + PERFORMANCE_CONFIG.FILE_BATCH_SIZE);
+      
+      const batchResults = await Promise.all(
+        batch.map(file => processFileOptimized(file, globalMaterialCache))
+      );
+      
+      allResults = allResults.concat(batchResults.flat());
+
+      updateProgress({
+        stage: "Processing Files (Optimized)",
+        processingStage: 1,
+        current: i + batch.length,
+        total: files.length,
+        subStage: `Processed ${i + batch.length}/${files.length} files`,
+        subProgress: Math.round(((i + batch.length) / files.length) * 100),
+      });
+    }
+
+    console.log(`Processed ${allResults.length} meshes in ${(Date.now() - startTime) / 1000}s`);
+
+    // Step 2: Bulk database storage (optimized)
+    updateProgress({
+      stage: "Bulk Database Storage",
+      processingStage: 2,
+      subStage: "Storing in large batches",
+      subProgress: 0,
+    });
+
+    const dbOperations = allResults.map(({ meshData }) => ({
+      store: "originalMeshes",
+      key: meshData.fileName,
+      data: meshData,
+    }));
+
+    await batchStoreInDBOptimized(dbOperations);
+
+    updateProgress({
+      stage: "Bulk Database Storage",
+      processingStage: 2,
+      subStage: "Database storage completed",
+      subProgress: 100,
+    });
+
+    // Step 2.5: Analyze and Optimize Isolated Meshes (with data transformation)
+    updateProgress({
+      stage: "Analyzing Mesh Distribution",
+      processingStage: 2.5,
+      subStage: "Analyzing isolated meshes",
+      subProgress: 0,
+    });
+
+    let meshInfos = allResults.map(r => r.meshInfo);
+    console.log(`Initial mesh count: ${meshInfos.length}`);
+
+    // Debug the mesh structure before transformation
+    debugMeshStructure(meshInfos);
+
+    try {
+      // Transform mesh data for IsolatedMeshProcessor compatibility
+      const transformedMeshInfos = meshInfos.map(transformMeshInfoForProcessor);
+      
+      // Debug the transformed structure
+      console.log('=== Transformed Mesh Structure ===');
+      if (transformedMeshInfos.length > 0) {
+        console.log('First transformed mesh:', transformedMeshInfos[0]);
+        console.log('Bounding box structure:', transformedMeshInfos[0].boundingInfo.boundingBox);
+      }
+
+      // Analyze isolated meshes with transformed data
+      const analysis = await analyzeIsolatedMeshes(sceneRef.current, transformedMeshInfos);
+      console.log("Isolated mesh analysis:", analysis);
+
+      let optimizedMeshInfos = meshInfos; // Keep original format for further processing
+
+      // Only proceed with optimization if beneficial
+      if (analysis.isolatedByDepth[1]?.length > 0 || 
+          analysis.isolatedByDepth[2]?.length > 0 ||
+          analysis.smallIsolatedMeshes.length > 0) {
+        
+        updateProgress({
+          stage: "Optimizing Mesh Distribution",
+          processingStage: 2.5,
+          subStage: "Removing isolated meshes",
+          subProgress: 30,
+        });
+
+        // Process isolated meshes with transformed data
+        const optimizationResult = await processIsolatedMeshes(
+          sceneRef.current, 
+          transformedMeshInfos, 
+          1
+        );
+
+        if (optimizationResult.statistics.removedCount > 0) {
+          // Map the optimized results back to original mesh infos
+          const optimizedIds = new Set(optimizationResult.meshInfos.map(m => m.metadata.id));
+          optimizedMeshInfos = meshInfos.filter(m => optimizedIds.has(m.metadata.id));
+          optimizationStats = optimizationResult.statistics;
+
+          console.log(`Optimization completed:`);
+          console.log(`- Removed ${optimizationStats.removedCount} isolated meshes`);
+          console.log(`- Remaining meshes: ${optimizationStats.remainingCount}`);
+          console.log(`- Bounding box reduction: ${optimizationStats.boundingBoxChange.reductionPercentage.toFixed(2)}%`);
+
+          updateProgress({
+            stage: "Optimizing Mesh Distribution",
+            processingStage: 2.5,
+            subStage: `Removed ${optimizationStats.removedCount} isolated meshes`,
+            subProgress: 70,
+          });
+        } else {
+          console.log("No optimization needed - no isolated meshes found");
+        }
+      } else {
+        console.log("No isolated meshes detected - skipping optimization");
+      }
+
+      meshInfos = optimizedMeshInfos; // Update for further processing
+
+    } catch (isolatedMeshError) {
+      console.error("Error in isolated mesh processing:", isolatedMeshError);
+      console.log("Continuing without isolated mesh optimization");
+      // Continue with original meshInfos if isolated mesh processing fails
+    }
+
+    updateProgress({
+      stage: "Optimizing Mesh Distribution",
+      processingStage: 2.5,
+      subStage: "Mesh optimization completed",
+      subProgress: 100,
+    });
+
+    // Ensure ALL meshInfos are consistently formatted before any further use
+    meshInfos = meshInfos.map(transformMeshInfoForProcessor);
+    console.log('All mesh data standardized to object format');
+
+    // Step 3: Optimized API upload
+    updateProgress({
+      stage: "Bulk API Upload",
+      processingStage: 3,
+      subStage: "Uploading in larger batches",
+      subProgress: 0,
+    });
+
+    await saveToAPIOptimized(allResults);
+
+    updateProgress({
+      stage: "Bulk API Upload",
+      processingStage: 3,
+      subStage: "API upload completed",
+      subProgress: 100,
+    });
+
+    // Step 4: Create Octree (using consistently formatted meshes)
+    updateProgress({
+      stage: "Creating Octree",
+      processingStage: 4,
+      subStage: "Building octree structure",
+      subProgress: 0,
+    });
+
+    const octreeRoot = createOctreeBlock(
+      sceneRef.current,
+      getMinBounds(meshInfos),
+      getMaxBounds(meshInfos),
+      meshInfos,
+      0,
+      null
+    );
+
+    const octreeInfo = createOctreeInfo(
+      octreeRoot,
+      getMinBounds(meshInfos),
+      getMaxBounds(meshInfos)
+    );
+
+    // Add both performance and optimization metadata
+    const totalTime = Date.now() - startTime;
+    octreeInfo.performance = {
+      processingTime: totalTime,
+      meshCount: allResults.length,
+      fileCount: files.length,
+      optimizations: PERFORMANCE_CONFIG
+    };
+
+    // Add optimization metadata to octree info
+    if (optimizationStats) {
+      octreeInfo.optimization = {
+        enabled: true,
+        originalMeshCount: allResults.length,
+        optimizedMeshCount: meshInfos.length,
+        removedMeshCount: optimizationStats.removedCount,
+        boundingBoxReduction: optimizationStats.boundingBoxChange.reductionPercentage,
+        optimizationTimestamp: new Date().toISOString()
+      };
+    } else {
+      octreeInfo.optimization = {
+        enabled: false,
+        originalMeshCount: allResults.length,
+        optimizedMeshCount: meshInfos.length,
+        removedMeshCount: 0
+      };
+    }
+
+    await batchStoreInDBOptimized([
+      {
+        store: "octree",
+        key: "mainOctree",
+        data: octreeInfo,
+      },
+    ]);
+
+    console.log("Octree created with performance and optimization info:", octreeInfo);
+    
+    await sendOctreeToBackend(octreeInfo);
+
+    updateProgress({
+      stage: "Creating Octree",
+      processingStage: 4,
+      subStage: "Octree created successfully",
+      subProgress: 100,
+    });
+
+    // Step 5: Load Models with Worker
+    updateProgress({
+      stage: "Loading Models",
+      processingStage: 5,
+      subStage: "Initializing worker",
+      subProgress: 0,
+    });
+
+    const handleWorkerProgress = (event) => {
+      const { stage, progress } = event.detail;
+      updateProgress({
+        stage: "Processing Models",
+        processingStage: 5,
+        subStage: stage,
+        subProgress: progress,
+      });
+    };
+
+    window.addEventListener("meshProcessingProgress", handleWorkerProgress);
+
+    try {
+      await loadModels((progressData) => {
+        updateProgress({
+          stage: progressData.stage,
+          processingStage: 5,
+          subStage: progressData.stage,
+          subProgress: progressData.progress,
+        });
+      });
+    } finally {
+      window.removeEventListener("meshProcessingProgress", handleWorkerProgress);
+    }
+
+    // Step 6: Complete
+    const finalTime = (Date.now() - startTime) / 1000;
+    updateProgress({
+      stage: "Complete",
+      processingStage: 6,
+      subStage: `Completed in ${finalTime.toFixed(1)}s`,
+      subProgress: 100,
+    });
+
+    // Enhanced success message with both performance and optimization stats
+    let successMessage = `Processing completed! ${allResults.length} meshes processed in ${finalTime.toFixed(1)} seconds.`;
+    
+    if (optimizationStats && optimizationStats.removedCount > 0) {
+      successMessage += ` Optimization: ${optimizationStats.removedCount} isolated meshes removed, ${optimizationStats.boundingBoxChange.reductionPercentage.toFixed(1)}% size reduction.`;
+    }
+    
+    setStatus(successMessage);
+
+    // Clear memory
+    allResults = [];
+    meshInfos = [];
 
   } catch (error) {
     console.error("Error:", error);
@@ -1047,28 +1618,58 @@ const sendOctreeToBackend = async (octreeInfo) => {
   }
 };
   // Helper functions
-  const getMinBounds = (meshInfos) => {
-    return meshInfos.reduce((min, info) => {
-      const bounds = info.boundingInfo.boundingBox.minimumWorld;
-      return new BABYLON.Vector3(
-        Math.min(min.x, bounds.x),
-        Math.min(min.y, bounds.y),
-        Math.min(min.z, bounds.z)
-      );
-    }, new BABYLON.Vector3(Infinity, Infinity, Infinity));
-  };
+// Replace your existing getMinBounds and getMaxBounds functions with these updated versions:
 
-  const getMaxBounds = (meshInfos) => {
-    return meshInfos.reduce((max, info) => {
-      const bounds = info.boundingInfo.boundingBox.maximumWorld;
-      return new BABYLON.Vector3(
-        Math.max(max.x, bounds.x),
-        Math.max(max.y, bounds.y),
-        Math.max(max.z, bounds.z)
-      );
-    }, new BABYLON.Vector3(-Infinity, -Infinity, -Infinity));
-  };
+// Helper functions - Updated to handle both array and object formats
+const getMinBounds = (meshInfos) => {
+  return meshInfos.reduce((min, info) => {
+    const boundingBox = info.boundingInfo.boundingBox;
+    let bounds;
+    
+    // Handle both formats: array format {min: [x,y,z]} and object format {minimumWorld: {x,y,z}}
+    if (boundingBox.minimumWorld) {
+      // Object format (transformed)
+      bounds = boundingBox.minimumWorld;
+    } else if (boundingBox.min && Array.isArray(boundingBox.min)) {
+      // Array format (original)
+      bounds = { x: boundingBox.min[0], y: boundingBox.min[1], z: boundingBox.min[2] };
+    } else {
+      console.warn('Unknown bounding box format:', boundingBox);
+      bounds = { x: 0, y: 0, z: 0 };
+    }
+    
+    return new BABYLON.Vector3(
+      Math.min(min.x, bounds.x),
+      Math.min(min.y, bounds.y),
+      Math.min(min.z, bounds.z)
+    );
+  }, new BABYLON.Vector3(Infinity, Infinity, Infinity));
+};
 
+const getMaxBounds = (meshInfos) => {
+  return meshInfos.reduce((max, info) => {
+    const boundingBox = info.boundingInfo.boundingBox;
+    let bounds;
+    
+    // Handle both formats: array format {max: [x,y,z]} and object format {maximumWorld: {x,y,z}}
+    if (boundingBox.maximumWorld) {
+      // Object format (transformed)  
+      bounds = boundingBox.maximumWorld;
+    } else if (boundingBox.max && Array.isArray(boundingBox.max)) {
+      // Array format (original)
+      bounds = { x: boundingBox.max[0], y: boundingBox.max[1], z: boundingBox.max[2] };
+    } else {
+      console.warn('Unknown bounding box format:', boundingBox);
+      bounds = { x: 1, y: 1, z: 1 };
+    }
+    
+    return new BABYLON.Vector3(
+      Math.max(max.x, bounds.x),
+      Math.max(max.y, bounds.y),
+      Math.max(max.z, bounds.z)
+    );
+  }, new BABYLON.Vector3(-Infinity, -Infinity, -Infinity));
+};
   const updateProgress = (updates) => {
     setProcessProgress((prev) => ({
       ...prev,
@@ -1326,7 +1927,7 @@ const loadOctree = async () => {
             </div>
             <hr />
             <button
-              onClick={handleCreateClickWithIsolatedMeshOptimization}
+              onClick={handleCreateClickCombinedOptimized}
               className="btn btn-light"
               style={{ fontSize: "12px" }}
               disabled={isProcessing || files.length === 0}
@@ -1340,4 +1941,4 @@ const loadOctree = async () => {
   );
 }
 
-export default CreateGlobalModal;
+export default SampleCreate;

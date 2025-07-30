@@ -1,4 +1,3 @@
-
 import * as BABYLON from "@babylonjs/core";
 
 const MAX_DEPTH = 4;

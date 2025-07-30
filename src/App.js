@@ -27,6 +27,7 @@ import SuperAdmin from "./pages/SuperAdmin";
 import SuperAdminAssignProject from "./pages/SuperAdminAssignProject";
 import AdminPanel from "./pages/AdminPanel";
 import AdminFeatureAssign from "./pages/AdminFeatureAssign";
+import SampleCreate from "./pages/SampleCreation";
 
 
 function App() {
@@ -53,6 +54,8 @@ function App() {
         <Route path="/iroamer" element={<Iroamer />} />       
         <Route path="/global-model/open" element={<GlobalModalOpen />} />
         <Route path="/global-model/create" element={<CreateGlobalModal/>}/>
+                {/* <Route path="/global-model/create" element={<SampleCreate/>}/> */}
+
         <Route path="/equipment-list" element={<EquipmentList />} />
         <Route path="/valve-list" element={<ValveList />} />
         <Route path="/line-list" element={<LineList />} />
