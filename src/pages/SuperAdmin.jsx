@@ -13,6 +13,7 @@ function SuperAdmin() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
+  // Fetch Microsoft 365 users and match with backend users
   useEffect(() => {
     const fetchUsers = async () => {
       try {
@@ -62,21 +63,64 @@ function SuperAdmin() {
     fetchUsers();
   }, [instance, accounts]);
 
-  // Generate dummy tokens
-  const generateDummyTokens = () => {
-    const tokens = [];
-    for (let i = 0; i < 5; i++) {
-      tokens.push(`VALID-${Math.random().toString(36).substring(2, 10).toUpperCase()}`);
+  // Fetch real tokens from license server
+const fetchTokensFromAPI = async () => {
+  const loggedInUser = JSON.parse(sessionStorage.getItem("userDetails"));
+  const loggedInUserEmail = loggedInUser?.email;
+  const loggedInUserToken = loggedInUser?.token;
+
+  if (!loggedInUserEmail) {
+    alert("User email not found in session.");
+    return;
+  }
+
+  try {
+    // Step 1: Get assigned tokens from license server
+    const response = await axios.post(
+      "https://apiservices.plantdesks.com/api/users/check-app-purchase",
+      {
+        email: loggedInUserEmail,
+        app_id: 1,
+      }
+    );
+
+    // Step 2: Get backend users to extract used tokens
+    const backendResponse = await GetAllUsers();
+    const backendUsers = backendResponse.data?.data?.users || [];
+    const tokensAlreadyUsed = backendUsers.map((u) => u.token).filter(Boolean);
+
+    if (
+      response.data.success &&
+      response.data.hasPurchased &&
+      Array.isArray(response.data.assignedTokens)
+    ) {
+      const tokens = response.data.assignedTokens
+        .map((t) => t.token)
+        .filter(
+          (token) =>
+            token !== loggedInUserToken && !tokensAlreadyUsed.includes(token)
+        );
+
+      if (tokens.length === 0) {
+        alert("No unassigned tokens found. All tokens may be in use.");
+      }
+
+      setGeneratedTokens(tokens);
+    } else {
+      alert("Failed to fetch tokens.");
     }
-    setGeneratedTokens(tokens);
-  };
+  } catch (error) {
+    console.error("Error fetching tokens from API:", error);
+    alert("Failed to fetch tokens from license server.");
+  }
+};
 
-  // Dummy token validation function
+
   const validateToken = async (token) => {
-    return token.startsWith("VALID-");
+    // Optional validation logic, keep or remove based on needs
+    return token && typeof token === "string" && token.trim() !== "";
   };
 
-  // Save user details with token to backend
   const saveToBackend = async (user, token) => {
     try {
       const data = {
@@ -84,18 +128,15 @@ function SuperAdmin() {
         username: user.displayName,
         email: user.userPrincipalName,
         token: token,
-      }
+      };
       const response = await Adduser(data);
-      if (response.status === 200) {
-        return true;
-      }
+      return response.status === 200;
     } catch (err) {
       console.error("Backend save error:", err);
       return false;
     }
   };
 
-  // Handle select/deselect all
   const handleSelectAll = () => {
     const newSelected = {};
     if (!selectAll) {
@@ -107,7 +148,6 @@ function SuperAdmin() {
     setSelectAll(!selectAll);
   };
 
-  // Handle individual checkbox
   const handleUserSelect = (userId) => {
     setSelectedUsers((prev) => ({
       ...prev,
@@ -115,58 +155,69 @@ function SuperAdmin() {
     }));
   };
 
-  const handleAssignTokens = async () => {
-    if (generatedTokens.length === 0) {
-      alert("Please generate tokens first");
-      return;
-    }
+const handleAssignTokens = async () => {
+  if (generatedTokens.length === 0) {
+    alert("Please get tokens first");
+    return;
+  }
 
-    let tokenIdx = 0;
-    const updatedUsers = [...users];
-    let anyUserSelected = Object.values(selectedUsers).some((val) => val);
+  let tokenIdx = 0;
+  const updatedUsers = [...users];
+  const anyUserSelected = Object.values(selectedUsers).some((val) => val);
 
-    for (let i = 0; i < updatedUsers.length && tokenIdx < generatedTokens.length; i++) {
-      const user = updatedUsers[i];
-      const isSelected = selectedUsers[user.id];
-      const hasToken = user.token && user.token.trim() !== "";
+  for (let i = 0; i < updatedUsers.length && tokenIdx < generatedTokens.length; i++) {
+    const user = updatedUsers[i];
+    const isSelected = selectedUsers[user.id];
+    const hasToken = user.token && user.token.trim() !== "";
 
-      // Skip users with existing tokens when no users are selected
-      if (!anyUserSelected && hasToken) {
-        continue;
-      }
+    if (!anyUserSelected && hasToken) continue;
 
-      // Assign token if user is selected or if no users are selected
-      if ((anyUserSelected && isSelected) || (!anyUserSelected && !hasToken)) {
-        if (tokenIdx < generatedTokens.length) {
-          const token = generatedTokens[tokenIdx];
-          const isValid = await validateToken(token);
-          
-          if (isValid) {
-            updatedUsers[i] = {
-              ...user,
-              token: token,
-              status: "Assigned",
-            };
-            // Save to backend
-            await saveToBackend(user, token);
-            tokenIdx++;
+    if ((anyUserSelected && isSelected) || (!anyUserSelected && !hasToken)) {
+      const token = generatedTokens[tokenIdx];
+
+      const isValid = await validateToken(token);
+      updatedUsers[i] = {
+        ...user,
+        token,
+        status: isValid ? "Assigned" : "Invalid",
+      };
+
+      if (isValid) {
+        try {
+          const assignResponse = await axios.post(
+            "https://apiservices.plantdesks.com/api/token-permissions/assign",
+            {
+              token,
+              app_id: 1
+            
+            }
+          );
+
+          if (assignResponse.data.success) {
+            const saved = await saveToBackend(user, token);
+            if (!saved) {
+              console.warn(`Token assigned but failed to save for ${user.displayName}`);
+            }
           } else {
-            updatedUsers[i] = {
-              ...user,
-              token: token,
-              status: "Invalid",
-            };
-            tokenIdx++;
+            console.warn(`Failed to assign token to ${user.displayName}`);
+            updatedUsers[i].status = "Assign Failed";
           }
+        } catch (assignErr) {
+          console.error(`Error assigning token to ${user.displayName}:`, assignErr);
+          updatedUsers[i].status = "Assign Error";
         }
       }
-    }
 
-    setUsers(updatedUsers);
-    setGeneratedTokens([]);
-    setSelectedUsers({});
-    setSelectAll(false);
-  };
+      tokenIdx++;
+    }
+  }
+
+  setUsers(updatedUsers);
+  setGeneratedTokens([]);
+  setSelectedUsers({});
+  setSelectAll(false);
+};
+
 
   return (
     <div
@@ -190,6 +241,7 @@ function SuperAdmin() {
       >
         <h3 style={{ fontWeight: "bold", paddingLeft: "20px" }}>All users</h3>
       </div>
+
       <div className="table-container">
         <div
           style={{
@@ -198,26 +250,30 @@ function SuperAdmin() {
             justifyContent: "space-between",
             alignItems: "center",
             padding: "20px",
-            gap: "10px"
+            gap: "10px",
           }}
         >
           <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
             {generatedTokens.length > 0 && (
-              <div style={{ 
-                backgroundColor: "#f0f0f0", 
-                padding: "10px", 
-                borderRadius: "4px",
-                marginBottom: "10px"
-              }}>
-                <h4 style={{ color: "#333", marginBottom: "5px" }}>Generated Tokens:</h4>
+              <div
+                style={{
+                  backgroundColor: "#f0f0f0",
+                  padding: "10px",
+                  borderRadius: "4px",
+                  marginBottom: "10px",
+                }}
+              >
+                <h4 style={{ color: "#333", marginBottom: "5px" }}>Available Tokens:</h4>
                 {generatedTokens.map((token, index) => (
-                  <div key={index} style={{ color: "#333" }}>{token}</div>
+                  <div key={index} style={{ color: "#333" }}>
+                    {token}
+                  </div>
                 ))}
               </div>
             )}
             <div style={{ display: "flex", gap: "10px" }}>
               <button
-                onClick={generateDummyTokens}
+                onClick={fetchTokensFromAPI}
                 className="btn"
                 style={{ padding: "8px 16px", backgroundColor: "#515CBC" }}
               >
@@ -257,7 +313,7 @@ function SuperAdmin() {
           <tbody>
             {users.map((u) => (
               <tr key={u.id}>
-                <td style={{ backgroundColor: '#f0f0f0' }}>
+                <td style={{ backgroundColor: "#f0f0f0" }}>
                   <input
                     type="checkbox"
                     checked={!!selectedUsers[u.id]}
@@ -267,10 +323,10 @@ function SuperAdmin() {
                 </td>
                 <td className="text-dark">{u.displayName}</td>
                 <td className="text-dark">{u.userPrincipalName}</td>
-                <td style={{ backgroundColor: '#f0f0f0' }} className="text-dark">
+                <td style={{ backgroundColor: "#f0f0f0" }} className="text-dark">
                   {u.token || "—"}
                 </td>
-                <td style={{ backgroundColor: '#f0f0f0' }} className="text-dark">
+                <td style={{ backgroundColor: "#f0f0f0" }} className="text-dark">
                   {u.status}
                 </td>
               </tr>

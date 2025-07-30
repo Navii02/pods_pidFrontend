@@ -9,6 +9,8 @@ import {
   getequipmentList,
   saveimportedEquipmentList,
 } from "../services/TagApi";
+import { canAccess } from "../Utils/accessControl";
+
 
 function EquipmentList() {
   const [editedEquipmentId, setEditedEquipmentId] = useState(null); // Changed from editedRowIndex
@@ -318,6 +320,14 @@ function EquipmentList() {
   const filteredEquipmentList = allEquipementList.filter((equipment) =>
     equipment.tag.toLowerCase().includes(searchQuery.toLowerCase())
   );
+   const canView = canAccess(projectId, "equipmentlist", "VIEWER");
+  const canEdit = canAccess(projectId, "equipmentlist", "EDITOR");
+
+  if (!canView) {
+    return <div className="alert alert-danger">Access Denied</div>;
+  }
+
+
 
   return (
     <div
@@ -367,24 +377,29 @@ function EquipmentList() {
                 <th>Revision</th>
                 <th>Revision date</th>
                 <th>
+                    <i
+                    className="fa-solid fa-download ms-2"
+                    title="Import"
+                    onClick={handleImportTag}
+                    style={{ cursor: "pointer" }}
+                  ></i>
+                    {canEdit && (
+                <>
                   <i
                     className="fa-solid fa-upload"
                     title="Export"
                     onClick={handleExport}
                     style={{ cursor: "pointer" }}
                   ></i>
-                  <i
-                    className="fa-solid fa-download ms-2"
-                    title="Import"
-                    onClick={handleImportTag}
-                    style={{ cursor: "pointer" }}
-                  ></i>
+                
                   <i
                     className="fa-solid fa-trash ms-2"
                     title="Delete Selected"
                     onClick={handleMultipleDelete}
                     style={{ cursor: "pointer" }}
                   ></i>
+                   </>
+                )}
                 </th>
               </tr>
               <tr>
@@ -643,6 +658,8 @@ function EquipmentList() {
                     )}
                   </td>
                   <td style={{ backgroundColor: "#f0f0f0" }}>
+                      {canEdit && (
+                <>
                     {editedEquipmentId === equipment.tagId ? (
                       <>
                         <i
@@ -672,6 +689,8 @@ function EquipmentList() {
                         ></i>
                       </>
                     )}
+                     </>
+                )}
                   </td>
                 </tr>
               ))}

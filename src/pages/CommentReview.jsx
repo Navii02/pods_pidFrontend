@@ -15,6 +15,8 @@ import {
 import { updateProjectContext } from "../context/ContextShare";
 import { getAllcomments, deleteComment, updateComment, deleteAllComment,  } from "../services/CommentApi";
 import * as XLSX from "xlsx";
+import { canAccess } from "../Utils/accessControl";
+
 
 function CommentReview() {
   const { updateProject } = useContext(updateProjectContext);
@@ -180,6 +182,13 @@ function CommentReview() {
     const date = new Date(dateString);
     return date.toLocaleDateString() + " " + date.toLocaleTimeString();
   };
+ const canView = canAccess(projectId, "comment", "VIEWER");
+  const canEdit = canAccess(projectId, "comment", "EDITOR");
+
+  if (!canView) {
+    return <div className="alert alert-danger">Access Denied</div>;
+  }
+
 
   return (
     <div
@@ -208,12 +217,16 @@ function CommentReview() {
                   onClick={handleExport}
                   style={{ cursor: 'pointer' }}
                 />
+                  {canEdit && (
+                <>
                 <FontAwesomeIcon 
                   icon={faTrash} 
                   title="DeleteAll"
                   onClick={handleDeleteAllClick}
                   style={{ cursor: 'pointer', marginLeft: '15px' }}
                 />
+                 </>
+                )}
               </th>
             </tr>
             <tr>
