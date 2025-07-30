@@ -25,8 +25,11 @@ import {
 
 
 // Simplified configuration
-const BATCH_SIZE = 10;
-const DB_BATCH_SIZE = 50;
+const BATCH_SIZE = 50; // Increased from 10 to 50
+const DB_BATCH_SIZE = 200; // Increased from 50 to 200
+const CHUNK_SIZE = 500; // Increased from 100 to 500
+const API_CHUNK_SIZE = 1000; // New: Larger chunks for API calls
+
 
 const PERFORMANCE_CONFIG = {
   FILE_BATCH_SIZE: 50,           // Your current: 10
@@ -37,6 +40,8 @@ const PERFORMANCE_CONFIG = {
   MAX_CONCURRENT_FILES: 10,      // New: parallel processing
   MEMORY_CLEANUP_INTERVAL: 100,  // New: cleanup every N meshes
 };
+
+
 
 function SampleCreate() {
   const [files, setFiles] = useState([]);

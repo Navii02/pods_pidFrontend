@@ -21,7 +21,7 @@ import {
   findIsolatedMeshes,
   calculateCumulativeBoundingBox,
   analyzeIsolatedMeshes
-} from "../Utils/IsolatedMeshProcessor"; // The code I provided earlier
+} from "../Utils/IsolatedMeshProcessor";
 
 
 // Simplified configuration
@@ -620,8 +620,9 @@ const handleCreateClickWithIsolatedMeshOptimization = useCallback(async () => {
 
   try {
     let allMeshInfos = [];
+    let allOriginalMeshData = []; // Store complete mesh data for merged mesh creation
 
-    // Step 1: Process Files (unchanged)
+    // Step 1: Process Files (modified to collect all mesh data)
     updateProgress({
       stage: "Processing Files",
       current: 0,
@@ -632,13 +633,20 @@ const handleCreateClickWithIsolatedMeshOptimization = useCallback(async () => {
       startTime: Date.now(),
     });
 
-    // Process files in batches (unchanged)
+    // Process files in batches and collect all mesh data
     for (let i = 0; i < files.length; i += BATCH_SIZE) {
       const batch = files.slice(i, i + BATCH_SIZE);
       const batchResults = await Promise.all(
         batch.map((file) => processFile(file))
       );
-      allMeshInfos = allMeshInfos.concat(batchResults.flat());
+      
+      // Extract mesh infos and mesh data separately
+      const batchMeshInfos = batchResults.flat();
+      allMeshInfos = allMeshInfos.concat(batchMeshInfos);
+
+      // We need to collect the actual mesh data from IndexedDB for merging
+      // This is a bit tricky since processFile stores data in IndexedDB
+      // We'll need to retrieve it or modify processFile to return both
 
       const progress = Math.min(
         Math.floor(((i + BATCH_SIZE) / files.length) * 100),
@@ -654,6 +662,23 @@ const handleCreateClickWithIsolatedMeshOptimization = useCallback(async () => {
       });
     }
 
+    // Step 1.5: Retrieve all original mesh data from IndexedDB for merging
+    updateProgress({
+      stage: "Retrieving Mesh Data",
+      processingStage: 1.5,
+      subStage: "Loading mesh data for analysis",
+      subProgress: 0,
+    });
+
+    allOriginalMeshData = await retrieveAllOriginalMeshData();
+
+    updateProgress({
+      stage: "Retrieving Mesh Data", 
+      processingStage: 1.5,
+      subStage: "Mesh data loaded",
+      subProgress: 100,
+    });
+
     // Step 2: Store Meshes (unchanged)
     updateProgress({
       stage: "Storing Meshes",
@@ -665,11 +690,11 @@ const handleCreateClickWithIsolatedMeshOptimization = useCallback(async () => {
     updateProgress({
       stage: "Storing Meshes",
       processingStage: 2,
-      subStage: "Meshes stored successfully",
+      subStage: "Meshes stored successfully", 
       subProgress: 100,
     });
 
-    // 🔥 NEW STEP 2.5: Analyze and Optimize Isolated Meshes
+    // 🔥 NEW STEP 2.5: Analyze and Process Isolated Meshes with Merging
     updateProgress({
       stage: "Analyzing Mesh Distribution",
       processingStage: 2.5,
@@ -684,6 +709,7 @@ const handleCreateClickWithIsolatedMeshOptimization = useCallback(async () => {
     console.log("Isolated mesh analysis:", analysis);
 
     let optimizedMeshInfos = allMeshInfos;
+    let mergedMeshes = [];
     let optimizationStats = null;
 
     // Only proceed with optimization if beneficial
@@ -694,30 +720,35 @@ const handleCreateClickWithIsolatedMeshOptimization = useCallback(async () => {
       updateProgress({
         stage: "Optimizing Mesh Distribution",
         processingStage: 2.5,
-        subStage: "Removing isolated meshes",
+        subStage: "Processing isolated meshes as merged meshes",
         subProgress: 30,
       });
 
-      // Process isolated meshes with configuration
+      // Process isolated meshes with merging
       const optimizationResult = await processIsolatedMeshes(
         sceneRef.current, 
-        allMeshInfos, 
+        allMeshInfos,
+        allOriginalMeshData, // Pass complete mesh data
+        projectId,
+        batchStoreInDB, // Pass the storage function
         1  // Minimum depth to consider for isolation
       );
 
-      if (optimizationResult.statistics.removedCount > 0) {
+      if (optimizationResult.statistics.isolatedCount > 0) {
         optimizedMeshInfos = optimizationResult.meshInfos;
+        mergedMeshes = optimizationResult.mergedMeshes;
         optimizationStats = optimizationResult.statistics;
 
-        console.log(`Optimization completed:`);
-        console.log(`- Removed ${optimizationStats.removedCount} isolated meshes`);
-        console.log(`- Remaining meshes: ${optimizationStats.remainingCount}`);
+        console.log(`Isolated mesh processing completed:`);
+        console.log(`- Processed ${optimizationStats.isolatedCount} isolated meshes as merged meshes`);
+        console.log(`- Created ${optimizationStats.mergedCount} merged mesh entries`);
+        console.log(`- Remaining meshes for octree: ${optimizationStats.remainingCount}`);
         console.log(`- Bounding box reduction: ${optimizationStats.boundingBoxChange.reductionPercentage.toFixed(2)}%`);
 
         updateProgress({
           stage: "Optimizing Mesh Distribution",
           processingStage: 2.5,
-          subStage: `Removed ${optimizationStats.removedCount} isolated meshes`,
+          subStage: `Created ${optimizationStats.mergedCount} merged meshes from isolated meshes`,
           subProgress: 70,
         });
       } else {
@@ -744,9 +775,9 @@ const handleCreateClickWithIsolatedMeshOptimization = useCallback(async () => {
 
     const octreeRoot = createOctreeBlock(
       sceneRef.current,
-      getMinBounds(optimizedMeshInfos), // Use optimized meshes
-      getMaxBounds(optimizedMeshInfos), // Use optimized meshes
-      optimizedMeshInfos,               // Use optimized meshes
+      getMinBounds(optimizedMeshInfos), // Use optimized meshes (non-isolated)
+      getMaxBounds(optimizedMeshInfos), // Use optimized meshes (non-isolated)
+      optimizedMeshInfos,               // Use optimized meshes (non-isolated)
       0,
       null
     );
@@ -757,22 +788,30 @@ const handleCreateClickWithIsolatedMeshOptimization = useCallback(async () => {
       getMaxBounds(optimizedMeshInfos)
     );
 
-    // Add optimization metadata to octree info
+    // Add optimization and merging metadata to octree info
     if (optimizationStats) {
       octreeInfo.optimization = {
         enabled: true,
         originalMeshCount: allMeshInfos.length,
         optimizedMeshCount: optimizedMeshInfos.length,
-        removedMeshCount: optimizationStats.removedCount,
+        isolatedMeshCount: optimizationStats.isolatedCount,
+        mergedMeshCount: optimizationStats.mergedCount,
         boundingBoxReduction: optimizationStats.boundingBoxChange.reductionPercentage,
-        optimizationTimestamp: new Date().toISOString()
+        optimizationTimestamp: new Date().toISOString(),
+        mergedMeshes: mergedMeshes.map(mesh => ({
+          id: mesh.fileName,
+          originalMeshId: mesh.data.mergedMetadata.originalMeshId,
+          nodeNumber: mesh.data.mergedMetadata.originalNodeNumber,
+          depth: mesh.data.mergedMetadata.isolationDepth
+        }))
       };
     } else {
       octreeInfo.optimization = {
         enabled: false,
         originalMeshCount: allMeshInfos.length,
         optimizedMeshCount: allMeshInfos.length,
-        removedMeshCount: 0
+        isolatedMeshCount: 0,
+        mergedMeshCount: 0
       };
     }
 
@@ -784,7 +823,7 @@ const handleCreateClickWithIsolatedMeshOptimization = useCallback(async () => {
       },
     ]);
 
-    console.log("Octree created with optimization info:", octreeInfo);
+    console.log("Octree created with optimization and merging info:", octreeInfo);
     
     await sendOctreeToBackend(octreeInfo);
 
@@ -798,6 +837,7 @@ const handleCreateClickWithIsolatedMeshOptimization = useCallback(async () => {
     // Clear memory
     allMeshInfos = [];
     optimizedMeshInfos = [];
+    allOriginalMeshData = [];
 
     // Continue with existing workflow...
     // Step 4: Load Models with Worker (unchanged)
@@ -841,10 +881,10 @@ const handleCreateClickWithIsolatedMeshOptimization = useCallback(async () => {
       subProgress: 100,
     });
 
-    // Enhanced success message with optimization stats
+    // Enhanced success message with optimization and merging stats
     let successMessage = "Processing completed successfully!";
-    if (optimizationStats && optimizationStats.removedCount > 0) {
-      successMessage += ` Optimization: ${optimizationStats.removedCount} isolated meshes removed, ${optimizationStats.boundingBoxChange.reductionPercentage.toFixed(1)}% size reduction.`;
+    if (optimizationStats && optimizationStats.isolatedCount > 0) {
+      successMessage += ` Optimization: ${optimizationStats.isolatedCount} isolated meshes processed as ${optimizationStats.mergedCount} merged meshes, ${optimizationStats.boundingBoxChange.reductionPercentage.toFixed(1)}% bounding box reduction.`;
     }
     setStatus(successMessage);
 
@@ -861,136 +901,31 @@ const handleCreateClickWithIsolatedMeshOptimization = useCallback(async () => {
   }
 }, [files, isProcessing]);
 
-// Enhanced isolated mesh analysis for debugging
-const analyzeCurrentOctree = async () => {
+// New helper function to retrieve all original mesh data from IndexedDB
+const retrieveAllOriginalMeshData = async () => {
   try {
     const db = await initDB();
-    const tx = db.transaction(['octree'], 'readonly');
-    const store = tx.objectStore('octree');
+    const tx = db.transaction(['originalMeshes'], 'readonly');
+    const store = tx.objectStore('originalMeshes');
     
-    const octreeRequest = store.get('mainOctree');
+    // Get all mesh data
+    const getAllRequest = store.getAll();
     
-    const result = await new Promise((resolve, reject) => {
-      octreeRequest.onsuccess = () => resolve(octreeRequest.result);
-      octreeRequest.onerror = () => reject(octreeRequest.error);
+    const allMeshData = await new Promise((resolve, reject) => {
+      getAllRequest.onsuccess = () => resolve(getAllRequest.result);
+      getAllRequest.onerror = () => reject(getAllRequest.error);
     });
     
-    if (result && result.data) {
-      console.log('=== Octree Analysis ===');
-      console.log('Total nodes per level:', result.properties?.nodesPerLevel);
-      console.log('Nodes with boxes per level:', result.properties?.nodesWithBoxes);
-      console.log('Total meshes:', result.statistics?.totalMeshes);
-      console.log('Meshes per level:', result.statistics?.meshesPerLevel);
-      
-      if (result.optimization) {
-        console.log('=== Optimization Info ===');
-        console.log('Optimization enabled:', result.optimization.enabled);
-        console.log('Original mesh count:', result.optimization.originalMeshCount);
-        console.log('Optimized mesh count:', result.optimization.optimizedMeshCount);
-        console.log('Removed mesh count:', result.optimization.removedMeshCount);
-        console.log('Bounding box reduction:', result.optimization.boundingBoxReduction + '%');
-      }
-      
-      return result;
-    } else {
-      console.log('No octree data found');
-      return null;
-    }
+    console.log(`Retrieved ${allMeshData.length} mesh data entries from IndexedDB`);
+    return allMeshData;
     
   } catch (error) {
-    console.error('Error analyzing octree:', error);
+    console.error('Error retrieving mesh data from IndexedDB:', error);
     throw error;
   }
 };
 
-// Configuration options for isolated mesh processing
-const ISOLATED_MESH_CONFIG = {
-  enableOptimization: true,
-  minDepthForIsolation: 1,
-  maxDepthForIsolation: 4,
-  considerMeshSize: true,
-  minSizeThreshold: 0.1,
-  considerDistance: false,
-  maxDistanceFromCenter: Infinity,
-  enableIterativeRefinement: false,
-  maxRefinementIterations: 2
-};
 
-// Advanced processing with custom configuration
-const processWithCustomConfiguration = async (meshInfos, config = ISOLATED_MESH_CONFIG) => {
-  if (!config.enableOptimization) {
-    return {
-      meshInfos: meshInfos,
-      statistics: { removedCount: 0 }
-    };
-  }
-
-  let currentMeshInfos = [...meshInfos];
-  let totalRemoved = 0;
-
-  if (config.enableIterativeRefinement) {
-    // Iterative refinement
-    for (let i = 0; i < config.maxRefinementIterations; i++) {
-      const result = await processIsolatedMeshes(
-        sceneRef.current,
-        currentMeshInfos,
-        config.minDepthForIsolation
-      );
-
-      if (result.statistics.removedCount === 0) break;
-
-      currentMeshInfos = result.meshInfos;
-      totalRemoved += result.statistics.removedCount;
-    }
-
-    return {
-      meshInfos: currentMeshInfos,
-      statistics: { removedCount: totalRemoved }
-    };
-  } else {
-    // Single pass
-    return await processIsolatedMeshes(
-      sceneRef.current,
-      currentMeshInfos,
-      config.minDepthForIsolation
-    );
-  }
-};
-
-  const serializeOctree = (octreeInfo) => {
-  // Create a more efficient serialization format
-  const serialized = {
-    name: octreeInfo.name,
-    bounds: octreeInfo.bounds,
-    properties: octreeInfo.properties,
-    statistics: octreeInfo.statistics,
-    timestamp: octreeInfo.timestamp,
-    data: {
-      blockHierarchy: {
-        bounds: octreeInfo.data.blockHierarchy.bounds,
-        properties: octreeInfo.data.blockHierarchy.properties,
-        relationships: octreeInfo.data.blockHierarchy.relationships,
-        meshInfos: octreeInfo.data.blockHierarchy.meshInfos.map(mesh => ({
-          id: mesh.id,
-          bounds: mesh.bounds,
-          vertexCount: mesh.vertexCount,
-          // Include only necessary mesh data
-          metadata: mesh.metadata || null
-        }))
-      }
-    }
-  };
-
-  // Stringify with circular reference handling
-  const seen = new WeakSet();
-  return JSON.stringify(serialized, (key, value) => {
-    if (typeof value === "object" && value !== null) {
-      if (seen.has(value)) return '[Circular]';
-      seen.add(value);
-    }
-    return value;
-  });
-};
 
 const sendOctreeToBackend = async (octreeInfo) => {
   try {
@@ -1193,11 +1128,6 @@ const loadOctree = async () => {
   }
 };
 
-
-
-
-
-
   return (
     <div
       style={{
@@ -1341,3 +1271,5 @@ const loadOctree = async () => {
 }
 
 export default CreateGlobalModal;
+
+
